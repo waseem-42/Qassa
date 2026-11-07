@@ -677,6 +677,30 @@ Claude measured it on 2026-11-07 in headed Chrome with the GPU, on an isolated c
 
 ---
 
+## Task 20 — Faster graphic capture (sol, from 07:10)
+
+**Measured tonight (Claude and sol, Task 16):**
+- A 64 s full-screen 9:16 graphic still takes about 460 s to capture and encode (328 s of it is capture, 1920 screenshots).
+- A 6 s library graphic in a 1080p final render with motion blur 4: capture 12.0 s on 2 pages, 12.7 s on 4 pages. More pages do not help, so the bottleneck is per-screenshot cost inside Chrome (seek + layout/paint + PNG encode with alpha), not parallelism.
+- `optimizeForSpeed` PNG is used only for opaque pages; alpha pages take the slow path (`graphics.ts` `renderOne` → `shot`).
+
+**Do (measure each step on the same two fixtures: the 64 s user-style graphic copied into a temporary project, and `lib/chapter` 6 s with motion blur 4):**
+1. Profile one screenshot: how long are seek (runtime pause/seek of CSS/WAAPI/GSAP), layout/paint, the capture itself, the PNG encode, and the transfer to Node?
+2. Try, keeping only what is faster **and** pixel-identical (or within the Task 16 quality bar on composited output):
+   - CDP `Page.captureScreenshot` with `optimizeForSpeed` on alpha pages, verifying the alpha;
+   - `HeadlessExperimental.beginFrame` deterministic frames (`--enable-begin-frame-control`), screenshot as part of the frame;
+   - raw RGBA readback (e.g. a canvas/`captureBeyondViewport:false` path or `Page.startScreencast`, only if it keeps alpha) piped straight into ffmpeg as `rawvideo`, skipping PNG encode/decode;
+   - a smaller viewport scale for preview-quality renders only.
+3. Motion blur: for samples where the page is idle between the first and last sub-frame, reuse the frame for all samples. Partly done already; check the coverage.
+4. Report a table: before/after seconds per screenshot and total for both fixtures, plus quality numbers. Keep the old path behind a fallback if the new one fails on a page.
+
+**Done when:**
+- The 64 s graphic captures at least 2× faster with an identical or visually lossless composite.
+- The library template stays frame-exact.
+- Tests, typecheck and build pass.
+
+---
+
 ## Report
 
 (sol: one block per task — status, files changed, tests, open questions for Claude)
