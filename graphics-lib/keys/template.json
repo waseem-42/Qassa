@@ -1,0 +1,27 @@
+{
+  "name": "اختصار كيبورد",
+  "about": "أزرار تظهر وتنضغط، مع وش يسوي الاختصار.",
+  "description": "Keyboard shortcut as keycaps that pop in and press (light, 2-4s). keys in pressing order (always shown left to right); label = what it does, optional. position: top|bottom|center — avoid bottom when captions are on.",
+  "duration": 3,
+  "data": {
+    "keys": [
+      "Ctrl",
+      "Shift",
+      "S"
+    ],
+    "label": "حفظ باسم",
+    "position": "top"
+  },
+  "options": {
+    "position": [
+      "top",
+      "bottom",
+      "center"
+    ]
+  },
+  "labels": {
+    "keys": "الأزرار",
+    "label": "وش يسوي",
+    "position": "المكان"
+  }
+}

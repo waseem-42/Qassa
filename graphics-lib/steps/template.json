@@ -1,0 +1,27 @@
+{
+  "name": "خطوات",
+  "about": "خطوات مرقّمة تظهر وحدة ورا الثانية.",
+  "description": "Numbered steps that appear one after another (heavy, 6-12s). position: start|end|center (reading sides; left/right also work). title: \"\" for none.",
+  "duration": 8,
+  "data": {
+    "title": "ثلاث خطوات",
+    "steps": [
+      "افتح الإعدادات",
+      "اختر الحساب",
+      "اضغط حفظ"
+    ],
+    "position": "start"
+  },
+  "options": {
+    "position": [
+      "start",
+      "end",
+      "center"
+    ]
+  },
+  "labels": {
+    "title": "العنوان",
+    "steps": "الخطوات",
+    "position": "المكان"
+  }
+}

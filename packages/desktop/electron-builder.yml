@@ -1,0 +1,28 @@
+appId: com.qassa.editor
+productName: Qassa
+artifactName: Qassa-Setup.exe
+directories:
+  app: packages/desktop
+  output: artifacts/desktop
+  buildResources: packages/desktop/resources
+files:
+  - dist/main.cjs
+  - package.json
+extraResources:
+  - from: packages/desktop/resources
+    to: qassa
+asar: true
+win:
+  target: nsis
+  icon: packages/desktop/resources/qassa.ico
+  executableName: Qassa
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: قَصّة
+  deleteAppDataOnUninstall: false
+  runAfterFinish: false

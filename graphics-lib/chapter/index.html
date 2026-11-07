@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="/api/graphics/runtime.js"></script>
+<script src="/graphics-lib/_shared/kit.js"></script>
+<link rel="stylesheet" href="/graphics-lib/_shared/kit.css">
+<style>
+  .wrap { position: absolute; inset: 0; display: grid; place-items: center; }
+  .card { display: flex; align-items: center; gap: 40px; padding: 46px 70px 46px 80px; animation: slide-in .6s var(--ease) both; }
+  .num { font-size: 150px; font-weight: 700; line-height: 1; color: var(--accent); direction: ltr; animation: pop .5s var(--ease) .15s both; }
+  .bar { width: 8px; align-self: stretch; border-radius: 4px; background: var(--accent); transform-origin: top; animation: grow .5s var(--ease) .25s both; }
+  .t { display: flex; flex-direction: column; gap: 6px; }
+  .title { font-size: 76px; font-weight: 700; line-height: 1.25; animation: rise .5s var(--ease) .35s both; }
+  .sub { font-size: 40px; color: var(--muted); animation: rise .5s var(--ease) .55s both; }
+  @keyframes grow { from { transform: scaleY(0); } }
+</style>
+</head>
+<body>
+<script>
+  const { data, el } = kit;
+  const wrap = el('div', 'wrap leave');
+  const card = el('div', 'card panel', undefined, 'card');
+  if (data.number !== undefined && data.number !== '') card.append(el('div', 'num', String(data.number).padStart(2, '0'), 'number'), el('div', 'bar', undefined, 'bar'));
+  const t = el('div', 't');
+  t.append(el('div', 'title', data.title || 'عنوان الفصل', 'title'));
+  if (data.subtitle) t.append(el('div', 'sub', data.subtitle, 'subtitle'));
+  kit.scenes([['الدخول', 0], ['الثبات', data.subtitle ? 1.05 : 0.85]]);
+  card.append(t);
+  wrap.append(card);
+  document.body.append(wrap);
+</script>
+</body>
+</html>

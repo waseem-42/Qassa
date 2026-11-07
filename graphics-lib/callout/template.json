@@ -1,0 +1,30 @@
+{
+  "name": "تحديد منطقة",
+  "about": "تحديد منطقة من الصورة وتعتيم الباقي. المكان والحجم أجزاء من الإطار (0 إلى 1).",
+  "description": "Highlight a region of the frame (a button, a menu, a face, a product) with a drawn outline, the rest dimmed, optional label (medium, 3-4s). x,y,w,h are fractions of the frame (0..1) — measure them on a contact_sheet. shape: box|circle; dim: false to keep the rest bright.",
+  "duration": 3.5,
+  "data": {
+    "x": 0.62,
+    "y": 0.08,
+    "w": 0.18,
+    "h": 0.06,
+    "label": "من هنا",
+    "shape": "box",
+    "dim": true
+  },
+  "options": {
+    "shape": [
+      "box",
+      "circle"
+    ]
+  },
+  "labels": {
+    "x": "من اليسار",
+    "y": "من الأعلى",
+    "w": "العرض",
+    "h": "الارتفاع",
+    "label": "التسمية",
+    "shape": "الشكل",
+    "dim": "تعتيم الباقي"
+  }
+}

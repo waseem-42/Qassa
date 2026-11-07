@@ -1,0 +1,16 @@
+# Durable project checkpoints API
+
+Snapshots contain validated project JSON only. They never copy, modify, move, or delete source assets. The project folder ID remains stable; media IDs and paths come from the saved project state. Files imported after a checkpoint remain on disk even when its older state is restored.
+
+- `GET /api/projects/:name/checkpoints` → metadata array, newest first: `{ id, label, createdAt, sourceRev, kind }`. `id` is a UUID, `createdAt` an ISO timestamp, `sourceRev` the revision captured, `kind` is `manual` or `before_restore`.
+- `POST /api/projects/:name/checkpoints` body `{ label }` → HTTP 201 `{ checkpoint: metadata }`. Label is trimmed Unicode text, 1–120 characters, no control characters. Creating a checkpoint does not edit the live project or change its revision/history.
+- `POST /api/projects/:name/checkpoints/:id/restore` body `{ expectedRev }` → `{ project, rev, history, restoredCheckpointId, safetyCheckpoint: metadata }`. `expectedRev` is a required nonnegative integer and must equal the current server revision. The server validates the saved state and identity, rejects active queued/running jobs and other in-flight project requests (including import/upload before a job is queued), durably creates an automatic `before_restore` checkpoint of the current state, and restores via an undoable `restore_project` operation. The operation advances revision and emits the existing project WebSocket event. Undo/redo works normally; automatic safety copies persist beyond the undo history/server lifetime.
+- Errors use `{ error: string }`: 400 invalid label/revision/UUID, corrupt checkpoint, mismatched project identity, or unsafe path/link; 404 absent project/checkpoint; 409 stale expected revision or busy project. Rejected restoration does not alter the live project or create a safety copy.
+
+Storage: `<project>/.checkpoints/<uuid>.json`, immutable, schema-validated envelopes containing metadata and project state. Files are staged with exclusive creation, flushed, and atomically published. Listings ignore partial/invalid files. No checkpoint deletion endpoint is provided. Listing and restoration survive Store/server restart. Revisions remain session-local; clients must refetch the live project revision after restarting the server.
+
+`restore_project` is an internal operation: ordinary `/ops` batches reject it. Only the checkpoint transaction enables full-state replacement after revision, identity, and busy-state checks. Saved folder identity, creation identity, source paths, unique IDs, clip references, and positive durations are checked before a safety copy is written.
+
+Automatic safety labels use `قبل استعادة: <saved label>` and are shortened to the 120-character label limit; implementation IDs are not embedded in the visible label.
+
+Integration: import `registerCheckpoints` from `packages/server/src/checkpoints.ts` and call `registerCheckpoints(app, store, jobs)` after `registerProjectManagement(app, store, jobs)` and before accepting requests. The project-management hooks provide the shared in-flight request guard. Existing `/files/` static serving must keep `dotfiles: 'deny'` so `.checkpoints` is inaccessible. No `server/src/index.ts` edits are included in this room. The parent registers the routes and coordinates UI/MCP changes.

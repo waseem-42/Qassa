@@ -1,0 +1,24 @@
+{
+  "saved": true,
+  "id": "تبصر",
+  "name": "تبصر",
+  "description": "هوية بودكاست تبصر (وضع الليل): خلفية ليل ناعمة #121211 بدل الأسود الكامل، نص ضوء القمر #E8E5DF، نجوم الشفق #878581 مع توهج خفيف، رماد النجوم #61605E للثانوي، خط IBM Plex Sans Arabic، كابشن هادئ أسفل الإطار. استخدمه مع هوية «تبصر» وأسلوب المونتاج اللي تختاره (مثل OneTake).",
+  "from": "تشويقة",
+  "createdAt": "2026-11-05T19:45:55.425Z",
+  "theme": {
+    "accent": "#878581",
+    "accent2": "#61605E",
+    "panel": "#121211",
+    "text": "#E8E5DF",
+    "font": "IBM Plex Sans Arabic",
+    "direction": "rtl"
+  },
+  "captions": {
+    "font": "IBM Plex Sans Arabic",
+    "size": 42,
+    "weight": 500,
+    "color": "#E8E5DF",
+    "background": "rgba(0,0,0,0)",
+    "y": 0.87
+  }
+}

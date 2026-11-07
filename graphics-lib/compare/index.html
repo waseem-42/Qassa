@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="/api/graphics/runtime.js"></script>
+<script src="/graphics-lib/_shared/kit.js"></script>
+<link rel="stylesheet" href="/graphics-lib/_shared/kit.css">
+<style>
+  .wrap { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 34px; }
+  h1 { margin: 0; padding: 10px 40px; border-radius: 999px; background: var(--panel); box-shadow: var(--shadow); font-size: 50px; font-weight: 700; color: var(--accent); animation: rise .45s var(--ease) both; }
+  .cols { display: flex; gap: 36px; align-items: stretch; }
+  .col { width: 640px; padding: 38px 46px; box-sizing: border-box; animation: rise .5s var(--ease) both; }
+  .col h2 { margin: 0 0 18px; font-size: 46px; font-weight: 700; display: flex; align-items: center; gap: 16px; }
+  .col h2::before { content: ''; width: 14px; height: 44px; border-radius: 7px; background: var(--col); }
+  .col ul { margin: 0; padding: 0; list-style: none; }
+  .col li { margin: 12px 0; font-size: 36px; line-height: 1.4; color: color-mix(in srgb, var(--text) 88%, transparent); animation: rise .4s var(--ease) both; display: flex; gap: 14px; }
+  .col li::before { content: '•'; color: var(--col); font-weight: 700; }
+  .vs { align-self: center; width: 88px; height: 88px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); font-size: 34px; font-weight: 700; direction: ltr; animation: pop .45s var(--ease) both; }
+</style>
+</head>
+<body>
+<script>
+  const { data, el, stagger, delay } = kit;
+  const sides = data.sides || [{ title: 'الطريقة الأولى', points: ['ميزة', 'عيب'] }, { title: 'الطريقة الثانية', points: ['ميزة', 'عيب'] }];
+  const accents = ['var(--accent)', 'var(--accent-2)'];
+  const wrap = el('div', 'wrap leave');
+  if (data.title) wrap.append(el('h1', '', data.title, 'title'));
+  const cols = el('div', 'cols');
+  // the first side sits on the reading-start side; its points come in first
+  const n = sides.reduce((s, x) => s + (x.points || []).length, 0);
+  const at = stagger(n, 0.9, 0.7);
+  let k = 0;
+  sides.slice(0, 2).forEach((side, i) => {
+    if (i) cols.append(delay(el('div', 'vs', data.vs || 'VS', 'vs'), 0.45));
+    const col = delay(el('div', 'col panel', undefined, `side-${i + 1}`), 0.15 + i * 0.2);
+    col.style.setProperty('--col', side.accent || accents[i]);
+    col.append(el('h2', '', side.title, `side-${i + 1}-title`));
+    const ul = el('ul');
+    (side.points || []).forEach((p, j) => ul.append(delay(el('li', '', p, `side-${i + 1}-point-${j + 1}`), at[k++])));
+    col.append(ul);
+    cols.append(col);
+  });
+  wrap.append(cols);
+  kit.scenes([['العنوان', 0], ...at.map((s, j) => [`النقطة ${j + 1}`, s])]);
+  document.body.append(wrap);
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="/api/graphics/runtime.js"></script>
+<script src="/graphics-lib/_shared/kit.js"></script>
+<link rel="stylesheet" href="/graphics-lib/_shared/kit.css">
+<style>
+  .wrap { position: absolute; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  .wrap.bottom { bottom: 150px; } .wrap.top { top: 110px; } .wrap.center { top: 50%; transform: translate(-50%, -50%); }
+  .row { display: flex; direction: ltr; align-items: center; gap: 18px; }
+  .key {
+    min-width: 92px; height: 92px; padding: 0 26px; box-sizing: border-box; border-radius: 18px;
+    display: grid; place-items: center; font: 600 40px var(--font), 'IBM Plex Sans Arabic', sans-serif; color: #fff; /* keycaps stay dark like real keys */
+    background: linear-gradient(#2a2e3a, #1b1e27); border: 2px solid rgba(255,255,255,.14);
+    box-shadow: 0 9px 0 #0b0c11, 0 22px 40px rgba(0,0,0,.45);
+    animation: pop .4s var(--ease) both, press .5s ease-in-out both;
+  }
+  .plus { font-size: 44px; font-weight: 700; color: var(--accent); animation: fade .3s both; }
+  .label { padding: 10px 30px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 38px; font-weight: 700; animation: rise .4s var(--ease) both; }
+  @keyframes press { 0%, 100% { transform: translateY(0); box-shadow: 0 9px 0 #0b0c11, 0 22px 40px rgba(0,0,0,.45); }
+    45% { transform: translateY(7px); box-shadow: 0 2px 0 #0b0c11, 0 10px 20px rgba(0,0,0,.4); border-color: var(--accent); } }
+</style>
+</head>
+<body>
+<script>
+  const { data, el } = kit;
+  const keys = data.keys || ['Ctrl', 'D'];
+  const wrap = el('div', `wrap leave ${data.position || 'bottom'}`);
+  const row = el('div', 'row');
+  const gap = 0.18;
+  keys.forEach((k, i) => {
+    if (i) { const p = el('span', 'plus', '+', `plus-${i}`); p.style.animationDelay = `${i * gap - 0.05}s`; row.append(p); }
+    const key = el('div', 'key', k, `key-${i + 1}`);
+    // pop in one after another, then all press together
+    key.style.animationDelay = `${i * gap}s, ${keys.length * gap + 0.25}s`;
+    row.append(key);
+  });
+  wrap.append(row);
+  const press = keys.length * gap + 0.25;
+  if (data.label) { const l = el('div', 'label', data.label, 'label'); l.style.animationDelay = `${press + 0.1}s`; wrap.append(l); }
+  kit.scenes([['الأزرار', 0], ['الضغط', press], ['الثبات', press + (data.label ? 0.6 : 0.5)]]);
+  document.body.append(wrap);
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "عنوان فصل",
+  "about": "رقم وعنوان لبداية جزء جديد.",
+  "description": "Section / chapter title card in the middle of the frame (medium, 2.5-4s), at the start of each new part. number optional.",
+  "duration": 3,
+  "data": {
+    "number": 2,
+    "title": "الجزء الثاني",
+    "subtitle": "نبدأ التطبيق"
+  },
+  "labels": {
+    "number": "الرقم",
+    "title": "العنوان",
+    "subtitle": "العنوان الفرعي"
+  }
+}

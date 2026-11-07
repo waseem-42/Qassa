@@ -1,0 +1,33 @@
+{
+  "name": "edit-tool",
+  "private": true,
+  "version": "0.1.2",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "styles:sync": "node scripts/sync-style-library.mjs",
+    "dev": "concurrently -k -n server,app -c blue,magenta \"npm:server\" \"npm:app\"",
+    "server": "node --watch-path=packages/server/src --watch-path=packages/shared/src --watch-path=packages/render/src --import tsx packages/server/src/index.ts",
+    "app": "npm run dev -w @edit/app",
+    "start": "npm run build -w @edit/app && tsx packages/server/src/index.ts",
+    "mcp": "tsx packages/mcp/src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "desktop:build": "npm run build -w @edit/app && node scripts/build-desktop.mjs",
+    "desktop": "npm run desktop:build && electron packages/desktop",
+    "dist:win": "npm run desktop:build && electron-builder --config packages/desktop/electron-builder.yml --win nsis --x64"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/node": "^22.10.0",
+    "concurrently": "^9.1.0",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

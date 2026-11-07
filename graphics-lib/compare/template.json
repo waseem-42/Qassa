@@ -1,0 +1,30 @@
+{
+  "name": "مقارنة",
+  "about": "خياران جنب بعض، ونقاط كل واحد تظهر بالترتيب.",
+  "description": "Side-by-side comparison of two options (heavy, 6-12s). sides[0] sits on the reading-start side; accent per side optional (defaults: theme accent, accent2); vs = the badge text.",
+  "duration": 9,
+  "data": {
+    "title": "أيهم أفضل؟",
+    "sides": [
+      {
+        "title": "الخيار الأول",
+        "points": [
+          "أسرع",
+          "أغلى"
+        ]
+      },
+      {
+        "title": "الخيار الثاني",
+        "points": [
+          "أرخص",
+          "أبطأ"
+        ]
+      }
+    ]
+  },
+  "labels": {
+    "title": "العنوان",
+    "sides": "الجانبان",
+    "vs": "شارة المقارنة"
+  }
+}

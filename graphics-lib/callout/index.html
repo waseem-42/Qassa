@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="/api/graphics/runtime.js"></script>
+<script src="/graphics-lib/_shared/kit.js"></script>
+<link rel="stylesheet" href="/graphics-lib/_shared/kit.css">
+<style>
+  svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .dim { fill: rgba(0, 0, 0, .55); animation: fade .4s both; }
+  .ring { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; filter: drop-shadow(0 0 14px rgba(242,179,61,.55));
+    stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: draw .6s var(--ease) .1s forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .tag { position: absolute; padding: 12px 30px; border-radius: 16px; background: var(--accent); color: var(--on-accent); font-size: 40px; font-weight: 700;
+    white-space: nowrap; box-shadow: var(--shadow); animation: rise .4s var(--ease) .55s both; }
+</style>
+</head>
+<body>
+<div class="leave" style="position:absolute;inset:0">
+  <svg id="s" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+<script>
+  const { data, el } = kit;
+  const W = GRAPHIC.width, H = GRAPHIC.height;
+  // region in 0..1 of the frame
+  const r = { x: data.x ?? 0.4, y: data.y ?? 0.35, w: data.w ?? 0.2, h: data.h ?? 0.2 };
+  const X = r.x * W, Y = r.y * H, RW = r.w * W, RH = r.h * H, pad = 14;
+  const circle = data.shape === 'circle';
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.getElementById('s');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const shape = (cls) => {
+    const e = document.createElementNS(NS, circle ? 'ellipse' : 'rect');
+    if (circle) { e.setAttribute('cx', X + RW / 2); e.setAttribute('cy', Y + RH / 2); e.setAttribute('rx', RW / 2 + pad); e.setAttribute('ry', RH / 2 + pad); }
+    else { e.setAttribute('x', X - pad); e.setAttribute('y', Y - pad); e.setAttribute('width', RW + 2 * pad); e.setAttribute('height', RH + 2 * pad); e.setAttribute('rx', 18); }
+    e.setAttribute('class', cls);
+    return e;
+  };
+  if (data.dim !== false) {
+    // darken everything except the region
+    const mask = document.createElementNS(NS, 'mask'); mask.id = 'm';
+    const all = document.createElementNS(NS, 'rect'); all.setAttribute('width', W); all.setAttribute('height', H); all.setAttribute('fill', '#fff');
+    const hole = shape(''); hole.setAttribute('fill', '#000');
+    mask.append(all, hole);
+    const defs = document.createElementNS(NS, 'defs'); defs.append(mask);
+    const dim = document.createElementNS(NS, 'rect'); dim.setAttribute('width', W); dim.setAttribute('height', H); dim.setAttribute('class', 'dim'); dim.setAttribute('mask', 'url(#m)'); dim.dataset.edit = 'dim';
+    svg.append(defs, dim);
+  }
+  const ring = shape('ring');
+  ring.dataset.edit = 'ring';
+  svg.append(ring);
+  ring.style.setProperty('--len', Math.ceil(ring.getTotalLength()));
+  if (data.label) {
+    const tag = el('div', 'tag', data.label, 'label');
+    document.querySelector('.leave').append(tag);
+    // put the label on the side with the most room
+    const below = Y + RH + pad + 90 < H;
+    tag.style.top = below ? `${Y + RH + pad + 24}px` : `${Y - pad - 24 - 70}px`;
+    tag.style.left = `${Math.min(W - 60, Math.max(60, X + RW / 2))}px`;
+    tag.style.translate = '-50% 0'; // not transform: the entrance animates transform
+  }
+  kit.scenes(data.label ? [['التحديد', 0], ['التسمية', 0.55], ['الثبات', 0.95]] : [['التحديد', 0], ['الثبات', 0.7]]);
+</script>
+</body>
+</html>

@@ -1,0 +1,235 @@
+{
+  "capturedAt": "2026-10-29T04:26:44.6489110+03:00",
+  "kind": "ordinary-source-inspection-not-REA",
+  "note": "Concurrent project management work may change line numbers and hashes after capture. These are static observations, not executed behavior.",
+  "files": [
+    {
+      "path": "packages/server/src/store.ts",
+      "sha256": "3BFAAF750E0698169510CBAEF1474B06D36E8FFEE013E37A20332540218A40CD",
+      "matches": [
+        {
+          "line": 26,
+          "text": "const HISTORY = 200;"
+        },
+        {
+          "line": 30,
+          "text": "  private entries = new Map<string, Entry>();"
+        },
+        {
+          "line": 89,
+          "text": "    const e: Entry = { project, rev: 0, undo: [], redo: [], lastWritten: '', transcripts: new Map() };"
+        },
+        {
+          "line": 105,
+          "text": "      e = { project: Project.parse(JSON.parse(text)), rev: 0, undo: [], redo: [], lastWritten: text, transcripts: new Map() };"
+        },
+        {
+          "line": 177,
+          "text": "  private write(name: string, e: Entry) {"
+        },
+        {
+          "line": 180,
+          "text": "    writeFileSync(join(this.dir(name), 'project.json'), text, 'utf8');"
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/jobs.ts",
+      "sha256": "96E214DDFCC45010AD21977F857141618BB53E728574B6B9D5A0FB27E1D9C1D0",
+      "matches": [
+        {
+          "line": 32,
+          "text": "  private jobs = new Map<string, Job>();"
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/index.ts",
+      "sha256": "373C34FE62C3FC7EA3376586871D0D1A1C650DC567A984694A61879F110DC9F6",
+      "matches": [
+        {
+          "line": 88,
+          "text": "  const p = store.get(name).project;"
+        },
+        {
+          "line": 239,
+          "text": "app.post<P & { Body: { images?: boolean; max?: number } }>('/api/projects/:name/check-cuts', async (req) => {"
+        },
+        {
+          "line": 269,
+          "text": "  const r = store.apply(req.params.name, [sfxTrackOp, { op: 'add_clip', clip: { trackId: SFX_TRACK, mediaId: m.id, in: 0, out: m.duration, start: Math.max(0, at ?? 0), volume: volume ?? 0.6, label: SFX[id].name } }], req.body?.author ?? 'user');"
+        },
+        {
+          "line": 275,
+          "text": "  const p = store.get(name).project;"
+        },
+        {
+          "line": 284,
+          "text": "      return { op: 'add_clip', clip: { trackId: SFX_TRACK, mediaId: m.id, in: 0, out: m.duration, start: q.at, volume: q.volume, label: `${AUTO_MARK} ${SFX[q.sfx].name}` } };"
+        },
+        {
+          "line": 332,
+          "text": "  const p = store.get(name).project;"
+        },
+        {
+          "line": 369,
+          "text": "  const p = store.get(name).project;"
+        },
+        {
+          "line": 396,
+          "text": "  const job = jobs.add('render', name, quality === 'final' ? 'رندر نهائي' : 'رندر معاينة', async (ctx) => {"
+        },
+        {
+          "line": 398,
+          "text": "    const p = store.get(name).project;"
+        },
+        {
+          "line": 427,
+          "text": "    const p = store.get(name).project;"
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/media.ts",
+      "sha256": "CBA6065E3FD97BBC466E879A43CB3BC5DC68A57EECC8059A53035F915E2A5714",
+      "matches": [
+        {
+          "line": 66,
+          "text": "  const first = role === 'source' && media.kind === 'video' && !store.get(name).project.media.some((m) => m.role === 'source');"
+        },
+        {
+          "line": 75,
+          "text": "  if (role === 'source' && media.kind !== 'audio') {"
+        },
+        {
+          "line": 76,
+          "text": "    store.apply(name, [{ op: 'add_clip', clip: { trackId: MAIN_TRACK, mediaId: media.id, in: 0, out: media.duration } }], 'system');"
+        },
+        {
+          "line": 86,
+          "text": "  if (m.role === 'broll') return ['probe', 'proxy', 'peaks', 'thumbs', 'shots'];"
+        }
+      ]
+    },
+    {
+      "path": "packages/app/src/components/MediaPanel.tsx",
+      "sha256": "18787502FFA62F3C22767EA6581CCFDAC1013664CA9ECAEABD87A0B4FB5340DF",
+      "matches": [
+        {
+          "line": 109,
+          "text": "                      {m.kind === 'video' && m.duration > 0 && (m.role === 'source' || m.role === 'broll') && <button className=\"btn h-6 px-2 text-[11px]\" onClick={() => { useStore.getState().setPlaying(false); setRangeMedia(m); }}>معاينة واختيار جزء</button>}"
+        },
+        {
+          "line": 110,
+          "text": "                      {m.role === 'broll' && <button className=\"btn h-6 px-2 text-[11px]\" onClick={() => ops([{ op: 'add_clip', clip: { trackId: 'V2', mediaId: m.id, in: 0, out: Math.min(m.duration, 5), start: time } }])}>+ عند المؤشر</button>}"
+        },
+        {
+          "line": 111,
+          "text": "                      {m.role === 'music' && <button className=\"btn h-6 px-2 text-[11px]\" onClick={() => ops([{ op: 'add_clip', clip: { trackId: 'A2', mediaId: m.id, in: 0, out: m.duration, start: 0, volume: 0.35 } }])}>+ للمشروع</button>}"
+        },
+        {
+          "line": 113,
+          "text": "                        <button className=\"btn h-6 px-2 text-[11px]\" onClick={() => ops([{ op: 'add_clip', clip: { trackId: MAIN_TRACK, mediaId: m.id, in: 0, out: m.duration } }])}>+ للتايملاين</button>"
+        },
+        {
+          "line": 256,
+          "text": "              <button className=\"btn btn-ghost h-7 text-xs\" onClick={() => ops([{ op: 'set_settings', patch: { defaultGrade: null } }]).then(() => notify('رجعت الألوان الأصلية', 'info'))}>إلغاء</button>"
+        }
+      ]
+    },
+    {
+      "path": "packages/app/src/components/Transcript.tsx",
+      "sha256": "B5220BD1E5E1C4C4FC871FDEA98DF8358FB58D0478BAFDC3629D430A4730EDEC",
+      "matches": [
+        {
+          "line": 8,
+          "text": "export function Transcript() {"
+        },
+        {
+          "line": 79,
+          "text": "  const cut = () => range && ops([{ op: 'cut_words', mediaId, from: range[0], to: range[1] }]).then(() => setSel(undefined));"
+        },
+        {
+          "line": 80,
+          "text": "  const restore = () => {"
+        }
+      ]
+    },
+    {
+      "path": "packages/app/src/components/Header.tsx",
+      "sha256": "7FB01A686700B0B407A2B842AA19CBF6D3864EE3D07FF50641B6BA427B48DFF7",
+      "matches": [
+        {
+          "line": 43,
+          "text": "      const r = await api.post(`${projectPath(name)}/render`, { quality });"
+        },
+        {
+          "line": 55,
+          "text": "        <dl className=\"export-specs\"><div><dt>الأبعاد</dt><dd className=\"num\">{size.width} × {size.height}</dd></div><div><dt>الإطارات</dt><dd className=\"num\">{project.settings.fps} fps</dd></div><div><dt>المدة</dt><dd className=\"num\">{fmtTime(projectDuration(project), 1)}</dd></div></dl>"
+        }
+      ]
+    },
+    {
+      "path": "packages/shared/src/captions.ts",
+      "sha256": "446E3EEB0528522597FF1C3007ABA0BA66153838FC998EEF57DCFBEA32456F34",
+      "matches": [
+        {
+          "line": 48,
+          "text": "    { op: 'clear_track', trackId: CAPTION_TRACK },"
+        }
+      ]
+    },
+    {
+      "path": "packages/shared/src/schema.ts",
+      "sha256": "1199AC6044339CCA4DE84E7B4BE6E872C059C86EFF9F0A596ACA7ACC0E0046E3",
+      "matches": [
+        {
+          "line": 59,
+          "text": "export const Media = z.object({"
+        },
+        {
+          "line": 157,
+          "text": "export const Project = z.object({"
+        }
+      ]
+    },
+    {
+      "path": "packages/shared/src/ops.ts",
+      "sha256": "0E6952512D1D1526AE3DAA653C80B35DE8C7F0DDA0FFADD8CC81E57B2031B1AA",
+      "matches": [
+        {
+          "line": 9,
+          "text": "export const ProjectDisplayName = z.string().trim().min(1).max(120).refine((value) => !/[\\u0000-\\u001f\\u007f-\\u009f]/u.test(value), 'display name must not contain control characters');"
+        },
+        {
+          "line": 10,
+          "text": "export const Op = z.discriminatedUnion('op', ["
+        },
+        {
+          "line": 11,
+          "text": "  z.object({ op: z.literal('rename_project'), name: ProjectDisplayName }),"
+        },
+        {
+          "line": 52,
+          "text": "  z.object({ op: z.literal('set_settings'), patch: Settings.partial().extend({ defaultGrade: Grade.partial().nullable().optional(), theme: Theme.partial().optional(), captionStyle: TextStyle.partial().nullable().optional() }) }),"
+        },
+        {
+          "line": 65,
+          "text": "export const OpBatch = z.array(Op).min(1);"
+        },
+        {
+          "line": 250,
+          "text": "    case 'rename_project':"
+        },
+        {
+          "line": 448,
+          "text": "        Clip.parse({ id: newId('t'), trackId, start: r3(op.start), in: 0, out: r3(op.duration), text: op.text, textStyle: TextStyle.parse(op.style ?? {}) }),"
+        },
+        {
+          "line": 453,
+          "text": "    case 'set_settings': {"
+        }
+      ]
+    }
+  ]
+}

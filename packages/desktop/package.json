@@ -1,0 +1,11 @@
+{
+  "name": "@edit/desktop",
+  "version": "0.1.2",
+  "private": true,
+  "main": "dist/main.cjs",
+  "description": "قَصّة — local video editor",
+  "author": "Qassa",
+  "scripts": {
+    "start": "electron ."
+  }
+}
