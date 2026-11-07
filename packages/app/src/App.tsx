@@ -6,7 +6,7 @@ import { Shortcuts } from './components/Shortcuts.tsx';
 import { Styles } from './components/Styles.tsx';
 import { BOTH_PANELS, connectLive, useStore } from './lib/store.ts';
 import { Viewer } from './components/Viewer.tsx';
-import { Timeline } from './components/Timeline.tsx';
+import { deleteSelectedKey, Timeline, useKeySel } from './components/Timeline.tsx';
 import { Transcript } from './components/Transcript.tsx';
 import { Inspector } from './components/Inspector.tsx';
 import { MediaPanel } from './components/MediaPanel.tsx';
@@ -15,15 +15,17 @@ import { Assistant } from './components/Assistant.tsx';
 import { Icon } from './components/Brand.tsx';
 import { Header } from './components/Header.tsx';
 import { Home as ProjectHome } from './components/Home.tsx';
-import { importFiles, isFileDrag, placeMedia, useMediaSelection } from './lib/import.ts';
+import { importFiles, isFileDrag, placeMediaRun, removeMedia, useMediaSelection } from './lib/import.ts';
 import { Uploads } from './components/Uploads.tsx';
 import { RangeDeleteHint } from './components/RangeDeleteHint.tsx';
+import { deleteOps, useLayout } from './lib/layout.ts';
 
 export function App() {
   const name = useStore((s) => s.name);
   const project = useStore((s) => s.project);
   const mediaOpen = useStore((s) => s.panels.media);
   const [fileOver, setFileOver] = useState(false);
+  const hidden = useLayout((s) => s.hidden);
 
   useEffect(() => {
     // connectLive loads the project list and the ?p= project as soon as the server answers
@@ -48,10 +50,10 @@ export function App() {
       <Header />
       {name && project ? (
         <div className="studio-body">
-          <ToolRail />
+          {!hidden.rail && <ToolRail />}
           <div className="studio-main">
             <Workspace />
-            <TimelineDock />
+            {!hidden.timeline && <TimelineDock />}
           </div>
         </div>
       ) : (
@@ -185,12 +187,16 @@ function useShortcuts() {
     const onKey = (e: KeyboardEvent) => {
       if (document.querySelector('dialog[open]') || e.defaultPrevented) return;
       if (e.code === 'Space' && !e.shiftKey && e.target instanceof Element && e.target.closest('button,a,summary,[role="button"]')) return;
-      if (e.target instanceof Element && e.target.closest('input,textarea,select,[contenteditable]')) return;
+      // in a field: text fields keep their own keys (and their own undo); after a slider, a checkbox or a list was used,
+      // focus stays on it, and Ctrl+Z / Ctrl+Shift+Z must still undo the edit it made
+      const field = e.target instanceof Element ? e.target.closest('input,textarea,select,[contenteditable]') : null;
+      const textual = !!field && (field.tagName === 'TEXTAREA' || field.hasAttribute('contenteditable') || (field instanceof HTMLInputElement && !['range', 'checkbox', 'radio', 'button', 'color'].includes(field.type)));
+      if (textual) return;
       const keys = useKeys.getState();
       const combo = comboOf(e);
       if (!combo) return;
       const action = actionFor(combo);
-      if (!action) return;
+      if (!action || (field && action !== 'undo' && action !== 'redo')) return;
       // the panels answer their own keys while open
       if (keys.open || useStore.getState().stylesOpen) {
         if (action === 'deselect') { e.preventDefault(); keys.setOpen(false); useStore.getState().setStylesOpen(false); }
@@ -206,7 +212,7 @@ function useShortcuts() {
       e.preventDefault();
       switch (action) {
         case 'timelineMax': return useTimelineView.getState().toggleMax();
-        case 'addMedia': { const id = useMediaSelection.getState().id; if (id) return placeMedia(id, { at: s.time }); return; }
+        case 'addMedia': { const { ids } = useMediaSelection.getState(); if (ids.length) return placeMediaRun(ids, s.time); return; }
         case 'nudgeBack': case 'nudgeFwd': case 'nudgeBack10': case 'nudgeFwd10': {
           const clips = p.clips.filter((c) => s.selected.includes(c.id) && c.trackId !== 'V1');
           const delta = (action.includes('Back') ? -1 : 1) * (action.endsWith('10') ? 10 : 1) / fps;
@@ -241,12 +247,16 @@ function useShortcuts() {
           return;
         }
         case 'delete':
+          // a picked ◆ on the timeline goes first
+          if (deleteSelectedKey()) return;
+          // focus in the project library: delete the picked files, not timeline clips
+          if (e.target instanceof Element && e.target.closest('[data-media-list]')) return removeMedia(useMediaSelection.getState().ids);
           if (s.selected.length) {
-            s.ops(s.selected.map((id) => ({ op: 'delete', clipId: id })));
+            s.ops(deleteOps(s.selected));
             s.select([]);
           } else return s.deleteMarkedRange();
           return;
-        case 'deselect': s.setGraphicPick(undefined); return s.select([]);
+        case 'deselect': s.setGraphicPick(undefined); useKeySel.setState({ key: undefined }); return s.select([]);
         case 'undo': return s.undo();
         case 'redo': return s.redo();
         case 'comment': return s.startNote();

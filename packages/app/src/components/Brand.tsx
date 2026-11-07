@@ -63,6 +63,8 @@ const PATHS = {
   image: 'M3 5h18v14H3z M3 16l5-5 4 4 3-3 6 6 M15.5 8.5h.01',
   camera: 'M4 8h3.5L9 5.5h6L16.5 8H20v11H4z M12 10.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6',
   paste: 'M8 4h8v3H8z M16 5h3v16H5V5h3 M9 12h6 M9 16h4',
+  lock: 'M6 11h12v9H6z M8.5 11V8a3.5 3.5 0 0 1 7 0v3',
+  unlock: 'M6 11h12v9H6z M8.5 11V8a3.5 3.5 0 0 1 6.8-1.2',
 } as const;
 
 export function Icon({ name, size = 14 }: { name: keyof typeof PATHS; size?: number }) {

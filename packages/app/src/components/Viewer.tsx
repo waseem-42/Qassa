@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   MAIN_TRACK, clipDuration, clipEnd, clipsAt, fmtTime, GRAPHIC_RUNTIME, graphicBaseSize, graphicTime, graphicUrl, placeCss, transitionHalf, mainClips, mainDuration, outputSize,
-  opacityAt, placeAt, projectDuration, textLayerHtml, transformAt, volumeAt,
+  opacityAt, placeAt, anchoredShift, projectDuration, textLayerHtml, transformAt, volumeAt,
   type Clip, type GraphicEdit, type Media, type Op, type Project, type Theme,
 } from '@edit/shared';
 import { withEdit } from '../lib/graphic-edit.ts';
@@ -32,6 +32,9 @@ function still(url: string): HTMLImageElement {
 
 function segments(p: Project, name: string): Seg[] {
   const media = new Map(p.media.map((m) => [m.id, m]));
+  // forget decoded stills the project no longer uses (a deleted 4K photo kept its memory until a reload)
+  const used = new Set(p.media.map((m) => fileUrl(name, m.proxy ?? m.path)));
+  for (const url of stills.keys()) if (!used.has(url)) stills.delete(url);
   return mainClips(p).flatMap<Seg>((clip) => {
     const m = media.get(clip.mediaId ?? '');
     const url = m && fileUrl(name, m.proxy ?? m.path);
@@ -262,11 +265,16 @@ export function Viewer() {
         if (cv) {
           // opacity: the whole frame (bars too) over black, as the render does
           const op = String(Math.round(opacityAt(cur.clip, t - cur.clip.start) * 1000) / 1000);
-          const css = `${box[0] * 100}%|${box[1] * 100}%|${box[2] * 100}%|${box[3] * 100}%|rotate(${pic?.rotate ?? 0}deg) scale(${pic?.flipX ? -1 : 1}, ${pic?.flipY ? -1 : 1})|${op}`;
+          // moved / resized on the main track: scaled about the frame centre, then shifted (in frame widths / heights)
+          const pl = placeAt(cur.clip, t - cur.clip.start), fr = frame.current;
+          const sh = anchoredShift(pl);
+          const place = pl.scale !== 1 || pl.dx || pl.dy ? `translate(${sh.x * (fr?.clientWidth ?? 0)}px, ${sh.y * (fr?.clientHeight ?? 0)}px) scale(${pl.scale}) ` : '';
+          const css = `${box[0] * 100}%|${box[1] * 100}%|${box[2] * 100}%|${box[3] * 100}%|${place}rotate(${pic?.rotate ?? 0}deg) scale(${pic?.flipX ? -1 : 1}, ${pic?.flipY ? -1 : 1})|${op}|${place}`;
           if (cv.dataset.css !== css) {
             const [l, tp, w, h, tf] = css.split('|');
-            Object.assign(cv.style, { left: l, top: tp, width: w, height: h, transform: tf, opacity: op });
-            if (bars.current) bars.current.style.opacity = op;
+            // the canvas turns about its own centre; a fitted picture's box is centred, so that is the frame centre too
+            Object.assign(cv.style, { left: l, top: tp, width: w, height: h, transform: tf, transformOrigin: `${(0.5 - box[0]) / box[2] * 100}% ${(0.5 - box[1]) / box[3] * 100}%`, opacity: op });
+            if (bars.current) { bars.current.style.opacity = op; bars.current.style.translate = place ? `${sh.x * (fr?.clientWidth ?? 0)}px ${sh.y * (fr?.clientHeight ?? 0)}px` : ''; bars.current.style.scale = place ? String(pl.scale) : ''; }
             cv.dataset.css = css;
           }
         }
@@ -343,7 +351,8 @@ export function Viewer() {
         const pic = c.picture, pl = placeAt(c, t - c.start), crop = pic?.crop;
         el.style.objectFit = pic?.fit === 'fit' ? 'contain' : 'cover';
         el.style.setProperty('object-view-box', crop ? `inset(${crop.t * 100}% ${crop.r * 100}% ${crop.b * 100}% ${crop.l * 100}%)` : 'none');
-        el.style.transform = `translate(${pl.dx * 100}%, ${pl.dy * 100}%) rotate(${pic?.rotate ?? 0}deg) scale(${pl.scale * (pic?.flipX ? -1 : 1)}, ${pl.scale * (pic?.flipY ? -1 : 1)})`;
+        const at = anchoredShift(pl);
+        el.style.transform = `translate(${at.x * 100}%, ${at.y * 100}%) rotate(${pic?.rotate ?? 0}deg) scale(${pl.scale * (pic?.flipX ? -1 : 1)}, ${pl.scale * (pic?.flipY ? -1 : 1)})`;
         el.style.opacity = String(opacityAt(c, t - c.start));
       }
     }
@@ -425,7 +434,7 @@ function EmptyViewer() {
         <>
           <Spinner size={32} />
           <span className="text-ink-300">{`يجهّز المقطع: ${analyzing.stage ?? ''} ${Math.round(analyzing.progress * 100)}%`}</span>
-          <span className="text-xs text-ink-500">أول ما يخلص البروكسي يظهر هنا ويتحط على التايملاين. التفريغ والسكتات يكملون بالخلفية.</span>
+          <span className="text-xs text-ink-500">الملف في مكتبة المشروع؛ اسحبه إلى التايملاين متى ما تبي. التحليل يكمل بالخلفية.</span>
         </>
       ) : (
         <>
@@ -433,7 +442,7 @@ function EmptyViewer() {
           <span className="text-lg text-ink-200">أفلت مقطعك هنا</span>
           <label className="btn btn-primary cursor-pointer">أو اختر ملف<input type="file" hidden accept="video/*,audio/*,image/*" multiple onChange={(e) => { importFiles([...(e.target.files ?? [])]); e.target.value = ''; }} /></label>
           {!project.media.length && <div className="flex flex-col items-center gap-2"><span className="text-xs text-ink-500">ابدأ بمسارات تناسبك — كلها قابلة للتغيير</span><StartChoice value={shape} onChange={async (start) => { if (await useStore.getState().ops(startShapeOps(project, start))) setShape(start); }} /></div>}
-          <span className="max-w-md text-xs leading-6 text-ink-500">ينحط على التايملاين ويتجهّز للمعاينة. تفريغ الكلام يبدأ فقط لما تطلبه. اسحب الصور والموسيقى هنا أيضًا، أو اسحب ملفًا إلى مسار تختاره.</span>
+          <span className="max-w-md text-xs leading-6 text-ink-500">الملفات تنضاف لمكتبة المشروع، وتحطها على التايملاين بسحبها إلى مسار أو بزر ＋. تفريغ الكلام يبدأ فقط لما تطلبه.</span>
         </>
       )}
     </div>

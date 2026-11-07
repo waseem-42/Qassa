@@ -5,10 +5,13 @@ import {
 } from '@edit/shared';
 import { useStore, type Analysis } from '../lib/store.ts';
 import { fileUrl } from '../lib/api.ts';
-import { actionFor, comboOf, useKeys } from '../lib/keys.ts';
-import { rowHeight, useTimelineView } from '../lib/timeline-view.ts';
+import { actionFor, comboOf } from '../lib/keys.ts';
+import { useRowHeight, useTimelineView } from '../lib/timeline-view.ts';
 import { snapSpan, snapTime, timelineTargets } from '../lib/snap.ts';
-import { keyTimes } from '../lib/anim.ts';
+import { deleteKeysPatch, keyTimes, moveKeysPatch } from '../lib/anim.ts';
+import { create } from 'zustand';
+import { deleteOps, useLayout } from '../lib/layout.ts';
+import { PopupMenu } from './PopupMenu.tsx';
 import { Icon } from './Brand.tsx';
 import { ClipMenu } from './ClipMenu.tsx';
 import { GraphicPicker, sceneEdges, useScenes } from './GraphicControls.tsx';
@@ -27,10 +30,17 @@ const STEPS = [0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
 type Drag =
   | { kind: 'trim'; clip: Clip; edge: 'in' | 'out'; x0: number; scroll0: number; value: number }
   /** over: another track the clip would land on (dropped there: it moves to that track) */
-  | { kind: 'move'; clip: Clip; group: Clip[]; fixedTracks?: boolean; x0: number; scroll0: number; start: number; dx: number; over?: string; plan?: Op[]; index?: number }
+  /** at: main-track magnet off — the main-track clip's new time (move_main) */
+  | { kind: 'move'; clip: Clip; group: Clip[]; fixedTracks?: boolean; x0: number; scroll0: number; start: number; dx: number; over?: string; plan?: Op[]; index?: number; at?: number }
   | { kind: 'scrub'; offset: number; targets: number[] }
   | { kind: 'mark'; edge: 'in' | 'out'; value: number; offset: number; base: Project['settings']['marks']; targets: number[] }
   | { kind: 'band'; x0: number; y0: number; x: number; y: number; from: number; to: number; moved: boolean; mode: 'replace' | 'add' | 'toggle'; base: string[] };
+
+/** Free clips moved by `delta` exactly as dropped: onto `over` (or each its own track), overlapping or not. */
+function exactMoveOps(group: Clip[], delta: number, over?: string): Op[] {
+  delta = Math.max(delta, -Math.min(...group.map((c) => c.start)));
+  return group.map((c) => ({ op: 'move' as const, clipId: c.id, trackId: over ?? c.trackId, start: Math.round((c.start + delta) * 1000) / 1000 }));
+}
 
 /** The preview follows the same track compatibility as persisted move ops. */
 function fitsTrack(c: Clip, t: Track, p: Project): boolean {
@@ -42,6 +52,56 @@ type Landing = { trackId?: string; at: number; duration: number; request: MediaT
 /** Clips whose in-point is their own clock (text, HTML graphics), not a position in a media file. */
 const isLayer = (c: Clip) => c.trackId !== MAIN_TRACK && !c.mediaId && (!!c.text || !!c.graphic);
 
+/** The ◆ picked on a timeline clip (Delete removes it), by clip and clip time. */
+export const useKeySel = create<{ key?: { clipId: string; t: number } }>(() => ({}));
+export function deleteSelectedKey(): boolean {
+  const s = useStore.getState(), k = useKeySel.getState().key, c = k && s.project?.clips.find((x) => x.id === k.clipId);
+  if (!k || !c || !keyTimes(c).some((t) => Math.abs(t - k.t) < 1e-3)) return false;
+  useKeySel.setState({ key: undefined });
+  void s.ops([{ op: 'update_clip', clipId: c.id, patch: deleteKeysPatch(c, k.t) }]);
+  return true;
+}
+
+/**
+ * A clip's ◆: drag along the clip to move every key at that moment (live, one undo step), click to put the
+ * playhead on it and pick it (Delete removes it), right-click for its menu.
+ */
+function ClipKey({ clip: c, k, zoom }: { clip: Clip; k: number; zoom: number }) {
+  const picked = useKeySel((s) => s.key?.clipId === c.id && Math.abs(s.key.t - k) < 1e-3);
+  const [menu, setMenu] = useState<{ x: number; y: number }>();
+  const down = (e: React.PointerEvent) => {
+    e.stopPropagation(); e.preventDefault();
+    if (e.button !== 0) return;
+    // window listeners: the ◆ is redrawn at its new time while dragging (a new element), so the drag can't live on it
+    const x0 = e.clientX, { preview, commit, seek } = useStore.getState();
+    let moved = false, to = k;
+    const move = (ev: PointerEvent) => {
+      if (!moved && Math.abs(ev.clientX - x0) < 3) return;
+      moved = true;
+      to = Math.max(0, Math.min(clipDuration(c), k + (ev.clientX - x0) / zoom));
+      // the playhead stays where it is: only the key moves
+      preview([{ op: 'update_clip', clipId: c.id, patch: moveKeysPatch(c, k, to) }]);
+    };
+    const up = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      if (moved && Math.abs(to - k) >= 1e-3) { useKeySel.setState({ key: { clipId: c.id, t: Math.round(to * 1000) / 1000 } }); void commit([{ op: 'update_clip', clipId: c.id, patch: moveKeysPatch(c, k, to) }]); return; }
+      const { draftBase } = useStore.getState();
+      if (draftBase) useStore.setState({ project: draftBase, draftBase: undefined });
+      useKeySel.setState({ key: { clipId: c.id, t: k } });
+      seek(c.start + k);
+    };
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  };
+  return <>
+    <button className="clip-key" data-picked={picked || undefined} style={{ left: k * zoom - 4 }} title={`مفتاح حركة ${fmtTime(c.start + k, 2)} — اسحبه لتحريكه (المؤشر يبقى مكانه)، نقرة تودّي المؤشر له، Delete يحذفه`} aria-label="مفتاح حركة"
+      onPointerDown={down} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); useKeySel.setState({ key: { clipId: c.id, t: k } }); setMenu({ x: e.clientX, y: e.clientY }); }} />
+    {menu && <PopupMenu label="مفتاح الحركة" x={menu.x} y={menu.y} onClose={() => setMenu(undefined)} groups={[
+      [{ label: 'انتقل إليه', run: () => useStore.getState().seek(c.start + k) }],
+      [{ label: 'حذف المفتاح', key: 'delete', danger: true, run: () => { useKeySel.setState({ key: { clipId: c.id, t: k } }); deleteSelectedKey(); } }],
+    ]} />}
+  </>;
+}
+
 const images = new Map<string, HTMLImageElement>();
 function sprite(url: string, onload: () => void) {
   let img = images.get(url);
@@ -52,6 +112,30 @@ function sprite(url: string, onload: () => void) {
   }
   if (!img.complete) img.addEventListener('load', onload, { once: true });
   return img;
+}
+
+/** A still drawn along its clip: a copy 160 px tall, made once (tiling the full photo on every redraw made drags crawl). */
+const tiles = new Map<string, HTMLCanvasElement>();
+function stillTile(url: string, onload: () => void): HTMLCanvasElement | undefined {
+  const done = tiles.get(url);
+  if (done) return done;
+  const img = sprite(url, onload);
+  if (!img.complete || !img.naturalWidth) return undefined;
+  const c = document.createElement('canvas');
+  c.height = 160; c.width = Math.max(8, Math.round((160 * img.naturalWidth) / img.naturalHeight));
+  c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+  tiles.set(url, c);
+  images.delete(url); // the full-size decode is no longer needed
+  return c;
+}
+
+/** Drop timeline images of media the project no longer has (its stills, and filmstrips under analysis/<id>/). */
+function pruneSprites(p: Project, name: string) {
+  const urls = new Set(p.media.flatMap((m) => [fileUrl(name, m.path), fileUrl(name, m.proxy)]));
+  const dirs = p.media.map((m) => fileUrl(name, `analysis/${m.id}/`)!);
+  const keep = (url: string) => urls.has(url) || dirs.some((d) => url.startsWith(d));
+  for (const url of images.keys()) if (!keep(url)) images.delete(url);
+  for (const url of tiles.keys()) if (!keep(url)) tiles.delete(url);
 }
 
 export function Timeline() {
@@ -74,7 +158,7 @@ export function Timeline() {
   const landingRef = useRef<Landing>();
   const setLanding = (next?: Landing) => { landingRef.current = next; setLandingState(next); };
   const size = useTimelineView((s) => s.size), maximised = useTimelineView((s) => s.maximised);
-  const mixedHint = useRef(false);
+  const mixedHint = useRef(false), lockHint = useRef(false), overlapHint = useRef(false);
   const placementIds = useRef(new Map<string, string>());
   const stablePlan = (plan: Op[]): Op[] => {
     const ids = new Map<string, string>();
@@ -85,8 +169,8 @@ export function Timeline() {
     });
     return plan.map((op) => op.op === 'add_track' ? { ...op, track: { ...op.track, id: ids.get(op.track.id)! } } : op.op === 'move_track' || op.op === 'move' ? { ...op, trackId: ids.get(op.trackId!) ?? op.trackId } : op.op === 'add_clip' ? { ...op, clip: { ...op.clip, trackId: ids.get(op.clip.trackId) ?? op.clip.trackId } } : op) as Op[];
   };
-  const pointer = useRef<{ clientX: number; clientY: number; altKey: boolean; media?: boolean }>();
-  const moveRef = useRef<(e: { clientX: number; clientY: number; altKey: boolean }) => void>();
+  const pointer = useRef<{ clientX: number; clientY: number; altKey: boolean; shiftKey?: boolean; media?: boolean }>();
+  const moveRef = useRef<(e: { clientX: number; clientY: number; altKey: boolean; shiftKey?: boolean }) => void>();
   const mediaRef = useRef<(e: { clientX: number; clientY: number; altKey: boolean }) => void>();
   // the first click re-renders the clip (selection), so the browser never sees a dblclick: detect it here
   const lastDown = useRef({ id: '', at: 0 });
@@ -97,6 +181,7 @@ export function Timeline() {
   const contentW = Math.max(duration, project.settings.marks.in ?? 0, project.settings.marks.out ?? 0) * zoom + 400;
   const previewOps = landing?.plan ?? (drag?.kind === 'move' ? drag.plan : undefined);
   const tracks = previewOps?.length ? applyOps(project, previewOps).tracks : project.tracks;
+  useEffect(() => pruneSprites(project, name), [project.media, name]);
   const waveInit = useRef<string>();
   useEffect(() => {
     const main = mainClips(project);
@@ -165,13 +250,24 @@ export function Timeline() {
         const list = ['compact', 'normal', 'large'] as const, v = useTimelineView.getState();
         v.setSize(list[Math.max(0, Math.min(2, list.indexOf(v.size) + (e.deltaY < 0 ? 1 : -1)))]); return;
       }
-      const box = el.getBoundingClientRect(), s = useStore.getState(), t = (e.clientX - box.left + el.scrollLeft) / s.zoom;
-      s.setZoom(s.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
-      requestAnimationFrame(() => { el.scrollLeft = t * useStore.getState().zoom - (e.clientX - box.left); });
+      const s = useStore.getState();
+      s.setZoom(s.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); // around the playhead (below)
     };
     el.addEventListener('wheel', wheel, { passive: false });
     return () => el.removeEventListener('wheel', wheel);
   }, []);
+
+  // any zoom (wheel, slider, keys) keeps the playhead where it is on screen — centred when it was out of view
+  useEffect(
+    () =>
+      useStore.subscribe((s, prev) => {
+        const el = scroller.current;
+        if (s.zoom === prev.zoom || !el) return;
+        const x = s.time * prev.zoom - el.scrollLeft, off = x >= 0 && x <= el.clientWidth ? x : el.clientWidth / 2;
+        requestAnimationFrame(() => { el.scrollLeft = Math.max(0, s.time * useStore.getState().zoom - off); });
+      }),
+    [],
+  );
 
   // keep the playhead in view while playing
   useEffect(
@@ -192,6 +288,7 @@ export function Timeline() {
 
   // the magnet (N): drags catch on the playhead, other clips' edges and comments; Alt lets go for one drag
   const magnet = useStore((s) => s.magnet);
+  const mainMagnet = useLayout((s) => s.mainMagnet);
   const [snapAt, setSnapAt] = useState<number>();
   const catches = (e: { altKey: boolean }) => magnet && !e.altKey;
   const clampTime = (t: number) => Math.min(projectDuration(project), Math.max(0, t));
@@ -221,6 +318,8 @@ export function Timeline() {
     if (e.button !== 0) return;
     capture(e);
     const box = content.current!.getBoundingClientRect(), x = e.clientX - box.left, y = e.clientY - box.top;
+    // a press on empty space puts the playhead there at once; dragging on draws a selection box
+    seek(clampTime(xToTime(e.clientX)));
     setDrag({ kind: 'band', x0: x, y0: y, x, y, from: clampTime(xToTime(e.clientX)), to: clampTime(xToTime(e.clientX)), moved: false, mode: e.ctrlKey ? 'toggle' : e.shiftKey ? 'add' : 'replace', base: [...selected] });
   };
   const marks = { ...(drag?.kind === 'mark' ? drag.base : project.settings.marks) };
@@ -231,10 +330,10 @@ export function Timeline() {
   const range = marks.in !== undefined && marks.out !== undefined ? [marks.in, marks.out] : undefined;
   const shownMarks = { in: marks.in ?? 0, out: marks.out ?? projectDuration(project) };
 
-  const onPointerMove = (e: { clientX: number; clientY: number; altKey: boolean }) => {
+  const onPointerMove = (e: { clientX: number; clientY: number; altKey: boolean; shiftKey?: boolean }) => {
     const drag = dragRef.current;
     if (!drag) return;
-    pointer.current = { clientX: e.clientX, clientY: e.clientY, altKey: e.altKey };
+    pointer.current = { clientX: e.clientX, clientY: e.clientY, altKey: e.altKey, shiftKey: e.shiftKey };
     if (drag.kind === 'scrub') return seek(snapCursor(e, xToTime(e.clientX) - drag.offset, drag.targets));
     if (drag.kind === 'mark') return setDrag({ ...drag, value: snapCursor(e, xToTime(e.clientX) - drag.offset, drag.targets) });
     if (drag.kind === 'band') {
@@ -242,7 +341,7 @@ export function Timeline() {
       const next = { ...drag, x, y, to: clampTime(xToTime(e.clientX)), moved: drag.moved || Math.hypot(x - drag.x0, y - drag.y0) > 3 };
       if (next.moved) {
         const rows = [...content.current!.querySelectorAll<HTMLElement>('[data-track-row]')].map((r) => ({ id: r.dataset.trackRow!, top: r.getBoundingClientRect().top - box.top, bottom: r.getBoundingClientRect().bottom - box.top }));
-        const hits = bandHits(project.clips, rows, { from: Math.min(next.from, next.to), to: Math.max(next.from, next.to), top: Math.min(next.y0, y), bottom: Math.max(next.y0, y) });
+        const hits = bandHits(project.clips.filter((c) => !project.tracks.find((t) => t.id === c.trackId)?.locked), rows, { from: Math.min(next.from, next.to), to: Math.max(next.from, next.to), top: Math.min(next.y0, y), bottom: Math.max(next.y0, y) });
         const ids = bandSelection(next.base, hits, next.mode);
         if (ids.join(',') !== useStore.getState().selected.join(',')) select(ids);
       }
@@ -269,8 +368,16 @@ export function Timeline() {
       // the track under the pointer, when the clip can go there (dropped: it moves to that track)
       const row = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-track-row]')?.dataset.trackRow;
       const target = project.tracks.find((t) => t.id === row);
-      const over = drag.fixedTracks ? undefined : target && fitsTrack(drag.clip, target, project) ? target.id === drag.clip.trackId ? undefined : target.id : drag.over;
+      const over = drag.fixedTracks ? undefined : target && !target.locked && fitsTrack(drag.clip, target, project) ? target.id === drag.clip.trackId ? undefined : target.id : drag.over;
       const onMain = over === MAIN_TRACK || (!over && drag.clip.trackId === MAIN_TRACK);
+      if (onMain && !over && drag.clip.trackId === MAIN_TRACK && !mainMagnet) {
+        // main-track magnet off: the clip moves in time; the space it leaves or takes is a gap (the clip before stops it)
+        setDropIndex(undefined);
+        const order = mainClips(project), i = order.findIndex((c) => c.id === drag.clip.id), prev = order[i - 1];
+        const floor = prev?.gap ? prev.start : drag.start;
+        const at = Math.max(floor, snap(e, drag.start + dt, drag.clip.id));
+        return setDrag({ ...drag, dx: (at - drag.start) * zoom, over: undefined, index: undefined, plan: undefined, at });
+      }
       if (onMain) {
         // joining or reordering the main track: where it would go between the others
         const t = xToTime(e.clientX);
@@ -290,7 +397,9 @@ export function Timeline() {
       const r = catches(e) ? snapSpan(raw, groupEnd - groupStart, points, 8 / zoom) : { start: raw, at: undefined };
       const delta = Math.max(0, r.start) - groupStart;
       setSnapAt(r.at);
-      setDrag({ ...drag, dx: delta * zoom, over, plan: stablePlan(freeMoveOps(project, drag.group, delta, over)) });
+      // dropped where it is let go, on the track under the pointer, even over another clip there (striped);
+      // Shift: the nearest free layer instead (a new one when none is free)
+      setDrag({ ...drag, dx: delta * zoom, over, plan: stablePlan(e.shiftKey ? freeMoveOps(project, drag.group, delta, over) : exactMoveOps(drag.group, delta, over)) });
     }
   };
   moveRef.current = onPointerMove;
@@ -308,7 +417,7 @@ export function Timeline() {
       return;
     }
     if (d.kind === 'band') {
-      if (!d.moved) { seek(d.from); if (d.mode === 'replace') select([]); }
+      if (!d.moved && d.mode === 'replace') select([]);
       return;
     }
     if (d.kind === 'trim') {
@@ -320,16 +429,24 @@ export function Timeline() {
     } else if (d.kind === 'move') {
       const index = d.index;
       setDropIndex(undefined);
+      if (d.at !== undefined) {
+        if (Math.abs(d.at - d.start) > 1e-3) await ops([{ op: 'move_main', clipId: d.clip.id, start: d.at }]);
+        return;
+      }
       if (d.over === MAIN_TRACK) {
         await ops([{ op: 'move', clipId: d.clip.id, trackId: MAIN_TRACK, index: index ?? mainClips(project).length }]);
       } else if (d.plan && (Math.abs(d.dx) >= 3 || d.over && d.over !== d.clip.trackId)) {
-        await ops(d.plan);
+        const before = project.tracks.reduce((n, t) => n + trackOverlaps(project, t.id).length, 0);
+        if (await ops(d.plan) && !overlapHint.current) {
+          const p = useStore.getState().project!;
+          if (p.tracks.reduce((n, t) => n + trackOverlaps(p, t.id).length, 0) > before) { overlapHint.current = true; useStore.getState().notify('اللقطة فوق لقطة ثانية بنفس المسار (المخطط) — اللي بعدها تظهر فوق. اسحب مع Shift عشان تنحط في طبقة فاضية', 'info'); }
+        }
       } else if (Math.abs(d.dx) < 3) {
         return;
       } else if (d.clip.trackId === MAIN_TRACK) {
         if (index !== undefined && index !== mainClips(project).findIndex((c) => c.id === d.clip.id)) await ops([{ op: 'reorder', clipId: d.clip.id, index }]);
         // a drag along the main track that changes nothing: say how it works instead of doing nothing
-        else useStore.getState().notify('المسار الرئيسي لقطاته ورا بعض بدون فراغ: اسحب اللقطة بين لقطاته تتغيّر مكانها في الترتيب، أو اسحبها لمسار «بي-رول» وتحرّكها بحرية', 'info');
+        else useStore.getState().notify('المسار الرئيسي مغناطيسي: لقطاته ورا بعض. اسحبها بين لقطاته لتغيير الترتيب، أو طفِّ «مغناطيس الأساسي» من شريط التايملاين عشان تتحرك بحرية وتترك فراغ', 'info');
       }
     }
   };
@@ -349,7 +466,7 @@ export function Timeline() {
     const r = t?.id === MAIN_TRACK ? { start: mainInsertion(project, raw).at } : catches(e) ? snapSpan(raw, duration, timelineTargets(project, useStore.getState().time), 8 / zoom) : { start: raw };
     request.at = Math.max(0, r.start);
     setSnapAt('at' in r ? r.at : undefined);
-    const error = t && (t.kind === 'text' || m && !mediaFitsTrack(m, t)) ? t.kind === 'text' ? 'النص له مسار نص؛ اختر مسار صورة أو صوت' : 'هذا الملف لا يناسب هذا المسار' : undefined;
+    const error = t?.locked ? 'المسار مقفول — افتح القفل أولاً' : t && (t.kind === 'text' || m && !mediaFitsTrack(m, t)) ? t.kind === 'text' ? 'النص له مسار نص؛ اختر مسار صورة أو صوت' : 'هذا الملف لا يناسب هذا المسار' : undefined;
     const plan = m && !error ? stablePlan(mediaPlacementOps(project, m, request)) : [];
     const added = plan.find((o) => o.op === 'add_clip');
     setLanding({ trackId: added?.op === 'add_clip' ? added.clip.trackId : t?.id, at: request.at, duration, request, plan, mediaId: m?.id, label: m?.name ?? 'ملف جديد — المدة بعد الفحص', error, x: e.clientX, y: e.clientY });
@@ -387,18 +504,19 @@ export function Timeline() {
         <select className="rounded border border-ink-700 bg-ink-900 text-xs text-ink-300" aria-label="حجم المسارات" value={size} onChange={(e) => useTimelineView.getState().setSize(e.target.value as typeof size)}><option value="compact">مضغوط</option><option value="normal">عادي</option><option value="large">كبير</option></select>
         <div className="timeline-tools">
           <button className="btn btn-ghost timeline-tool" title="تقسيم عند المؤشر (S)" aria-label="تقسيم عند المؤشر" disabled={!project.clips.length} onClick={() => { const s = useStore.getState(); const target = project.clips.find((c) => selected.includes(c.id) && s.time > c.start && s.time < clipEnd(c)) ?? timelineToSource(project, s.time)?.clip; if (target && s.time > target.start && s.time < clipEnd(target)) ops([{ op: 'split', clipId: target.id, at: s.time }]); else s.notify('حرّك المؤشر داخل اللقطة لتقسيمها', 'info'); }}><Icon name="cut" size={16} /><span>تقسيم</span></button>
-          <button className="btn btn-ghost timeline-tool" title="حذف المحدد (Delete)" aria-label="حذف المحدد" disabled={!selected.length && !range} onClick={async () => { if (!selected.length) return useStore.getState().deleteMarkedRange(); if (await ops(selected.map((id) => ({ op: 'delete' as const, clipId: id })))) select([]); }}><Icon name="trash" size={16} /></button>
+          <button className="btn btn-ghost timeline-tool" title="حذف المحدد (Delete)" aria-label="حذف المحدد" disabled={!selected.length && !range} onClick={async () => { if (!selected.length) return useStore.getState().deleteMarkedRange(); if (await ops(deleteOps(selected))) select([]); }}><Icon name="trash" size={16} /></button>
           <button className="btn btn-ghost timeline-tool" title="إضافة نص" aria-label="إضافة نص" onClick={() => ops([{ op: 'add_text', text: 'نص جديد', start: useStore.getState().time, duration: 4, style: { preset: 'lower-third', animation: 'slide-up' } }])}><Icon name="text" size={16} /><span>نص</span></button>
           <GraphicPicker />
           <button className="btn btn-ghost timeline-tool magnet-toggle" aria-label="موجة صوت كبيرة" aria-pressed={largeWave} title="موجة صوت كبيرة (Shift+W)" onClick={() => useStore.getState().setLargeWave(!largeWave)}><Icon name="speaker" size={16} /><span>الموجة</span></button>
           <button className="btn btn-ghost timeline-tool" title="إضافة تعليق (C)" aria-label="إضافة تعليق" onClick={() => useStore.getState().startNote()}><Icon name="comment" size={16} /></button>
+          <button className="btn btn-ghost timeline-tool magnet-toggle" aria-pressed={mainMagnet} aria-label="مغناطيس المسار الأساسي" title={mainMagnet ? 'مغناطيس الأساسي شغّال — لقطات المسار الأساسي ورا بعض بدون فراغ. اضغط عشان تتحرك بحرية وتترك فراغ' : 'مغناطيس الأساسي طافي — اسحب لقطات المسار الأساسي لأي وقت؛ الحذف يترك فراغ. اضغط عشان ترجع تتلاصق'}
+            onClick={() => useLayout.getState().setMainMagnet(!mainMagnet)}><Icon name="magnet" size={16} /><span>الأساسي</span></button>
           <button className="btn btn-ghost timeline-tool magnet-toggle" aria-pressed={magnet} title={magnet ? 'المغناطيس شغّال (N) — اللقطات تلقط الحواف والمؤشر. Alt أثناء السحب يوقفه مؤقتًا' : 'المغناطيس طافي (N)'} aria-label="المغناطيس" onClick={() => useStore.getState().setMagnet(!magnet)}><Icon name="magnet" size={16} /></button>
         </div>
         {(marks.in !== undefined || marks.out !== undefined) && <div className="flex shrink-0 items-center gap-1 text-xs text-accent" data-marks-length><span className="num" dir="ltr">{range ? fmtTime(range[1] - range[0], 1) : `${marks.in !== undefined ? 'In' : 'Out'} ${fmtTime(marks.in ?? marks.out!, 1)}`}</span><button className="icon-button" aria-label="مسح علامات I/O" onClick={() => ops([{ op: 'set_marks', in: null, out: null }])}><Icon name="close" size={12} /></button></div>}
         <div className="flex-1" />
         <div className="timeline-zoom"><input aria-label="تكبير التايملاين" type="range" min={0} max={1} step={0.001} style={{ width: 100 }} value={Math.log(zoom) / Math.log(400)} onChange={(e) => setZoom(Math.pow(400, Number(e.target.value)))} />
-        <button className="btn btn-ghost text-xs" title="عرض التايملاين كاملًا" onClick={() => setZoom((view.width - 40) / Math.max(5, projectDuration(project)))}>ملاءمة</button></div>
-        <button className="icon-button" aria-label="عرض الاختصارات" onClick={() => useKeys.getState().setOpen(true)}><Icon name="keyboard" size={16} /></button>
+        <button className="btn btn-ghost text-xs" title="عرض التايملاين كاملًا" onClick={() => { setZoom((view.width - 40) / Math.max(5, projectDuration(project))); requestAnimationFrame(() => requestAnimationFrame(() => { if (scroller.current) scroller.current.scrollLeft = 0; })); }}>ملاءمة</button></div>
       </div>
       {/* the ruler sits inside the sideways scroller, so CSS sticky cannot follow the vertical scroll: move it by hand */}
       <div ref={rows} data-timeline-rows className="flex min-h-0 flex-1 overflow-y-auto overflow-x-hidden" onScroll={(e) => {
@@ -407,8 +525,8 @@ export function Timeline() {
       }}>
         <div className="h-max shrink-0 border-r border-ink-800" style={{ width: HEAD }}>
           <div data-ruler style={{ height: RULER }} className="relative z-20 border-b border-ink-800 bg-ink-900"><div className="px-2 text-[10px] leading-[22px] text-ink-500" dir="rtl">حدود التصدير</div><AddTrack /></div>
-          {tracks.map((t) => (
-            <TrackHead key={t.id} track={t} ghost={!project.tracks.some((x) => x.id === t.id)} />
+          {tracks.map((t, i) => (
+            <TrackHead key={t.id} track={t} index={i} count={tracks.length} ghost={!project.tracks.some((x) => x.id === t.id)} />
           ))}
           <div className="flex items-center px-2 text-[10px] text-ink-500" style={{ height: 38 }} dir="rtl">مسار جديد بالسحب</div>
           <div className="flex items-center gap-1 border-b border-ink-800 px-2 text-xs" style={{ height: NOTES_LANE }} dir="rtl">
@@ -460,6 +578,11 @@ export function Timeline() {
                 onBackground={startBand}
                 onClipDown={(e, c, part) => {
                   e.stopPropagation();
+                  if (t.locked) {
+                    if (e.button === 0) { capture(e); seek(clampTime(xToTime(e.clientX))); }
+                    if (!lockHint.current) { useStore.getState().notify('المسار مقفول — افتح القفل من رأس المسار عشان تعدّل لقطاته', 'info'); lockHint.current = true; }
+                    return;
+                  }
                   // right button: the clip menu opens (on contextmenu); keep a multi-selection that includes it
                   if (e.button === 2) { if (!selected.includes(c.id)) select([c.id]); return; }
                   if (e.button !== 0) return;
@@ -479,7 +602,7 @@ export function Timeline() {
                   } else setDrag({ kind: 'trim', clip: c, edge: part, x0: e.clientX, scroll0: scroller.current!.scrollLeft, value: part === 'in' ? c.in : c.out });
                 }}
                 onClipDouble={(c) => seek(c.start)}
-                onClipMenu={(e, c) => { e.preventDefault(); setMenu({ clip: c, x: e.clientX, y: e.clientY }); }}
+                onClipMenu={(e, c) => { e.preventDefault(); if (!t.locked) setMenu({ clip: c, x: e.clientX, y: e.clientY }); }}
               />
               </div>
             ))}
@@ -506,10 +629,56 @@ export function Timeline() {
   );
 }
 
-function TrackHead({ track, ghost }: { track: Track; ghost?: boolean }) {
+/** A track head being dragged to another place in the stack: the gap (0 = above the first head) it would go into. */
+const useTrackDrag = create<{ id?: string; slot?: number }>(() => ({}));
+
+/** The line under a track: drag it to make the row taller or shorter (remembered per project); double-click resets it. */
+function TrackResizer({ track }: { track: Track }) {
+  const h = useRowHeight(track), name = useStore((s) => s.name)!;
+  const key = `${name}:${track.id}`;
+  const down = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.stopPropagation(); e.preventDefault();
+    const y0 = e.clientY, view = useTimelineView.getState();
+    let last = h;
+    const move = (ev: PointerEvent) => { last = h + ev.clientY - y0; view.setHeight(key, last, false); };
+    const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); view.setHeight(key, last); };
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  };
+  return <div className="track-resizer" role="separator" aria-orientation="horizontal" aria-label={`ارتفاع مسار ${track.name}`} title="اسحب لتغيير ارتفاع المسار · دبل كلك يرجّعه"
+    onPointerDown={down} onDoubleClick={(e) => { e.stopPropagation(); useTimelineView.getState().setHeight(key, undefined); }} />;
+}
+
+function TrackHead({ track, index, count, ghost }: { track: Track; index: number; count: number; ghost?: boolean }) {
   const ops = useStore((s) => s.ops);
-  const largeWave = useStore((s) => s.largeWave);
   const size = useTimelineView((s) => s.size);
+  const h = useRowHeight(track);
+  const slot = useTrackDrag((s) => s.slot), dragging = useTrackDrag((s) => s.id === track.id);
+  // drag a head (not its buttons) up or down to put the track elsewhere in the stack; the main track stays first
+  const reorder = (e: React.PointerEvent) => {
+    if (e.button !== 0 || ghost || track.id === MAIN_TRACK || (e.target as Element).closest('button,input')) return;
+    const y0 = e.clientY;
+    let active = false;
+    const slotAt = (y: number) => {
+      const heads = [...document.querySelectorAll<HTMLElement>('[data-track-head]:not([data-ghost-track])')];
+      const i = heads.findIndex((el) => { const r = el.getBoundingClientRect(); return y < r.top + r.height / 2; });
+      return Math.max(1, i < 0 ? heads.length : i);
+    };
+    const move = (ev: PointerEvent) => {
+      if (!active && Math.abs(ev.clientY - y0) < 4) return;
+      active = true;
+      useTrackDrag.setState({ id: track.id, slot: slotAt(ev.clientY) });
+    };
+    const up = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      const { slot: s } = useTrackDrag.getState();
+      useTrackDrag.setState({ id: undefined, slot: undefined });
+      if (!active || s === undefined) return;
+      const to = s > index ? s - 1 : s;
+      if (to !== index) void ops([{ op: 'move_track', trackId: track.id, index: to }]);
+    };
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  };
   const [renaming, setRenaming] = useState(false), [label, setLabel] = useState(track.name);
   const saveName = () => { setRenaming(false); if (label.trim() && label.trim() !== track.name) void ops([{ op: 'set_track', trackId: track.id, patch: { name: label.trim() } }]); };
   // sound: main, b-roll and music tracks; visibility: everything drawn on top of the main track
@@ -518,13 +687,16 @@ function TrackHead({ track, ghost }: { track: Track; ghost?: boolean }) {
   const toggle = (on: boolean, label: string, onTitle: string, offTitle: string, icon: [IconName, IconName], patch: Partial<Track>) => (
     <button className={`flex ${size === 'compact' ? 'h-4 w-4' : 'h-5 w-5'} items-center justify-center rounded text-[13px] transition-colors ${on ? 'bg-cut/25 text-cut-text' : 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'}`}
       title={on ? onTitle : offTitle} aria-label={label} aria-pressed={on}
-      onClick={() => ops([{ op: 'set_track', trackId: track.id, patch }])}>
+      onClick={async () => { if (await ops([{ op: 'set_track', trackId: track.id, patch }]) && patch.locked) { const s = useStore.getState(); s.select(s.selected.filter((id) => s.project?.clips.find((c) => c.id === id)?.trackId !== track.id)); } }}>
       <Icon name={on ? icon[1] : icon[0]} />
     </button>
   );
   const [manage, setManage] = useState(false);
   return (
-    <div data-track-head={track.id} data-ghost-track={ghost || undefined} className="flex flex-col justify-center gap-0.5 border-b border-ink-800 px-2 text-xs" style={{ height: rowHeight(track, size, largeWave), opacity: ghost ? .6 : 1 }} dir="rtl">
+    <div data-track-head={track.id} data-ghost-track={ghost || undefined} data-locked={track.locked || undefined} className={`relative flex flex-col justify-center gap-0.5 overflow-hidden border-b border-ink-800 px-2 text-xs ${track.id !== MAIN_TRACK && !ghost ? 'cursor-grab' : ''}`} style={{ height: h, opacity: ghost || dragging ? .6 : 1 }} dir="rtl" onPointerDown={reorder}
+      title={track.id !== MAIN_TRACK && !ghost ? 'اسحب رأس المسار لأعلى أو أسفل لتغيير ترتيبه' : undefined}>
+      {slot === index && <div className="track-drop-line" data-edge="top" />}
+      {slot === count && index === count - 1 && <div className="track-drop-line" data-edge="bottom" />}
       <div className={`flex min-w-0 items-center gap-1 text-xs ${size === 'compact' ? 'leading-3' : 'leading-4'}`}>
         <span className="h-3 w-1 shrink-0 rounded" style={{ background: COLOR[track.kind] }} />
         {renaming ? <input autoFocus aria-label="تسمية المسار" className="min-w-0 flex-1 bg-ink-950 text-ink-200" value={label} maxLength={80} onChange={(e) => setLabel(e.target.value)} onBlur={saveName} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setRenaming(false); setLabel(track.name); } }} /> : <span onDoubleClick={() => { if (!ghost) { setLabel(track.name); setRenaming(true); } }} title="دبل كلك لتغيير اسم المسار" className={`flex-1 truncate ${track.muted || track.hidden ? 'text-ink-500 line-through' : 'text-ink-300'}`}>{ghost ? '＋ طبقة جديدة' : track.id === MAIN_TRACK && track.name === 'رئيسي' ? 'الأساسي' : track.name}</span>}
@@ -533,9 +705,11 @@ function TrackHead({ track, ghost }: { track: Track; ghost?: boolean }) {
       {!ghost && <div className="flex items-center gap-1">
         {canMute && toggle(track.muted, 'كتم', 'مكتوم — اضغط عشان يرجع الصوت', 'كتم صوت المسار', ['speaker', 'speakerOff'], { muted: !track.muted })}
         {canHide && toggle(track.hidden, 'إخفاء', 'مخفي — اضغط عشان يظهر', 'إخفاء المسار', ['eye', 'eyeOff'], { hidden: !track.hidden })}
+        {toggle(track.locked, 'قفل', 'مقفول — لقطاته ما تتعدّل. اضغط لفتحه', 'قفل المسار: لقطاته ما تتحرك ولا تتعدّل', ['unlock', 'lock'], { locked: !track.locked })}
         {track.kind === 'audio' && <button className="truncate text-[10px] text-ink-400 hover:text-accent" aria-label={`نوع صوت ${track.name}`} title="كلام: بلا خفض أو تلاشي تلقائي؛ موسيقى: تنخفض تحت الكلام" onClick={() => ops([{ op: 'set_track', trackId: track.id, patch: { audio: track.audio === 'voice' ? 'music' : 'voice' } }])}>{track.audio === 'voice' ? 'كلام' : 'موسيقى'}</button>}
       </div>}
       {manage && <ManageTrack track={track} onClose={() => setManage(false)} />}
+      {!ghost && <TrackResizer track={track} />}
     </div>
   );
 }
@@ -594,6 +768,7 @@ function NotesLane({ zoom, xToTime }: { zoom: number; xToTime: (clientX: number)
 
   return (
     <div className="relative border-b border-ink-800 bg-ink-950/40" style={{ height: NOTES_LANE }}
+      onPointerDown={(e) => { if (e.target === e.currentTarget && e.button === 0) useStore.getState().seek(Math.min(projectDuration(useStore.getState().project!), xToTime(e.clientX))); }}
       onDoubleClick={(e) => { if (e.target === e.currentTarget) startNote(xToTime(e.clientX)); }}
       onPointerMove={(e) => { if (drag) { if (Math.abs(e.clientX - drag.x0) > 2) drag.moved = true; preview(ops(drag, e.clientX)); } }}
       onPointerUp={(e) => {
@@ -627,8 +802,7 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 /** Transitions on the main track: a bar across each cut as long as the blend; click selects the clip it leads into. */
 function TransitionMarks({ zoom }: { zoom: number }) {
   const project = useStore((s) => s.project!);
-  const largeWave = useStore((s) => s.largeWave);
-  const size = useTimelineView((s) => s.size);
+  const mainH = useRowHeight(project.tracks[0]);
   const { select } = useStore.getState();
   const main = mainClips(project);
   return (
@@ -638,7 +812,7 @@ function TransitionMarks({ zoom }: { zoom: number }) {
         if (!h) return null;
         return (
           <button key={c.id} className="absolute z-20 flex h-4 items-center justify-center rounded-sm border border-ink-950 bg-accent text-[9px] font-bold text-ink-950"
-            style={{ top: RULER + rowHeight(project.tracks[0], size, largeWave) - 18, left: (c.start - h) * zoom, width: Math.max(10, 2 * h * zoom) }}
+            style={{ top: RULER + mainH - 18, left: (c.start - h) * zoom, width: Math.max(10, 2 * h * zoom) }}
             title={`انتقال: ${c.transition!.kind} ${c.transition!.duration}ث`} onPointerDown={(e) => { e.stopPropagation(); select([c.id]); }}>
             ⧖
           </button>
@@ -693,8 +867,7 @@ interface RowProps {
 
 function TrackRow({ track, project, name, zoom, view, analysis, selected, drag, dropIndex, dropTarget, landing, onBackground, onClipDown, onClipDouble, onClipMenu }: RowProps) {
   const largeWave = useStore((s) => s.largeWave);
-  const size = useTimelineView((s) => s.size);
-  const h = rowHeight(track, size, largeWave);
+  const h = useRowHeight(track);
   const canvas = useRef<HTMLCanvasElement>(null);
   const clips = trackClips(project, track.id);
   const [, redraw] = useState(0);
@@ -717,7 +890,8 @@ function TrackRow({ track, project, name, zoom, view, analysis, selected, drag, 
       const m = project.media.find((x) => x.id === c.mediaId);
       const x0 = c.start * zoom - view.left;
       const soundOnly = c.picture?.off || m?.kind === 'audio' || track.kind === 'audio';
-      const wave = soundOnly ? h - 14 : track.kind === 'video' ? h * (largeWave ? 0.52 : 0.32) : track.kind === 'overlay' ? h - 14 : 0;
+      // no sound (a still, a silent video): the picture takes the whole row
+      const wave = soundOnly ? h - 14 : m && !m.hasAudio ? 0 : track.kind === 'video' ? h * (largeWave ? 0.52 : 0.32) : track.kind === 'overlay' ? h - 14 : 0;
       // filmstrip
       if (!soundOnly && (track.kind === 'video' || track.kind === 'overlay') && data?.thumbs && m) {
         const th = data.thumbs;
@@ -743,9 +917,9 @@ function TrackRow({ track, project, name, zoom, view, analysis, selected, drag, 
         ctx.restore();
       } else if (!soundOnly && (track.kind === 'video' || track.kind === 'overlay') && m?.kind === 'image') {
         // a still (a photo, a held frame): the picture itself, repeated along the clip
-        const img = sprite(fileUrl(name, m.path)!, () => redraw((n) => n + 1));
-        if (img.complete && img.naturalWidth) {
-          const ih = h - wave - 4, iw = Math.max(8, Math.round(ih * (img.naturalWidth / img.naturalHeight)));
+        const img = stillTile(fileUrl(name, m.proxy ?? m.path)!, () => redraw((n) => n + 1));
+        if (img) {
+          const ih = h - wave - 4, iw = Math.max(8, Math.round(ih * (img.width / img.height)));
           ctx.save();
           ctx.beginPath();
           ctx.rect(Math.max(0, x0), 0, clipDuration(c) * zoom, h);
@@ -792,7 +966,7 @@ function TrackRow({ track, project, name, zoom, view, analysis, selected, drag, 
   });
 
   return (
-    <div className="relative border-b border-ink-800" data-track-row={track.id} data-drop={dropTarget || !!landing || undefined} style={{ height: h, opacity: track.muted || track.hidden ? 0.45 : 1 }} onPointerDown={onBackground}>
+    <div className="relative border-b border-ink-800" data-track-row={track.id} data-locked={track.locked || undefined} data-drop={dropTarget || !!landing || undefined} style={{ height: h, opacity: track.muted || track.hidden ? 0.45 : 1 }} onPointerDown={onBackground}>
       {landing && (track.id === MAIN_TRACK ? <div data-media-insertion className="pointer-events-none absolute inset-y-0 z-50 w-0.5 bg-accent" style={{ left: landing.at * zoom }} /> : <GhostClip landing={landing} zoom={zoom} name={name} />)}
       <canvas ref={canvas} className="pointer-events-none absolute top-0 z-10" style={{ left: view.left, width: view.width, height: h }} />
       {/* visual ideas waiting for a yes, under the clips of the first overlay track: click one to see it in the assistant */}
@@ -834,16 +1008,17 @@ function TrackRow({ track, project, name, zoom, view, analysis, selected, drag, 
         const media = project.media.find((m) => m.id === c.mediaId);
         const gd = c.graphicData as { title?: unknown; label?: unknown } | undefined;
         const gName = c.graphic && `◆ ${c.graphic.replace(/^(graphics|lib)\//, '')}${gd?.title || gd?.label ? ` · ${gd.title || gd.label}` : ''}`;
-        const label = c.text ?? c.label ?? media?.name ?? gName ?? '';
+        const label = c.gap ? 'فراغ' : c.text ?? c.label ?? media?.name ?? gName ?? '';
         return (
           <div
             key={c.id}
             data-clip-id={c.id}
+            data-gap={c.gap || undefined}
             className="group absolute top-0 h-full overflow-hidden rounded-[5px]"
             style={{
               left, width: Math.max(2, width),
-              background: track.kind === 'text' ? COLOR.text : `color-mix(in srgb, ${COLOR[track.kind]} 22%, transparent)`,
-              outline: sel ? '2px solid var(--color-accent)' : `1px solid color-mix(in srgb, ${COLOR[track.kind]} 70%, black)`,
+              background: c.gap ? 'repeating-linear-gradient(135deg, rgb(255 255 255 / .05) 0 6px, transparent 6px 12px)' : track.kind === 'text' ? COLOR.text : `color-mix(in srgb, ${COLOR[track.kind]} 22%, transparent)`,
+              outline: sel ? '2px solid var(--color-accent)' : c.gap ? '1px dashed var(--color-ink-600)' : `1px solid color-mix(in srgb, ${COLOR[track.kind]} 70%, black)`,
               outlineOffset: -1,
               opacity: ghost ? 0.6 : 1,
               zIndex: ghost ? 40 : sel ? 15 : 12,
@@ -861,11 +1036,8 @@ function TrackRow({ track, project, name, zoom, view, analysis, selected, drag, 
               {(c.picture?.off || track.kind === 'audio') && <span className="ms-1">♪</span>}
             </div>
             {c.graphic && <SceneBands clip={c} zoom={zoom} width={width} />}
-            {/* keyframes (zoom, place, opacity, volume): click one to put the playhead on it */}
-            {keyTimes(c).filter((k) => k >= 0 && k <= clipDuration(c)).map((k) => (
-              <button key={k} className="clip-key" style={{ left: k * zoom - 4 }} title={`مفتاح حركة ${fmtTime(c.start + k, 2)}`} aria-label="مفتاح حركة"
-                onPointerDown={(e) => { e.stopPropagation(); useStore.getState().seek(c.start + k); }} />
-            ))}
+            {/* keyframes (zoom, place, opacity, volume): drag to move, click to go there, Delete / right-click to remove */}
+            {keyTimes(c).filter((k) => k >= 0 && k <= clipDuration(c)).map((k) => <ClipKey key={k} clip={c} k={k} zoom={zoom} />)}
             <div className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-white/0 group-hover:bg-white/30" onPointerDown={(e) => onClipDown(e, c, 'in')} />
             <div className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-white/0 group-hover:bg-white/30" onPointerDown={(e) => onClipDown(e, c, 'out')} />
           </div>
@@ -894,7 +1066,7 @@ function TrackRow({ track, project, name, zoom, view, analysis, selected, drag, 
 function GhostClip({ landing, zoom, name }: { landing: Landing; zoom: number; name: string }) {
   const media = useStore((s) => s.project?.media.find((m) => m.id === landing.mediaId));
   const thumbs = useStore((s) => s.analysis[landing.mediaId ?? '']?.thumbs);
-  const url = media?.kind === 'image' ? fileUrl(name, media.path) : thumbs?.sheets[0] ? fileUrl(name, `analysis/${media?.id}/${thumbs.sheets[0]}`) : undefined;
+  const url = media?.kind === 'image' ? fileUrl(name, media.proxy ?? media.path) : thumbs?.sheets[0] ? fileUrl(name, `analysis/${media?.id}/${thumbs.sheets[0]}`) : undefined;
   return <div data-landing-clip className={`landing-clip ${landing.error ? 'landing-invalid' : ''}`} style={{ left: landing.at * zoom, width: Math.max(6, landing.duration * zoom) }}>
     {url && <span className="h-full w-12 shrink-0 bg-cover bg-center" style={{ backgroundImage: `url("${url}")`, ...(media?.kind === 'video' && thumbs ? { backgroundSize: `${thumbs.cols * 100}% ${thumbs.rows * 100}%`, backgroundPosition: '0 0' } : {}) }} />}
     <span className="min-w-0 flex-1 truncate" dir="auto">{media?.kind === 'audio' ? '♪ ' : ''}{landing.label}</span><span className="num shrink-0 px-1">{fmtTime(landing.duration, 1)}</span>

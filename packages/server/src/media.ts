@@ -5,6 +5,8 @@ import { basename, dirname, extname, isAbsolute, join, relative } from 'node:pat
 import { MAIN_TRACK, guessedRole, mediaPlacementOps, makeId, mainClips, OpError, type Media, type MediaTarget, type Suggestion } from '@edit/shared';
 import { ANALYSIS_DIR, LANGUAGE, PYTHON, WHISPER_MODEL } from './config.ts';
 import { runPython, type Jobs } from './jobs.ts';
+import { imageProxy } from './image-proxy.ts';
+import { probeAudioTracks, queueAudioMix } from './audio-tracks.ts';
 import { projectDir, type Store } from './store.ts';
 
 export function ffprobe(file: string): Pick<Media, 'kind' | 'duration' | 'width' | 'height' | 'fps' | 'hasAudio'> {
@@ -17,9 +19,10 @@ export function ffprobe(file: string): Pick<Media, 'kind' | 'duration' | 'width'
   const fps = den ? Math.round((num / den) * 1000) / 1000 : 0;
   const duration = Number(data.format?.duration ?? 0);
   // a still: read by an image demuxer (png_pipe, jpeg_pipe, image2…) or without any length.
-  // Not by frame rate — recent ffprobe reports 25 fps for a single PNG. An animated GIF has a length: video.
+  // Not by frame rate — recent ffprobe reports 25 fps for a single PNG. An animated GIF has a length: video;
+  // a one-frame GIF/AVIF reports a 0.04 s length but a single frame: still an image.
   const format = String(data.format?.format_name ?? '');
-  const image = !!v && !a && (format === 'image2' || format.endsWith('_pipe') || !(duration > 0));
+  const image = !!v && !a && (format === 'image2' || format.endsWith('_pipe') || !(duration > 0) || Number(v.nb_frames) === 1);
   return {
     kind: image ? 'image' : v ? 'video' : 'audio',
     duration: image ? 5 : Math.round(duration * 1000) / 1000,
@@ -34,9 +37,9 @@ const ROLE_DIR: Record<Media['role'], string> = { source: 'source', ref: 'refs',
 
 /**
  * Register a file that is already in the project (uploaded) or copy one in from elsewhere.
- * Sources go straight onto the main track; analysis is queued.
+ * Sources go straight onto the main track unless `place: false`; analysis is queued.
  */
-export function addMedia(store: Store, jobs: Jobs, name: string, file: string, role: Media['role'] | undefined, opts: { copy?: boolean; analyze?: boolean; placement?: MediaTarget; name?: string } = {}): Media {
+export function addMedia(store: Store, jobs: Jobs, name: string, file: string, role: Media['role'] | undefined, opts: { copy?: boolean; analyze?: boolean; placement?: MediaTarget; place?: boolean; name?: string } = {}): Media {
   const dir = store.dir(name);
   let abs = isAbsolute(file) ? file : join(dir, file);
   if (!existsSync(abs)) throw new OpError(`file not found: ${file}`);
@@ -65,6 +68,12 @@ export function addMedia(store: Store, jobs: Jobs, name: string, file: string, r
     analyzed: [],
     ...info,
   };
+  const proxy = imageProxy(dir, media);
+  if (proxy) media.proxy = proxy;
+  // several audio tracks: hear them all (the mix is made in a job; originals stay in the file)
+  const audio = media.hasAudio && media.kind !== 'image' ? probeAudioTracks(abs) : undefined;
+  const multi = !!audio && audio.tracks.length > 1;
+  if (multi) media.audioTracks = { count: audio.tracks.length, mix: audio.mixed ? audio.mix : audio.tracks.map((_, i) => i) };
   const first = role === 'source' && media.kind === 'video' && !store.get(name).project.media.some((m) => m.role === 'source');
   const placement = opts.placement ? mediaPlacementOps(store.get(name).project, media, opts.placement) : undefined;
   store.mutate(name, (p) => {
@@ -77,10 +86,11 @@ export function addMedia(store: Store, jobs: Jobs, name: string, file: string, r
   });
   if (placement) {
     store.apply(name, placement, 'user');
-  } else if (role === 'source') {
+  } else if (role === 'source' && opts.place !== false) {
     store.apply(name, [{ op: 'add_clip', clip: { trackId: MAIN_TRACK, mediaId: media.id, in: 0, out: media.duration } }], 'system');
   }
-  if (opts.analyze !== false && media.kind !== 'image' && analysisReady()) queueAnalysis(store, jobs, name, media.id);
+  if (multi && !audio!.mixed && !isAbsolute(rel)) queueAudioMix(store, jobs, name, media.id, 'all', { analyze: opts.analyze !== false && analysisReady(), fresh: true });
+  else if (opts.analyze !== false && media.kind !== 'image' && analysisReady()) queueAnalysis(store, jobs, name, media.id);
   return media;
 }
 

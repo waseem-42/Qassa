@@ -1,4 +1,5 @@
 import { outputSize, type Clip, type Place, type Retime, type Settings, type Theme } from './schema.ts';
+import { anchoredShift } from './timeline.ts';
 
 // Heavy motion graphics (step lists, comparisons, explainers) are HTML pages: graphics/<name>/ in
 // the project, or lib/<template> from the shared graphics-lib/ folder (parametrised by
@@ -36,21 +37,22 @@ export function graphicUrlPath(project: string, graphic: string): string {
 
 const isDefaultPlace = (pl?: Partial<Place>) => !pl || ((pl.dx ?? 0) === 0 && (pl.dy ?? 0) === 0 && (pl.scale ?? 1) === 1);
 
-/** CSS transform for a graphic layer of a W×H frame (transform-origin: center). */
+/** CSS transform for a graphic layer of a W×H frame (transform-origin: center; the anchor is in the shift). */
 export function placeCss(pl: Partial<Place> | undefined, W: number, H: number): string | undefined {
   if (isDefaultPlace(pl)) return undefined;
-  return `translate(${(pl!.dx ?? 0) * W}px, ${(pl!.dy ?? 0) * H}px) scale(${pl!.scale ?? 1})`;
+  const at = anchoredShift(pl!);
+  return `translate(${at.x * W}px, ${at.y * H}px) scale(${pl!.scale ?? 1})`;
 }
 
 /** The same placement for ffmpeg: a scale filter for the layer and the overlay x/y. Undefined = full frame at 0,0. */
 export function placeFilter(pl: Partial<Place> | undefined, W: number, H: number): { scale?: string; x: string; y: string } | undefined {
   if (isDefaultPlace(pl)) return undefined;
-  const s = pl!.scale ?? 1;
+  const s = pl!.scale ?? 1, at = anchoredShift(pl!);
   const r = (v: number) => Math.round(v * 100) / 100;
   return {
     scale: s !== 1 ? `scale=w=trunc(iw*${s}/2)*2:h=trunc(ih*${s}/2)*2` : undefined,
-    x: `(main_w-overlay_w)/2+${r((pl!.dx ?? 0) * W)}`,
-    y: `(main_h-overlay_h)/2+${r((pl!.dy ?? 0) * H)}`,
+    x: `(main_w-overlay_w)/2+${r(at.x * W)}`,
+    y: `(main_h-overlay_h)/2+${r(at.y * H)}`,
   };
 }
 

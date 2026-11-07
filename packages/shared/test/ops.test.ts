@@ -493,7 +493,7 @@ describe('keyframes of place, opacity and volume', () => {
     ], ctx);
     const b = () => p.clips.find((c) => c.id === 'b')!;
     expect(b().anim!.dx!.map((k) => k.t)).toEqual([0, 4]); // kept in time order
-    expect(placeAt(b(), 2)).toEqual({ dx: 0, dy: 0, scale: 0.5 }); // halfway, smoothstep; the fixed place under it
+    expect(placeAt(b(), 2)).toEqual({ dx: 0, dy: 0, scale: 0.5, ax: 0.5, ay: 0.5 }); // halfway, smoothstep; the fixed place under it
     expect(placeAt(b(), 9).dx).toBe(0.3);
     expect(opacityAt(b(), -1)).toBe(0);
     expect(volumeAt(b(), 3)).toBe(1);

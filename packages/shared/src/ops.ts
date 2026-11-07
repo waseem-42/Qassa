@@ -21,6 +21,7 @@ export const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('restore_project'), project: Project }),
   z.object({ op: z.literal('rename_project'), name: ProjectDisplayName }),
   z.object({ op: z.literal('update_media'), mediaId: id, patch: z.object({ role: Media.shape.role.optional(), name: z.string().trim().min(1).max(200).optional() }).refine((x) => x.role !== undefined || x.name !== undefined, 'update_media: give a role or a name') }),
+  z.object({ op: z.literal('remove_media'), mediaIds: z.array(id).min(1) }),
   z.object({ op: z.literal('set_marks'), in: z.number().finite().min(0).nullable().optional(), out: z.number().finite().min(0).nullable().optional() }),
   z.object({ op: z.literal('delete_range'), start: z.number().finite().min(0), end: z.number().finite().min(0) }),
   z.object({ op: z.literal('cut_range'), mediaId: id, t0: z.number(), t1: z.number() }),
@@ -42,7 +43,11 @@ export const Op = z.discriminatedUnion('op', [
    * Each clip keeps the part of the page it shows; pieces that followed one another still do.
    */
   z.object({ op: z.literal('retime_graphic'), clipIds: z.array(id).min(1), from: z.array(z.number().min(0)), to: z.array(z.number().min(0)).nullable(), hold: z.boolean().optional() }),
-  z.object({ op: z.literal('delete'), clipId: id }),
+  // lift: a main-track clip leaves a gap of its length instead of closing up (main-track magnet off)
+  z.object({ op: z.literal('delete'), clipId: id, lift: z.boolean().optional() }),
+  // a main-track clip to another time: the gap before it grows or shrinks (never into the clip before), the one after
+  // gives way, and past that the clips after it are pushed
+  z.object({ op: z.literal('move_main'), clipId: id, start: z.number().min(0) }),
   /** hold the frame under `at` for `duration` seconds: the clip is split there and the still (an image media of that frame) goes between */
   z.object({ op: z.literal('freeze_frame'), clipId: id, at: z.number(), mediaId: id, duration: z.number().min(0.1).max(60).default(2) }),
   /** the clip's sound becomes its own clip on an audio track (same timing); the clip itself goes silent */
@@ -84,11 +89,11 @@ export const Op = z.discriminatedUnion('op', [
     words: Clip.shape.words,
   }),
   z.object({ op: z.literal('set_settings'), patch: Settings.partial().extend({ defaultGrade: Grade.partial().nullable().optional(), theme: Theme.partial().optional(), captionStyle: TextStyle.partial().nullable().optional() }) }),
-  z.object({ op: z.literal('add_track'), track: Track.partial({ magnetic: true, muted: true, hidden: true, audio: true }), index: z.number().int().optional() }),
+  z.object({ op: z.literal('add_track'), track: Track.partial({ magnetic: true, muted: true, hidden: true, audio: true, locked: true }), index: z.number().int().optional() }),
   z.object({ op: z.literal('remove_track'), trackId: id, deleteClips: z.boolean().optional() }),
   z.object({ op: z.literal('move_track'), trackId: id, index: z.number().int().min(1) }),
   z.object({ op: z.literal('clear_track'), trackId: id }),
-  z.object({ op: z.literal('set_track'), trackId: id, patch: Track.pick({ name: true, muted: true, hidden: true, audio: true }).partial() }),
+  z.object({ op: z.literal('set_track'), trackId: id, patch: Track.pick({ name: true, muted: true, hidden: true, audio: true, locked: true }).partial() }),
   z.object({ op: z.literal('add_suggestions'), items: z.array(Suggestion.partial({ id: true, author: true })) }),
   z.object({ op: z.literal('resolve_suggestions'), ids: z.union([z.array(id), z.literal('all')]), accept: z.boolean() }),
   z.object({ op: z.literal('clear_suggestions'), author: z.enum(['analysis', 'claude', 'user']).optional() }),
@@ -131,6 +136,16 @@ function need<T>(v: T | undefined | null, msg: string): T {
 
 /** Pack the magnetic main track: keep order by start, remove gaps. */
 export function normalize(p: Project): void {
+  // gaps: one between two clips at most (neighbours merge), none at the end, none too short to see
+  const drop = new Set<string>();
+  let last: Clip | undefined;
+  for (const c of mainClips(p)) {
+    if (c.gap && last?.gap) { last.out = r3(last.out + clipDuration(c)); drop.add(c.id); continue; }
+    last = c;
+  }
+  for (const c of mainClips(p).filter((x) => !drop.has(x.id)).reverse()) { if (!c.gap) break; drop.add(c.id); }
+  for (const c of mainClips(p)) if (c.gap && clipDuration(c) < 1 / 120) drop.add(c.id);
+  if (drop.size) p.clips = p.clips.filter((c) => !drop.has(c.id));
   let t = 0;
   for (const c of mainClips(p)) {
     c.start = r3(t);
@@ -319,7 +334,24 @@ export function applyOps(project: Project, ops: Op[], ctx: OpContext = {}): Proj
   return p;
 }
 
+const SOURCE_EDITS = new Set<Op['op']>(['cut_range', 'restore_range', 'cut_words', 'keep_only', 'speed_range']);
+
+/** A locked track takes no edits to its clips, nothing new on it, and is not removed or cleared. */
+function refuseLocked(p: Project, op: Op): void {
+  const locked = (trackId?: string) => (trackId ? p.tracks.find((t) => t.id === trackId && t.locked) : undefined);
+  const refuse = (t?: Track) => { if (t) throw new OpError(`المسار «${t.name}» مقفول — افتح القفل أولاً`); };
+  const o = op as { clipId?: string; clipIds?: string[] };
+  for (const id of [...(o.clipId ? [o.clipId] : []), ...(o.clipIds ?? [])]) refuse(locked(p.clips.find((c) => c.id === id)?.trackId));
+  if (op.op === 'add_clip') refuse(locked(op.clip.trackId ?? MAIN_TRACK));
+  if (op.op === 'move' || op.op === 'clear_track' || op.op === 'remove_track') refuse(locked(op.trackId));
+  if (SOURCE_EDITS.has(op.op)) refuse(locked(MAIN_TRACK));
+  // a ripple across every track would shift or cut a locked one
+  if (op.op === 'delete_range') refuse(p.tracks.find((t) => t.locked && p.clips.some((c) => c.trackId === t.id && clipEnd(c) > op.start)));
+  if (op.op === 'remove_media') refuse(p.tracks.find((t) => t.locked && p.clips.some((c) => c.trackId === t.id && c.mediaId && op.mediaIds.includes(c.mediaId))));
+}
+
 function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
+  refuseLocked(p, op);
   if (op.op === 'add_clip' || op.op === 'move') {
     const target = op.op === 'add_clip' ? op.clip.trackId : op.trackId;
     const kind = target === 'overlay' || target === 'audio' || target === 'text' ? target : undefined;
@@ -353,6 +385,8 @@ function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
         const c = p.clips.find((x) => x.id === op.clipId);
         return c?.trackId === MAIN_TRACK && Math.abs((op.out - op.in) - (c.out - c.in)) > EPS;
       }
+      case 'move_main': return true;
+      case 'remove_media': return p.clips.some((c) => c.trackId === MAIN_TRACK && c.mediaId && op.mediaIds.includes(c.mediaId));
       case 'resolve_suggestions': return op.accept;
       case 'move': return op.trackId !== undefined && (op.trackId === MAIN_TRACK || p.clips.find((c) => c.id === op.clipId)?.trackId === MAIN_TRACK);
       case 'add_clip': return (op.clip.trackId ?? MAIN_TRACK) === MAIN_TRACK;
@@ -558,6 +592,7 @@ function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
       for (const cid of op.clipIds) {
         const c = getClip(p, cid);
         if (c.trackId !== MAIN_TRACK) throw new OpError('transitions are between main-track clips');
+        if (c.gap && op.kind !== null) throw new OpError('a gap has no transition');
         if (op.kind === null) delete c.transition;
         else c.transition = Transition.parse({ ...c.transition, kind: op.kind, ...(op.duration !== undefined ? { duration: op.duration } : {}) });
       }
@@ -617,7 +652,7 @@ function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
       const freeze = Clip.parse({
         id: newId('c'), trackId: c.trackId, mediaId: still.id, start: at, in: 0, out: r3(op.duration), label: 'تجميد',
         // moving values are held at what they are at that moment
-        grade: c.grade, ...(c.place || c.anim ? { place: Object.fromEntries(Object.entries(placeAt(c, local)).map(([k, v]) => [k, r4(v)])) } : {}),
+        grade: c.grade, ...(c.place || c.anim ? { place: Object.fromEntries(Object.entries(placeAt(c, local)).filter(([k]) => (k !== 'ax' && k !== 'ay') || c.place?.[k] !== undefined).map(([k, v]) => [k, r4(v)])) } : {}),
         ...(c.picture || c.anim?.opacity ? { picture: { ...c.picture, opacity: r4(opacityAt(c, local)) } } : {}),
         ...(c.transform ? { transform: { scale: tr.scale, x: tr.x, y: tr.y } } : {}), // the zoom of that moment, held
       });
@@ -680,10 +715,31 @@ function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
       break;
     }
 
-    case 'delete':
-      getClip(p, op.clipId);
-      p.clips = p.clips.filter((c) => c.id !== op.clipId);
+    case 'delete': {
+      const c = getClip(p, op.clipId);
+      p.clips = p.clips.filter((x) => x.id !== op.clipId);
+      if (op.lift && c.trackId === MAIN_TRACK && !c.gap) p.clips.push(Clip.parse({ id: newId('g'), trackId: MAIN_TRACK, gap: true, in: 0, out: r3(clipDuration(c)), start: c.start }));
       break;
+    }
+
+    case 'move_main': {
+      const order = mainClips(p), i = order.findIndex((c) => c.id === op.clipId);
+      if (i < 0) throw new OpError('move_main: not a main-track clip');
+      const c = order[i];
+      if (c.gap) throw new OpError('move_main: move the clips around a gap, not the gap');
+      const gap = (len: number) => { const g = Clip.parse({ id: newId('g'), trackId: MAIN_TRACK, gap: true, in: 0, out: r3(len), start: 0 }); p.clips.push(g); return g; };
+      const before = order[i - 1]?.gap ? order[i - 1] : undefined, after = order[i + 1]?.gap ? order[i + 1] : undefined;
+      const delta = r3(Math.max(op.start - c.start, -(before ? clipDuration(before) : 0)));
+      if (Math.abs(delta) < EPS) break;
+      if (before) before.out = r3(before.out + delta); else order.splice(i, 0, gap(delta));
+      const j = order.indexOf(c);
+      if (j < order.length - 1) {
+        if (after) after.out = r3(Math.max(0, after.out - delta));
+        else if (delta < 0) order.splice(j + 1, 0, gap(-delta));
+      }
+      order.forEach((x, k) => (x.start = k));
+      break;
+    }
 
     case 'add_clip': {
       const trackId = op.clip.trackId ?? MAIN_TRACK;
@@ -802,6 +858,18 @@ function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
       if (op.patch.role !== undefined) m.role = op.patch.role;
       // only the shown name changes; the file on disk keeps its own
       if (op.patch.name !== undefined) m.name = need(op.patch.name.trim() || undefined, 'update_media: the name is empty');
+      break;
+    }
+
+    case 'remove_media': {
+      const gone = new Set(op.mediaIds);
+      for (const mediaId of gone) need(p.media.find((m) => m.id === mediaId), `media ${mediaId} not found`);
+      // Its clips leave every track (V1 closes up) with the proposals pinned to its words.
+      // The file stays on disk, so undo brings the media back whole.
+      p.media = p.media.filter((m) => !gone.has(m.id));
+      p.clips = p.clips.filter((c) => !c.mediaId || !gone.has(c.mediaId));
+      p.suggestions = p.suggestions.filter((s) => !gone.has(s.mediaId));
+      p.ideas = p.ideas.filter((i) => !gone.has(i.mediaId) && !(i.source && gone.has(i.source.mediaId)));
       break;
     }
 

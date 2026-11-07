@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { api } from '../lib/api.ts';
 import { Modal } from './Modal.tsx';
+import { Icon } from './Brand.tsx';
+import { keysFor, prettyKey, useKeys } from '../lib/keys.ts';
 
 interface Runtime {
   desktop: boolean; ready: boolean; dataDir: string; gpu?: string; estimatedGB: number; claude: boolean; claudeCommand: string;
@@ -30,6 +32,10 @@ export function RuntimeSettings() {
   };
   if (!open) return null;
   return <Modal title="إعدادات قَصّة" subtitle="أدوات الجهاز وربط المساعد" onClose={() => setOpen(false)}><div className="modal-body space-y-5">
+    <section className="space-y-3"><h3 className="text-ink-100">لوحة المفاتيح</h3>
+      <p className="text-sm text-ink-400">كل الاختصارات، وتقدر تغيّر أي واحد منها.{keysFor('shortcuts')[0] && <> أو اضغط <kbd dir="ltr">{prettyKey(keysFor('shortcuts')[0])}</kbd> من أي مكان.</>}</p>
+      <button className="btn" onClick={() => { setOpen(false); useKeys.getState().setOpen(true); }}><Icon name="keyboard" size={16} /> اختصارات لوحة المفاتيح</button>
+    </section>
     {!r ? <p role="status">جارٍ قراءة حالة الجهاز…</p> : <>
       <section className="space-y-3"><h3 className="text-ink-100">أدوات التحليل والتفريغ</h3>
         {r.desktop ? <>

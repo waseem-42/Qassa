@@ -13,7 +13,7 @@ export const mainClips = (p: Project) => trackClips(p, MAIN_TRACK);
 
 /** Half of the transition from `prev` into `c`, on either side of their cut (0 = hard cut). Never more than ~half of either clip. */
 export function transitionHalf(prev: Clip | undefined, c: Clip): number {
-  return prev && c.transition ? Math.min(c.transition.duration / 2, clipDuration(prev) * 0.45, clipDuration(c) * 0.45) : 0;
+  return prev && c.transition && !prev.gap && !c.gap ? Math.min(c.transition.duration / 2, clipDuration(prev) * 0.45, clipDuration(c) * 0.45) : 0;
 }
 
 export function projectDuration(p: Project): number {
@@ -137,9 +137,18 @@ export function keyAt(keys: Key[] | undefined, t: number, base: number): number 
 }
 
 /** A layer's place at time t of the clip (its keyframes over its fixed place). */
-export function placeAt(c: Pick<Clip, 'place' | 'anim'>, t: number): { dx: number; dy: number; scale: number } {
+export function placeAt(c: Pick<Clip, 'place' | 'anim'>, t: number): { dx: number; dy: number; scale: number; ax: number; ay: number } {
   const pl = c.place, a = c.anim;
-  return { dx: keyAt(a?.dx, t, pl?.dx ?? 0), dy: keyAt(a?.dy, t, pl?.dy ?? 0), scale: keyAt(a?.scale, t, pl?.scale ?? 1) };
+  return { dx: keyAt(a?.dx, t, pl?.dx ?? 0), dy: keyAt(a?.dy, t, pl?.dy ?? 0), scale: keyAt(a?.scale, t, pl?.scale ?? 1), ax: pl?.ax ?? 0.5, ay: pl?.ay ?? 0.5 };
+}
+
+/**
+ * Scaling about the anchor instead of the centre is the same as scaling about the centre and shifting by
+ * (anchor − ½)·(1 − scale): the shift the picture really has (frame widths / heights). Every drawer uses this.
+ */
+export function anchoredShift(pl: { dx?: number; dy?: number; scale?: number; ax?: number; ay?: number }): { x: number; y: number } {
+  const s = pl.scale ?? 1;
+  return { x: (pl.dx ?? 0) + ((pl.ax ?? 0.5) - 0.5) * (1 - s), y: (pl.dy ?? 0) + ((pl.ay ?? 0.5) - 0.5) * (1 - s) };
 }
 export const opacityAt = (c: Pick<Clip, 'picture' | 'anim'>, t: number) => keyAt(c.anim?.opacity, t, c.picture?.opacity ?? 1);
 export const volumeAt = (c: Pick<Clip, 'volume' | 'anim'>, t: number) => keyAt(c.anim?.volume, t, c.volume);

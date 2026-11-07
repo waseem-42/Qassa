@@ -27,8 +27,9 @@ def make_proxy(src, out_dir, info):
     fps = info["fps"] or 30
     gop = max(1, round(fps / 2))
     vf = "scale=-2:'min(720,ih)':flags=bicubic,format=yuv420p"
-    audio = ["-c:a", "aac", "-b:a", "128k"] if info["hasAudio"] else ["-an"]
-    run_ffmpeg(["-i", src, "-vf", vf, *h264_args("proxy"), "-g", gop, "-bf", 0, *audio, "-movflags", "+faststart", dst],
+    # the first audio track: a multi-track recording's mix (ffmpeg would pick the track with the most channels)
+    audio = ["-map", "0:a:0", "-c:a", "aac", "-b:a", "128k"] if info["hasAudio"] else ["-an"]
+    run_ffmpeg(["-i", src, "-map", "0:v:0", "-vf", vf, *h264_args("proxy"), "-g", gop, "-bf", 0, *audio, "-movflags", "+faststart", dst],
                stage="proxy", duration=info["duration"])
     return dst
 
@@ -37,7 +38,7 @@ def make_peaks(src, out_dir, info, rate=50):
     if not info["hasAudio"]:
         return None
     sr = 8000
-    raw = subprocess.run([FFMPEG, "-v", "error", "-i", str(src), "-vn", "-ac", "1", "-ar", str(sr), "-f", "s16le", "-"],
+    raw = subprocess.run([FFMPEG, "-v", "error", "-i", str(src), "-map", "0:a:0", "-ac", "1", "-ar", str(sr), "-f", "s16le", "-"],
                          capture_output=True, check=True).stdout
     pcm = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
     step = sr // rate
@@ -81,7 +82,7 @@ def transcribe(src, out_dir, info, media_id, model_name, language, prompt):
         return WhisperModel(model_name, device=device, compute_type=compute)
 
     # decode with ffmpeg ourselves: faster-whisper's own PyAV decoding breaks across av versions
-    raw = subprocess.run([FFMPEG, "-v", "error", "-i", str(src), "-vn", "-ac", "1", "-ar", "16000", "-f", "s16le", "-"],
+    raw = subprocess.run([FFMPEG, "-v", "error", "-i", str(src), "-map", "0:a:0", "-ac", "1", "-ar", "16000", "-f", "s16le", "-"],
                          capture_output=True, check=True).stdout
     audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
 
@@ -122,7 +123,7 @@ _SIL = re.compile(r"silence_(start|end): (-?[\d.]+)")
 def detect_silence(src, out_dir, info, noise_db=-35, min_dur=0.35):
     if not info["hasAudio"]:
         return None
-    err = run_ffmpeg(["-i", src, "-vn", "-af", f"silencedetect=noise={noise_db}dB:d={min_dur}", "-f", "null", "-"],
+    err = run_ffmpeg(["-i", src, "-map", "0:a:0", "-af", f"silencedetect=noise={noise_db}dB:d={min_dur}", "-f", "null", "-"],
                      stage="silence", duration=info["duration"], loglevel="info")
     spans, start = [], None
     for kind, val in _SIL.findall(err):

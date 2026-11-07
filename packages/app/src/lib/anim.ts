@@ -1,4 +1,4 @@
-import { animValue, type AnimProp, type Clip, type Ease, type Key, type Keyframe, type Op } from '@edit/shared';
+import { animValue, clipDuration, type AnimProp, type Clip, type Ease, type Key, type Keyframe, type Op } from '@edit/shared';
 
 // Keyframes in the editor, the CapCut / Resolve way: a property without keys has one value; once it has keys,
 // changing it (slider, drag on the preview) sets the key at the playhead, and ◆ adds or removes that key.
@@ -62,6 +62,44 @@ export function toggleKeyPatch(c: Clip, p: AnimProp, t: number): Patch {
   const rest = keys!.filter((k) => k !== here);
   if (rest.length) return { anim: { [p]: rest } };
   return { anim: { [p]: null }, ...valuesPatch({ ...c, anim: undefined }, { [p]: here.v }, t) };
+}
+
+const at = (t: number, k: { t: number }) => Math.abs(k.t - t) < 1e-3;
+
+/**
+ * Every key at clip time `from` (any property, zoom included) moved to `to` — dragging a ◆ on the timeline.
+ * A key already at `to` gives way; `to` stays inside the clip.
+ */
+export function moveKeysPatch(c: Clip, from: number, to: number): Patch {
+  to = r3(Math.max(0, Math.min(clipDuration(c), to)));
+  const patch: Patch = {};
+  const moved = <K extends { t: number }>(ks: K[]) => [...ks.filter((k) => !at(from, k) && !at(to, k)), ...ks.filter((k) => at(from, k)).map((k) => ({ ...k, t: to }))].sort((a, b) => a.t - b.t);
+  const anim: NonNullable<Patch['anim']> = {};
+  for (const [p, ks] of Object.entries(c.anim ?? {}) as [AnimProp, Key[] | undefined][]) if (ks?.some((k) => at(from, k))) anim[p] = moved(ks);
+  if (Object.keys(anim).length) patch.anim = anim;
+  if (c.transform?.keyframes.some((k) => at(from, k))) patch.transform = { keyframes: moved(c.transform.keyframes) };
+  return patch;
+}
+
+/** Remove every key at clip time t; a property whose last key goes keeps the value it had there. */
+export function deleteKeysPatch(c: Clip, t: number): Patch {
+  const anim: NonNullable<Patch['anim']> = {};
+  const fixed: Partial<Record<AnimProp, number>> = {};
+  for (const [p, ks] of Object.entries(c.anim ?? {}) as [AnimProp, Key[] | undefined][]) {
+    const here = ks?.find((k) => at(t, k));
+    if (!here) continue;
+    const rest = ks!.filter((k) => k !== here);
+    anim[p] = rest.length ? rest : null;
+    if (!rest.length) fixed[p] = here.v;
+  }
+  const patch: Patch = Object.keys(fixed).length ? valuesPatch({ ...c, anim: undefined }, fixed, t) : {};
+  if (Object.keys(anim).length) patch.anim = anim;
+  const kf = c.transform?.keyframes.find((k) => at(t, k));
+  if (kf) {
+    const rest = c.transform!.keyframes.filter((k) => k !== kf);
+    patch.transform = rest.length ? { keyframes: rest } : { keyframes: [], scale: kf.scale, x: kf.x, y: kf.y };
+  }
+  return patch;
 }
 
 /** Times of the keys of a clip (any property, zoom included), for jumping between them. */

@@ -6,12 +6,15 @@ import { freeTrackFor } from './placement.ts';
 export interface MediaTarget { trackId?: string; at?: number; newTrack?: boolean; trackIndex?: number; soundOnly?: boolean }
 
 export function guessedRole(p: Project, kind: Media['kind'], target?: MediaTarget): Media['role'] {
+  if (target?.trackId === MAIN_TRACK) return 'source';
   if (kind === 'audio') {
     const track = p.tracks.find((t) => t.id === target?.trackId);
     if (track?.id === MAIN_TRACK || track?.audio === 'voice') return 'source';
     if (track?.kind === 'audio' || target?.newTrack) return 'music';
   }
-  return mainClips(p).length === 0 ? 'source' : kind === 'audio' ? 'music' : 'broll';
+  // imports wait in the library: the story is whatever is on the main track, or the first source imported
+  const story = mainClips(p).length > 0 || p.media.some((m) => m.role === 'source');
+  return !story ? 'source' : kind === 'audio' ? 'music' : 'broll';
 }
 
 export function mediaFitsTrack(m: Media, t: Track): boolean {

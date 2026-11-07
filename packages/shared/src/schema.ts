@@ -24,7 +24,7 @@ export type Keyframe = z.infer<typeof Keyframe>;
 
 export const Transform = z.object({
   // scale >= 1 zooms in; x/y is the focus point in 0..1 of the frame
-  scale: z.number().min(1).max(8).default(1),
+  scale: z.number().min(1).max(20).default(1),
   x: z.number().min(0).max(1).default(0.5),
   y: z.number().min(0).max(1).default(0.5),
   keyframes: z.array(Keyframe).default([]), // t is relative to the clip start
@@ -39,11 +39,15 @@ export const Transition = z.object({
 });
 export type Transition = z.infer<typeof Transition>;
 
-/** Where a full-frame layer (an HTML graphic) sits: scaled about the frame centre, then shifted. */
+/** Where a picture sits (a layer, or the main track's): scaled about the frame centre, then shifted — off the frame too. */
+export const PLACE_LIMITS = { d: 3, scaleMin: 0.02, scaleMax: 10 } as const;
 export const Place = z.object({
-  dx: z.number().min(-1).max(1).default(0), // fraction of the frame width
-  dy: z.number().min(-1).max(1).default(0), // fraction of the frame height
-  scale: z.number().min(0.1).max(4).default(1),
+  dx: z.number().min(-PLACE_LIMITS.d).max(PLACE_LIMITS.d).default(0), // fraction of the frame width
+  dy: z.number().min(-PLACE_LIMITS.d).max(PLACE_LIMITS.d).default(0), // fraction of the frame height
+  scale: z.number().min(PLACE_LIMITS.scaleMin).max(PLACE_LIMITS.scaleMax).default(1),
+  // the anchor: the point the size grows / shrinks about, as a fraction of the picture's full-frame box (0.5 = centre)
+  ax: z.number().min(0).max(1).optional(), // default 0.5
+  ay: z.number().min(0).max(1).optional(),
 });
 export type Place = z.infer<typeof Place>;
 
@@ -71,9 +75,9 @@ export type Picture = z.infer<typeof Picture>;
 /** Values that change over a clip: keys at moments of the clip (seconds from its start), eased between (by the earlier key's ease), per property. */
 const keys = (min: number, max: number) => z.array(z.object({ t: z.number(), v: z.number().min(min).max(max), ease: Ease.optional() }));
 export const Anim = z.object({
-  dx: keys(-1, 1).optional(), // a layer's place (Place.dx/dy/scale)
-  dy: keys(-1, 1).optional(),
-  scale: keys(0.1, 4).optional(),
+  dx: keys(-PLACE_LIMITS.d, PLACE_LIMITS.d).optional(), // a picture's place (Place.dx/dy/scale)
+  dy: keys(-PLACE_LIMITS.d, PLACE_LIMITS.d).optional(),
+  scale: keys(PLACE_LIMITS.scaleMin, PLACE_LIMITS.scaleMax).optional(),
   opacity: keys(0, 1).optional(), // Picture.opacity
   volume: keys(0, 4).optional(), // Clip.volume
 });
@@ -100,7 +104,7 @@ export const GraphicEdit = z.object({
   hidden: z.boolean().optional(),
   dx: z.number().optional(), // page pixels (the 1080p authoring frame)
   dy: z.number().optional(),
-  scale: z.number().min(0.1).max(5).optional(),
+  scale: z.number().min(0.02).max(10).optional(),
 });
 export type GraphicEdit = z.infer<typeof GraphicEdit>;
 export type Key = { t: number; v: number; ease?: Ease };
@@ -112,8 +116,8 @@ export const TextStyle = z.object({
   weight: z.number().default(700),
   color: z.string().optional(), // default: the project theme's text colour
   background: z.string().optional(),
-  x: z.number().min(0).max(1).default(0.5),
-  y: z.number().min(0).max(1).default(0.5),
+  x: z.number().min(-0.5).max(1.5).default(0.5), // the frame is 0..1; a text may start or sit partly outside it
+  y: z.number().min(-0.5).max(1.5).default(0.5),
   align: z.enum(['start', 'center', 'end']).default('center'),
   animation: z.enum(['none', 'fade', 'pop', 'slide-up', 'typewriter']).default('fade'),
 });
@@ -130,6 +134,9 @@ export const Media = z.object({
   height: z.number().default(0),
   fps: z.number().default(0),
   hasAudio: z.boolean().default(false),
+  // several audio tracks (a recording's mic / desktop / music): the file's first track mixes `mix` (original track
+  // numbers, 0-based) and the `count` originals follow it — so everything reading the first track hears them all
+  audioTracks: z.object({ count: z.number().int().min(2), mix: z.array(z.number().int().min(0)) }).optional(),
   proxy: z.string().optional(),
   peaks: z.string().optional(),
   thumbs: z.string().optional(), // json manifest of filmstrip sprites
@@ -148,6 +155,7 @@ export const Track = z.object({
   muted: z.boolean().default(false),
   hidden: z.boolean().default(false),
   audio: z.enum(['music', 'voice']).default('music'),
+  locked: z.boolean().default(false), // its clips take no edits until unlocked
 });
 export type Track = z.infer<typeof Track>;
 
@@ -155,6 +163,8 @@ export const Clip = z.object({
   id: z.string(),
   trackId: z.string(),
   mediaId: z.string().optional(), // absent for text clips
+  // a blank on the main track (black, silent) — main-track magnet off: the track stays packed, a gap fills the space
+  gap: z.literal(true).optional(),
   start: z.number().min(0), // timeline position
   in: z.number().min(0), // source in (for text clips: 0)
   out: z.number().min(0), // source out (for text clips: duration)

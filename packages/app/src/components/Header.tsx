@@ -1,11 +1,44 @@
 import { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../lib/store.ts';
-import { useKeys } from '../lib/keys.ts';
 import { Icon, Wordmark } from './Brand.tsx';
 import { Checkpoints } from './Checkpoints.tsx';
 import { ExportDialog } from './ExportDialog.tsx';
 import { RuntimeSettings, useRuntime } from './RuntimeSettings.tsx';
+import { PopupMenu, type MenuItem } from './PopupMenu.tsx';
+import { useKeys } from '../lib/keys.ts';
+import { useLayout } from '../lib/layout.ts';
+
+const PAGES = [['assistant', 'مساعد AI'], ['text', 'المونتاج بالنص'], ['inspect', 'الخصائص'], ['notes', 'التعليقات']] as const;
+
+/** «النوافذ»: every panel and window of the editor, shown or hidden from one place (a closed panel comes back here). */
+function WindowsMenu({ onDialog }: { onDialog(d: 'jobs' | 'checkpoints'): void }) {
+  const [at, setAt] = useState<{ x: number; y: number }>();
+  const panels = useStore((s) => s.panels), panel = useStore((s) => s.panel);
+  const hidden = useLayout((s) => s.hidden);
+  const s = useStore.getState(), layout = useLayout.getState();
+  const groups: MenuItem[][] = [
+    [
+      { label: 'مكتبة المشروع', checked: panels.media, run: () => s.showPanel('media', !panels.media) },
+      ...PAGES.map(([id, label]) => { const on = panels.tools && panel === id; return { label, checked: on, run: () => (on ? s.showPanel('tools', false) : s.setPanel(id)) }; }),
+    ],
+    [
+      { label: 'التايملاين', checked: !hidden.timeline, run: () => layout.setHidden('timeline', !hidden.timeline) },
+      { label: 'شريط الأدوات الجانبي', checked: !hidden.rail, run: () => layout.setHidden('rail', !hidden.rail) },
+    ],
+    [
+      { label: 'الستايلات', run: () => s.setStylesOpen(true) },
+      { label: 'المهام', run: () => onDialog('jobs') },
+      { label: 'نقاط الحفظ', run: () => onDialog('checkpoints') },
+      { label: 'اختصارات لوحة المفاتيح', key: 'shortcuts', run: () => useKeys.getState().setOpen(true) },
+    ],
+    [{ label: 'إظهار الكل', run: () => { layout.setHidden('timeline', false); layout.setHidden('rail', false); s.showPanel('tools', true); s.showPanel('media', true); } }],
+  ];
+  return <>
+    <button className="btn btn-ghost" aria-haspopup="menu" aria-expanded={!!at} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setAt(at ? undefined : { x: r.left, y: r.bottom + 4 }); }}>النوافذ</button>
+    {at && <PopupMenu label="النوافذ" groups={groups} x={at.x} y={at.y} onClose={() => setAt(undefined)} />}
+  </>;
+}
 
 export function Header() {
   const { name, projects, project, history, connection, jobs } = useStore(useShallow(({ name, projects, project, history, connection, jobs }) => ({ name, projects, project, history, connection, jobs })));
@@ -22,11 +55,11 @@ export function Header() {
       </> : <span className="header-caption">استوديو المونتاج بالذكاء الاصطناعي</span>}
       <div className="header-spacer" />
       <button className="btn btn-ghost" onClick={() => useRuntime.getState().setOpen(true)}>الإعدادات</button>
+      {project && <WindowsMenu onDialog={(d) => { useStore.getState().setPlaying(false); setDialog(d); }} />}
       {/* only a problem is worth the space: connected is the normal state */}
       <span className="connection-pill" data-connected={connection === 'connected'} role="status">{connection !== 'connected' && <><i />{connection === 'connecting' ? 'جارٍ الاتصال…' : 'انقطع الاتصال — أحاول مرة ثانية'}</>}</span>
       {project && <button className="btn checkpoint-trigger" aria-label="نقاط حفظ المشروع" title="نقاط حفظ المشروع" onClick={() => { useStore.getState().setPlaying(false); setDialog('checkpoints'); }}><Icon name="bookmark" size={17} /><span>نقاط الحفظ</span></button>}
       {project && <button className="btn task-button" onClick={() => setDialog('jobs')} title="التحليل والتصدير"><Icon name="clock" />المهام {active.length > 0 && <span className="count-badge">{active.length}</span>}</button>}
-      <button className="icon-button header-help" aria-label="اختصارات لوحة المفاتيح" onClick={() => useKeys.getState().setOpen(true)}><Icon name="keyboard" size={19} /></button>
       {project && <button className="btn btn-primary export-trigger" onClick={() => { useStore.getState().setPlaying(false); setDialog('export'); }}><Icon name="download" size={17} />تصدير</button>}
     </header>
     {dialog && project && (dialog === 'checkpoints' ? <Checkpoints key={name} onClose={() => setDialog(undefined)} /> : <ExportDialog key={name} initial={dialog} onClose={() => setDialog(undefined)} />)}

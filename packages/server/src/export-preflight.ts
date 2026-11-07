@@ -113,6 +113,7 @@ export function exportPreflight(project: Project, rev: number, dir: string, qual
       usedFonts.add(clip.textStyle?.font ?? project.settings.theme.font);
       continue;
     }
+    if (clip.gap) continue; // black and silent, made by the render
     const m = clip.mediaId ? media.get(clip.mediaId) : undefined;
     if (!m) { blockers.push({ code: 'missing_media_reference', message: 'لقطة مرتبطة بملف غير مسجّل في المشروع.', ...context }); continue; }
     // Match compiler inputs: audio tracks always read originals; visible video layers may use proxies.

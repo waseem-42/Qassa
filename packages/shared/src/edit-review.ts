@@ -108,8 +108,11 @@ export function editReview(p: Project, opts: { aspect?: Settings['aspect'] } = {
     out.push({ code: 'audio_only', severity: 'info', at: 0, end: r2(duration), clipIds: [],
       message: `الصورة سوداء في ${Math.round((blackTotal / duration) * 100)}% من المقطع (صوت فقط)`, fix: 'add a picture, a graphic or a waveform on an overlay track if this is not intended' });
   } else {
+    const gaps = mainClips(p).filter((c) => c.gap);
     for (const [a, b] of black) {
       if (b - a < .1) continue;
+      // a gap left on purpose (main-track magnet off) is not a mistake
+      if (gaps.some((g) => g.start <= a + .05 && clipEnd(g) >= b - .05)) continue;
       const over = p.clips.some((c) => !hidden(p, c) && (isText(c) || !!c.graphic) && c.start < b && clipEnd(c) > a);
       out.push({ code: 'black_picture', severity: over ? 'info' : 'warn', at: r2(a), end: r2(b), clipIds: [],
         message: `شاشة سوداء ${(b - a).toFixed(1)}ث${over ? ' خلف نص أو رسم' : ''}`, fix: 'cover it with footage, or close the gap' });

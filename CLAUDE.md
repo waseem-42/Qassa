@@ -36,7 +36,7 @@ First-time setup: `powershell -File setup.ps1` (venv with faster-whisper/scenede
 ## Rules
 
 - All edits go through ops (`packages/shared/src/ops.ts`). A new kind of edit = a new op + a test in `packages/shared/test`.
-- Times: `in/out/t0/t1` are source seconds, `start/at` are timeline seconds. V1 is magnetic; other tracks are re-anchored to their content after V1 edits.
+- Times: `in/out/t0/t1` are source seconds, `start/at` are timeline seconds. V1 is packed; other tracks are re-anchored to their content after V1 edits. With the editor's main-track magnet off, `move_main` / `delete {lift:true}` leave `clip.gap` clips on V1 (black, silent; normalize merges them and drops trailing ones) — the track stays packed.
 - ffmpeg always runs with cwd = project folder and project-relative paths (keeps `D:` out of filtergraphs).
 - Python scripts talk to the server with `@@ {json}` lines on stdout; the last one is `{"result": ...}`.
 - Text overlays render from `textLayerHtml()` in a headless browser — the editor preview uses the same markup.
@@ -47,6 +47,9 @@ First-time setup: `powershell -File setup.ps1` (venv with faster-whisper/scenede
 
 - When making graphics, read the project’s `settings.brand` kit with `brands` and use its palette, logo, fonts and voice. Log library references with `style_reference {project, id, what}` or the undoable `log_style` op; `apply_style` records its own use.
 
+- Imports without a timeline target only join the library (never auto-placed); stills over 1920 px get a preview proxy (`image-proxy.ts`); a file with several audio tracks gets a first track mixing them (`audio-tracks.ts`, originals kept after it) — anything reading sound reads `0:a:0`. `remove_media` deletes media with its clips.
+- Place has an anchor (`ax/ay`, default ½): every drawer applies it through `anchoredShift`. Job journals live in `<data>/logs` in every mode (a reloaded dev server marks cut-short tasks failed).
+- `Track.locked`: ops refuse edits to a locked track's clips, new clips on it, its removal, and ripples that would shift it; free placement skips it.
 - Tracks are user-managed via undoable `add_track/set_track/move_track/remove_track` (nonempty removal needs `deleteClips:true`; V1 stays first and cannot be removed). Text goes on text tracks, graphics on overlay tracks; video sound may go on audio tracks. `track.audio` defaults to `music`; `voice` is never ducked or auto-faded and joins V1 as the key that ducks music. `picture.off` hides the picture without moving or shortening the clip. Project starts (`video/podcast/empty`) only choose initial tracks.
 
 - Transcription is opt-in. Import/ordinary analysis never runs Whisper; energy-based silence detection stays available without words. Before requested word-level cuts, retakes, captions or speech-based ideas, tell the user, then explicitly call `analyze` with `steps:["transcribe","silence","summary"]` and wait. Placing media or changing visuals never authorizes transcription. Playback, export, covers and ranges use the last clip on any track (`projectDuration`); absent V1 picture is black.

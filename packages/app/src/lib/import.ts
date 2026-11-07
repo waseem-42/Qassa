@@ -4,7 +4,9 @@ import { projectPath } from './api.ts';
 import { useStore } from './store.ts';
 
 export const MEDIA_DRAG = 'application/x-qassa-media';
-export const useMediaSelection = create<{ id?: string }>(() => ({}));
+/** Library selection: ids in the order picked; id is the last one clicked (Shift ranges start there); confirm asks before removing used media. */
+export const useMediaSelection = create<{ id?: string; ids: string[]; confirm?: string[] }>(() => ({ ids: [] }));
+export const selectMedia = (id?: string) => useMediaSelection.setState({ id, ids: id ? [id] : [] });
 export let draggingMediaId: string | undefined;
 export function setDraggingMedia(id?: string) { draggingMediaId = id; }
 export const isFileDrag = (d: DataTransfer) => [...d.types].includes('Files');
@@ -61,6 +63,27 @@ async function drain() {
       } finally { active.delete(u.id); }
     }
   } finally { running = false; }
+}
+
+/** Remove media from the project (undoable); used media asks first because its clips leave the timeline. */
+export async function removeMedia(ids: string[], confirmed = false) {
+  const s = useStore.getState(), p = s.project;
+  if (!p || !ids.length) return;
+  if (!confirmed && p.clips.some((c) => c.mediaId && ids.includes(c.mediaId))) return useMediaSelection.setState({ confirm: ids });
+  useMediaSelection.setState({ confirm: undefined });
+  if (await s.ops([{ op: 'remove_media', mediaIds: ids }])) {
+    useMediaSelection.setState({ id: undefined, ids: [] });
+    s.notify(ids.length > 1 ? `حُذف ${ids.length} ملفات من المشروع — Ctrl+Z للتراجع` : 'حُذف الملف من المشروع — Ctrl+Z للتراجع', 'info');
+  }
+}
+
+/** Place media one after another from `at` (the library's multi-selection). */
+export async function placeMediaRun(ids: string[], at: number) {
+  for (const id of ids) {
+    const m = useStore.getState().project?.media.find((x) => x.id === id);
+    if (!m || !(await placeMedia(id, { at }))) return;
+    at += m.duration;
+  }
 }
 
 export function placeMedia(mediaId: string, target: MediaTarget) {

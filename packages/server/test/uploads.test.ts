@@ -11,7 +11,7 @@ import { Jobs } from '../src/jobs.ts';
 import { registerUploads } from '../src/uploads.ts';
 
 describe('role-free uploads', () => {
-  it('places video then music, keeps duplicate filenames safe, supports track drops and role undo', async () => {
+  it('imports video then music into the library only, keeps duplicate filenames safe, supports track drops and role undo', async () => {
     const root = mkdtempSync(join(tmpdir(), 'qassa-upload-'));
     const store = new Store(root, { watch: false }), app = Fastify();
     app.setErrorHandler((err, _req, reply) => reply.code(err instanceof OpError ? 400 : 500).send({ error: (err as Error).message }));
@@ -27,8 +27,8 @@ describe('role-free uploads', () => {
       const song = (await upload('song.wav')).json().added[0];
       expect(song.role).toBe('music');
       let p = store.get('test').project;
-      expect(mainClips(p)).toHaveLength(1);
-      expect(p.clips.find((c) => c.mediaId === song.id)?.trackId).toBe('A2');
+      // no target: nothing lands on the timeline until it is dragged there
+      expect(p.clips).toHaveLength(0);
       const more = (await upload('clip.mp4', '?trackId=V2&at=12')).json().added[0];
       p = store.get('test').project;
       expect(more.path).not.toBe(video.path);

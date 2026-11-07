@@ -30,8 +30,9 @@ export function registerUploads(app: FastifyInstance, store: Store, jobs: Jobs, 
       try {
         await pipeline(part.file, createWriteStream(dest, { flags: 'wx' }));
         if (part.file.truncated || req.raw.aborted) throw new OpError('أُلغي الرفع أو تجاوز الملف الحد');
-        const placement: MediaTarget | undefined = q.trackId || q.newTrack || !q.role ? { trackId: q.trackId, at: q.at, newTrack: !!q.newTrack, trackIndex: q.trackIndex } : undefined;
-        added.push(addMedia(store, jobs, name, dest, q.role, { analyze: options.analyze, placement, name: filename }));
+        // Only a drop on the timeline places the file; other imports just join the project library.
+        const placement: MediaTarget | undefined = q.trackId || q.newTrack ? { trackId: q.trackId, at: q.at, newTrack: !!q.newTrack, trackIndex: q.trackIndex } : undefined;
+        added.push(addMedia(store, jobs, name, dest, q.role, { analyze: options.analyze, placement, place: !!placement, name: filename }));
       } catch (e) {
         // A registered media may already be in use; only remove incomplete/unregistered uploads.
         if (!store.get(name).project.media.some((m) => join(dir, m.path) === dest)) rmSync(dest, { force: true });

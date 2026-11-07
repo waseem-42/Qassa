@@ -21,6 +21,8 @@ import { registerCheckpoints } from './checkpoints.ts';
 import { Jobs, runPython, type Job } from './jobs.ts';
 import { addMedia, queueAnalysis, readAnalysis } from './media.ts';
 import { registerUploads } from './uploads.ts';
+import { ensureImageProxies } from './image-proxy.ts';
+import { registerAudioTracks } from './audio-tracks.ts';
 import { ProjectStart, speechClips } from '@edit/shared';
 import { fontFaceCss, fontFiles, renderTextImages } from './textimg.ts';
 import { graphicStills, renderGraphics } from './graphics.ts';
@@ -37,17 +39,22 @@ import { routeTask, runAgent, setAgentProjectDir, taskLog, type AgentRequest } f
 import { recordCacheUse, registerRenderCache } from './render-cache.ts';
 
 const store = new Store();
-const jobs = new Jobs(DESKTOP ? join(DATA_DIR, 'logs/jobs.json') : undefined);
+// journals in every mode: a restart (the dev server reloads on every source change) marks the jobs it cut short as
+// failed instead of losing them — an AI task on a comment used to vanish without a word
+const jobs = new Jobs(join(DATA_DIR, 'logs/jobs.json'));
 // AI tasks queue on their own: one may start a render or an analysis through MCP and wait for it
-const agentJobs = new Jobs(DESKTOP ? join(DATA_DIR, 'logs/agent-jobs.json') : undefined);
+const agentJobs = new Jobs(join(DATA_DIR, 'logs/agent-jobs.json'));
 setAgentProjectDir(projectDir);
 const app = Fastify({ logger: { level: 'warn' }, bodyLimit: 20 * 1024 * 1024 });
 
 await app.register(fastifyWebsocket);
 await app.register(fastifyMultipart, { defCharset: 'utf8', limits: { fileSize: 64 * 1024 * 1024 * 1024 } });
-await app.register(fastifyStatic, { root: PROJECTS_DIR, prefix: '/files/', decorateReply: false, cacheControl: false, dotfiles: 'deny' });
+// no-cache: the browser asks again every time (a cheap 304 when unchanged) — project files are rewritten in place
+// (graphic pages, proxies, a re-mixed recording) and a heuristically cached copy showed the old one
+const revalidate = (res: { setHeader(k: string, v: string): unknown }) => res.setHeader('Cache-Control', 'no-cache');
+await app.register(fastifyStatic, { root: PROJECTS_DIR, prefix: '/files/', decorateReply: false, cacheControl: false, setHeaders: revalidate, dotfiles: 'deny' });
 if (!DESKTOP) mkdirSync(GRAPHICS_LIB_DIR, { recursive: true });
-await app.register(fastifyStatic, { root: GRAPHICS_LIB_DIR, prefix: '/graphics-lib/', decorateReply: false, cacheControl: false });
+await app.register(fastifyStatic, { root: GRAPHICS_LIB_DIR, prefix: '/graphics-lib/', decorateReply: false, cacheControl: false, setHeaders: revalidate });
 if (existsSync(APP_DIST)) await app.register(fastifyStatic, { root: APP_DIST, prefix: '/', decorateReply: false, wildcard: false });
 
 app.setErrorHandler((err, _req, reply) => {
@@ -81,6 +88,7 @@ app.get('/ws', { websocket: true }, (socket) => {
 type P = { Params: { name: string } };
 
 const view = (name: string) => {
+  ensureImageProxies(store, name);
   const e = store.get(name);
   return { project: e.project, rev: e.rev, history: store.history(name) };
 };
@@ -129,6 +137,7 @@ app.post<P & { Body: { who?: string; text: string } }>('/api/projects/:name/chan
 // ---------------------------------------------------------------- media
 
 registerUploads(app, store, jobs);
+registerAudioTracks(app, store, jobs);
 
 app.post<P & { Body: { path: string; role?: Media['role']; copy?: boolean; analyze?: boolean } }>('/api/projects/:name/import', async (req) => {
   const role = Media.shape.role.parse(req.body.role ?? 'source');
@@ -164,6 +173,7 @@ function overview(name: string, p: Project): string {
   mainClips(p).forEach((c, i) => {
     const g = c.grade ? ` grade=${JSON.stringify(c.grade)}` : '';
     const t = c.transform ? ` zoom=${c.transform.scale}${c.transform.keyframes.length ? `+${c.transform.keyframes.length}kf` : ''}` : '';
+    if (c.gap) return void lines.push(`${i}. ${c.id} @${fmtTime(c.start)}–${fmtTime(c.start + clipDuration(c))}  gap (black, silent)`);
     lines.push(`${i}. ${c.id} @${fmtTime(c.start)}–${fmtTime(c.start + clipDuration(c))}  src ${media.get(c.mediaId!)?.name ?? c.mediaId} ${fmtTime(c.in)}–${fmtTime(c.out)}${c.speed !== 1 ? ` x${c.speed}` : ''}${g}${t}${c.label ? ` «${c.label}»` : ''}${c.transition ? ` ⧖${c.transition.kind} ${c.transition.duration}s` : ''}`);
   });
   const free = p.clips.filter((c) => c.trackId !== 'V1').sort((a, b) => a.start - b.start);

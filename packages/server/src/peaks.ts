@@ -17,7 +17,7 @@ export function normalizePeaks(data: number[]): Peaks {
 /** Stream PCM rather than holding a recording's decoded audio in memory. */
 export function makePeaks(dir: string, path: string): Promise<Peaks> {
   return new Promise((resolve, reject) => {
-    const child = spawn('ffmpeg', ['-v', 'error', '-i', path, '-vn', '-ac', '1', '-ar', '8000', '-f', 's16le', '-'], { cwd: dir, windowsHide: true });
+    const child = spawn('ffmpeg', ['-v', 'error', '-i', path, '-map', '0:a:0', '-ac', '1', '-ar', '8000', '-f', 's16le', '-'], { cwd: dir, windowsHide: true });
     const data: number[] = [];
     let tail: Buffer = Buffer.alloc(0), samples = 0, peak = 0, error = '';
     child.stdout.on('data', (chunk: Buffer) => {

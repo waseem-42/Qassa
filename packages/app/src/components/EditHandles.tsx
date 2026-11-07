@@ -1,8 +1,9 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { clipEnd, placeAt, TextStyle, type Clip, type Op, type Project } from '@edit/shared';
+import { anchoredShift, clipEnd, MAIN_TRACK, PLACE_LIMITS, placeAt, TextStyle, transformAt, type Clip, type Op, type Project } from '@edit/shared';
 import { useStore } from '../lib/store.ts';
 import { snapBox } from '../lib/snap.ts';
-import { valuesPatch } from '../lib/anim.ts';
+import { valuesPatch, withZoomKey } from '../lib/anim.ts';
+import { useLayout } from '../lib/layout.ts';
 
 // Direct manipulation on the preview: click a text to select it; drag the selected text or
 // graphic to move it, its corner to resize it. A graphic whose data has a region (x, y, w, h —
@@ -13,7 +14,9 @@ interface Box { left: number; top: number; width: number; height: number }
 type Drag =
   | { kind: 'text-move' | 'text-size'; clip: Clip; x0: number; y0: number; style: TextStyle; box: Box }
   | { kind: 'layer-move' | 'layer-size'; clip: Clip; x0: number; y0: number; place: Place }
-  | { kind: 'region-move' | 'region-size'; clip: Clip; x0: number; y0: number; region: Region; layer: Box };
+  | { kind: 'region-move' | 'region-size'; clip: Clip; x0: number; y0: number; region: Region; layer: Box }
+  | { kind: 'focus'; clip: Clip; x0: number; y0: number; focus: { scale: number; x: number; y: number }; span: { x: number; y: number } }
+  | { kind: 'anchor'; clip: Clip; x0: number; y0: number; place: Place };
 interface Region { x: number; y: number; w: number; h: number }
 type Place = ReturnType<typeof placeAt>;
 
@@ -25,10 +28,35 @@ function regionOf(c: Clip): Region | undefined {
   return d && ['x', 'y', 'w', 'h'].every((k) => typeof d[k] === 'number') ? { x: d.x as number, y: d.y as number, w: d.w as number, h: d.h as number } : undefined;
 }
 
+/**
+ * Where the zoom focus shows on the picture, as fractions of the box the picture fills (fill fit), matching
+ * framingFilters: the source covers the box times the zoom, cropped around the focus and clamped at its edges.
+ * span = how many box widths/heights the zoomed source spans (a pointer move of one box is 1/span of focus).
+ */
+export function focusOnFrame(m: { width: number; height: number }, boxAspect: number, f: { scale: number; x: number; y: number }) {
+  const a = (m.width || 16) / (m.height || 9);
+  const span = { x: f.scale * Math.max(1, a / boxAspect), y: f.scale * Math.max(1, boxAspect / a) };
+  const at = (s: number, v: number) => s * v - clamp(s * v - 0.5, 0, s - 1);
+  return { x: at(span.x, f.x), y: at(span.y, f.y), span };
+}
+
 /** Where a layer sits inside the fitted frame (fw × fh px), `pl` = its place at the playhead. */
 function layerBox(pl: Place, fw: number, fh: number): Box {
-  const width = fw * pl.scale, height = fh * pl.scale;
-  return { width, height, left: (fw - width) / 2 + pl.dx * fw, top: (fh - height) / 2 + pl.dy * fh };
+  const width = fw * pl.scale, height = fh * pl.scale, at = anchoredShift(pl);
+  return { width, height, left: (fw - width) / 2 + at.x * fw, top: (fh - height) / 2 + at.y * fh };
+}
+
+/**
+ * The patch that moves the anchor to (ax, ay) without the picture moving (like After Effects): the shift makes up
+ * for it at the current size — and every key of a keyed shift moves by as much.
+ */
+export function anchorPatch(c: Clip, pl: Place, ax: number, ay: number) {
+  const k = 1 - pl.scale, ddx = r3((pl.ax - ax) * k), ddy = r3((pl.ay - ay) * k);
+  const keyed = (keys: { t: number; v: number }[] | undefined, d: number) => keys?.map((x) => ({ ...x, v: r3(x.v + d) }));
+  return {
+    place: { ax: r3(ax), ay: r3(ay), ...(c.anim?.dx?.length ? {} : { dx: r3(pl.dx + ddx) }), ...(c.anim?.dy?.length ? {} : { dy: r3(pl.dy + ddy) }) },
+    ...(c.anim?.dx?.length || c.anim?.dy?.length ? { anim: { ...(c.anim?.dx?.length ? { dx: keyed(c.anim.dx, ddx) } : {}), ...(c.anim?.dy?.length ? { dy: keyed(c.anim.dy, ddy) } : {}) } } : {}),
+  };
 }
 
 export function EditHandles({ project, time, fw, fh, frame }: { project: Project; time: number; fw: number; fh: number; frame: React.RefObject<HTMLDivElement> }) {
@@ -39,11 +67,12 @@ export function EditHandles({ project, time, fw, fh, frame }: { project: Project
   const [textBox, setTextBox] = useState<Box>();
   const [guides, setGuides] = useState<{ gx?: number; gy?: number }>({});
   const magnet = useStore((s) => s.magnet);
+  const showFocus = useLayout((s) => s.showFocus);
   const lastOps = useRef<Op[]>();
 
   const visible = (c: Clip) => !project.tracks.find((t) => t.id === c.trackId)?.hidden && time >= c.start && time < clipEnd(c);
-  // a b-roll video/still (picture-in-picture) moves and resizes like a graphic layer
-  const isPicture = (c: Clip) => !c.picture?.off && project.tracks.find((t) => t.id === c.trackId)?.kind === 'overlay' && project.media.some((m) => m.id === c.mediaId && m.kind !== 'audio');
+  // a b-roll video/still (picture-in-picture) — or the main track's picture — moves and resizes like a graphic layer
+  const isPicture = (c: Clip) => !c.picture?.off && ['overlay', 'video'].includes(project.tracks.find((t) => t.id === c.trackId)?.kind ?? '') && project.media.some((m) => m.id === c.mediaId && m.kind !== 'audio');
   const sel = selected.length === 1 ? project.clips.find((c) => c.id === selected[0] && (c.text || c.graphic || isPicture(c)) && visible(c)) : undefined;
 
   // measure the selected text box from the layer the viewer rendered
@@ -87,19 +116,32 @@ export function EditHandles({ project, time, fw, fh, frame }: { project: Project
     };
     if (drag.kind === 'text-move') {
       moved(drag.box);
-      show([{ op: 'update_clip', clipId: c.id, patch: { textStyle: { x: r3(clamp(drag.style.x + dx / fw, 0, 1)), y: r3(clamp(drag.style.y + dy / fh, 0, 1)) } } }]);
+      show([{ op: 'update_clip', clipId: c.id, patch: { textStyle: { x: r3(clamp(drag.style.x + dx / fw, -0.5, 1.5)), y: r3(clamp(drag.style.y + dy / fh, -0.5, 1.5)) } } }]);
     } else if (drag.kind === 'text-size') {
       const k = Math.max(0.2, (drag.box.height + dy) / drag.box.height);
-      show([{ op: 'update_clip', clipId: c.id, patch: { textStyle: { size: Math.round(clamp(drag.style.size * k, 12, 400)) } } }]);
+      show([{ op: 'update_clip', clipId: c.id, patch: { textStyle: { size: Math.round(clamp(drag.style.size * k, 6, 1200)) } } }]);
     } else if (drag.kind === 'layer-move') {
       moved(layerBox(drag.place, fw, fh));
-      show(placeOps(c, { dx: r3(clamp(drag.place.dx + dx / fw, -1, 1)), dy: r3(clamp(drag.place.dy + dy / fh, -1, 1)) }));
+      show(placeOps(c, { dx: r3(clamp(drag.place.dx + dx / fw, -PLACE_LIMITS.d, PLACE_LIMITS.d)), dy: r3(clamp(drag.place.dy + dy / fh, -PLACE_LIMITS.d, PLACE_LIMITS.d)) }));
     } else if (drag.kind === 'layer-size') {
-      // the corner follows the pointer away from the frame centre
-      const half = Math.max(8, Math.abs(p.x - fw / 2 - drag.place.dx * fw));
-      let scale = (2 * half) / fw;
+      // the corner (bottom-left) follows the pointer away from the anchor, which stays put
+      const pl = drag.place, ax = pl.dx * fw + pl.ax * fw, ay = pl.dy * fh + pl.ay * fh;
+      let scale = pl.ax > 0.05 ? Math.max(8, Math.abs(ax - p.x)) / (pl.ax * fw) : Math.max(8, Math.abs(p.y - ay)) / Math.max(1, (1 - pl.ay) * fh);
       if (magnet && !e.altKey && Math.abs(scale - 1) * fw < 8) scale = 1; // full frame
-      show(placeOps(c, { scale: r3(clamp(scale, 0.1, 4)) }));
+      show(placeOps(c, { scale: r3(clamp(scale, PLACE_LIMITS.scaleMin, PLACE_LIMITS.scaleMax)) }));
+    } else if (drag.kind === 'anchor') {
+      // the anchor goes where it is dropped on the picture; the picture stays where it is
+      const L = layerBox(drag.place, fw, fh);
+      let ax = clamp((p.x - L.left) / L.width, 0, 1), ay = clamp((p.y - L.top) / L.height, 0, 1);
+      // the magnet: the centre, edges and corners of the picture
+      if (magnet && !e.altKey) { for (const s of [0, 0.5, 1]) { if (Math.abs(ax - s) * L.width < 8) ax = s; if (Math.abs(ay - s) * L.height < 8) ay = s; } }
+      show([{ op: 'update_clip', clipId: c.id, patch: anchorPatch(c, drag.place, ax, ay) }]);
+    } else if (drag.kind === 'focus') {
+      // unzoomed: the point follows the pointer; zoomed in: the picture does (the view pans). Keyed at the playhead when the zoom has keys.
+      const k = drag.focus.scale > 1.001 ? -1 : 1;
+      const x = r3(clamp(drag.focus.x + k * dx / fw / drag.span.x, 0, 1)), y = r3(clamp(drag.focus.y + k * dy / fh / drag.span.y, 0, 1));
+      const tr = c.transform, local = at(c);
+      show([{ op: 'update_clip', clipId: c.id, patch: { transform: tr?.keyframes.length ? { keyframes: withZoomKey(tr.keyframes, { t: local, ...drag.focus, x, y }) } : { x, y } } }]);
     } else if (drag.kind === 'region-move' || drag.kind === 'region-size') {
       const L = drag.layer, R = drag.region;
       if (drag.kind === 'region-move') moved({ left: L.left + R.x * L.width, top: L.top + R.y * L.height, width: R.w * L.width, height: R.h * L.height });
@@ -172,9 +214,27 @@ export function EditHandles({ project, time, fw, fh, frame }: { project: Project
     }
   }
 
+  // ◎ in «زوم وتركيز»: the focus point of the selected picture (drag it to refocus) and a layer's anchor (its centre, what size scales about)
+  let focus: React.ReactNode = null;
+  const fc = showFocus && selected.length === 1 ? project.clips.find((c) => c.id === selected[0] && visible(c) && !c.picture?.off) : undefined;
+  const fm = fc && project.media.find((m) => m.id === fc.mediaId && m.kind !== 'audio');
+  const ft = fc && project.tracks.find((t) => t.id === fc.trackId);
+  if (fc && fm && ft && (ft.id === MAIN_TRACK || ft.kind === 'overlay')) {
+    const box = layerBox(placeAt(fc, at(fc)), fw, fh);
+    const now = transformAt(fc.transform, at(fc)), fill = fc.picture?.fit !== 'fit';
+    const p = focusOnFrame(fm, box.width / box.height, now);
+    focus = <>
+      {fill && <div data-focus-point className="focus-point" style={{ left: box.left + p.x * box.width, top: box.top + p.y * box.height }} title={`نقطة التركيز ${Math.round(now.x * 100)}% · ${Math.round(now.y * 100)}% — ${now.scale > 1.001 ? 'اسحب لتحريك الصورة' : 'اسحبها لمكان التركيز'}`}
+        onPointerDown={(e) => { const q = local(e); begin(e, { kind: 'focus', clip: fc, x0: q.x, y0: q.y, focus: now, span: p.span }); }} />}
+      {(() => { const pl = placeAt(fc, at(fc)), L = layerBox(pl, fw, fh); return <div data-anchor-point className="anchor-point" style={{ left: L.left + pl.ax * L.width, top: L.top + pl.ay * L.height }} title={`نقطة الارتكاز ${Math.round(pl.ax * 100)}% · ${Math.round(pl.ay * 100)}% — الحجم يكبر ويصغر حولها. اسحبها لمكان ثاني (الصورة ما تتحرك)`}
+        onPointerDown={(e) => { const q = local(e); begin(e, { kind: 'anchor', clip: fc, x0: q.x, y0: q.y, place: pl }); }} />; })()}
+    </>;
+  }
+
   return (
     <div className="absolute inset-0 z-10" onPointerDown={onFrameDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
       {handle}
+      {focus}
       {drag && guides.gx !== undefined && <div className="frame-guide" data-axis="x" style={{ left: guides.gx }} />}
       {drag && guides.gy !== undefined && <div className="frame-guide" data-axis="y" style={{ top: guides.gy }} />}
     </div>

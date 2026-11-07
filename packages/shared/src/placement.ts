@@ -15,7 +15,7 @@ export function clipFitsTrack(p: Project, item: Clip | Media, track: Track): boo
 export function freeTrackFor(p: Project, item: Clip | Media, start: number, end: number, preferTrackId?: string, except: string[] = [], kind?: Track['kind'], insertIndex?: number): { track: Track; ops: Op[]; index?: number } {
   const preferred = p.tracks.find((t) => t.id === preferTrackId);
   const family = kind ?? preferred?.kind ?? ('path' in item ? item.kind === 'audio' ? 'audio' : 'overlay' : item.text !== undefined ? 'text' : 'overlay');
-  const free = (t: Track) => t.id !== MAIN_TRACK && t.kind === family && (family !== 'audio' || !preferred || t.audio === preferred.audio) && clipFitsTrack(p, item, t) && !p.clips.some((c) => !except.includes(c.id) && c.trackId === t.id && c.start < end - .001 && clipEnd(c) > start + .001);
+  const free = (t: Track) => t.id !== MAIN_TRACK && !t.locked && t.kind === family && (family !== 'audio' || !preferred || t.audio === preferred.audio) && clipFitsTrack(p, item, t) && !p.clips.some((c) => !except.includes(c.id) && c.trackId === t.id && c.start < end - .001 && clipEnd(c) > start + .001);
   const index = preferred ? p.tracks.indexOf(preferred) : p.tracks.length;
   if (insertIndex === undefined) {
     const found = [...p.tracks].sort((a, b) => Math.abs(p.tracks.indexOf(a) - index) - Math.abs(p.tracks.indexOf(b) - index)).find(free);

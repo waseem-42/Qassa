@@ -20,15 +20,19 @@ export function Row({ label, children, hint }: { label: string; children: React.
  * A value slider: drag it, or click the number and type one (in the units it shows: 50 for 50%),
  * Enter to apply, Esc to cancel. Double-click the slider to go back to `def`.
  */
-export function Slider({ value, min, max, step, onPreview, onCommit, fmt, def }: {
+export function Slider({ value, min, max, step, onPreview, onCommit, fmt, def, hardMin = min, hardMax = max, onReset, changed }: {
   value: number; min: number; max: number; step: number; onPreview: (v: number) => void; onCommit: (v: number) => void; fmt?: (v: number) => string; def?: number;
+  /** a typed value may go past the slider's track, up to these */
+  hardMin?: number; hardMax?: number;
+  /** ↺ beside the value (shown when it differs from `def`, or when `changed`): `def` again, or this instead */
+  onReset?: () => void; changed?: boolean;
 }) {
   const [v, setV] = useState(value);
   const [text, setText] = useState<string>();
   useEffect(() => setV(value), [value]);
   // what one unit of the value reads as (100 for a percentage), so typed numbers mean what is shown
   const k = fmt ? Number.parseFloat(fmt(1).replace(/[^\d.+-]/g, '')) || 1 : 1;
-  const set = (n: number) => { const x = Math.min(max, Math.max(min, n)); setV(x); onCommit(x); };
+  const set = (n: number) => { const x = Math.min(hardMax, Math.max(hardMin, n)); setV(x); onCommit(x); };
   const typed = () => {
     if (text === undefined) return;
     const n = Number.parseFloat(text.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[,٫]/g, '.'));
@@ -40,12 +44,19 @@ export function Slider({ value, min, max, step, onPreview, onCommit, fmt, def }:
       <input type="range" min={min} max={max} step={step} value={v} title={def !== undefined ? 'دبل كلك يرجّع الافتراضي' : undefined}
         style={{ '--fill': `${((v - min) / (max - min || 1)) * 100}%` } as React.CSSProperties}
         onChange={(e) => { const n = Number(e.target.value); setV(n); onPreview(n); }}
-        onPointerUp={() => onCommit(v)} onKeyUp={() => onCommit(v)}
+        // only the keys that move it save (Ctrl+Z released on it must not save the old value back over the undo)
+        onPointerUp={() => onCommit(v)} onKeyUp={(e) => { if (/^(Arrow|Page|Home|End)/.test(e.key)) onCommit(v); }}
         onDoubleClick={() => { if (def !== undefined) set(def); }} />
-      <input className="slider-value num" aria-label="القيمة" value={text ?? (fmt ? fmt(v) : v.toFixed(2))}
+      <input className="slider-value num" aria-label="القيمة" title={hardMin < min || hardMax > max ? 'اكتب أي قيمة — تقدر تتجاوز حدود الشريط' : undefined} value={text ?? (fmt ? fmt(v) : v.toFixed(2))}
         onFocus={(e) => { setText(String(Math.round(v * k * 1000) / 1000)); requestAnimationFrame(() => e.target.select()); }}
         onChange={(e) => setText(e.target.value)} onBlur={typed}
         onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setText(undefined); requestAnimationFrame(() => (e.target as HTMLInputElement).blur()); } }} />
+      {def !== undefined && (() => {
+        const dirty = changed ?? Math.abs(v - def) > step / 2;
+        // always takes its place, so the row doesn't shift when it appears
+        return <button type="button" className="reset-value" style={{ visibility: dirty ? 'visible' : 'hidden' }} aria-hidden={!dirty} tabIndex={dirty ? 0 : -1}
+          title={`إعادة للافتراضي (${fmt ? fmt(def) : def})`} aria-label="إعادة للافتراضي" onClick={(e) => { e.preventDefault(); if (onReset) onReset(); else set(def); }}>↺</button>;
+      })()}
     </div>
   );
 }
@@ -54,7 +65,7 @@ export function Slider({ value, min, max, step, onPreview, onCommit, fmt, def }:
  * A slider for a property that can change over the clip (place, opacity, volume): it shows and edits the value at the
  * playhead; ◆ adds a key there (or removes the one there), ‹ › jump to the key before / after.
  */
-export function KeySlider({ clip, prop, min, max, step, fmt, def }: { clip: Clip; prop: AnimProp; min: number; max: number; step: number; fmt?: (v: number) => string; def?: number }) {
+export function KeySlider({ clip, prop, min, max, step, fmt, def, hardMin, hardMax }: { clip: Clip; prop: AnimProp; min: number; max: number; step: number; fmt?: (v: number) => string; def?: number; hardMin?: number; hardMax?: number }) {
   const { preview, commit, seek } = useStore.getState();
   const time = useStore((s) => s.time);
   const t = Math.min(Math.max(0, time - clip.start), clipDuration(clip));
@@ -65,7 +76,10 @@ export function KeySlider({ clip, prop, min, max, step, fmt, def }: { clip: Clip
   return (
     <div className="min-w-0">
     <div className="flex items-center gap-1">
-      <div className="min-w-0 flex-1"><Slider value={animValue(clip, prop, t)} min={min} max={max} step={step} fmt={fmt} def={def} onPreview={(v) => preview(ops(v))} onCommit={(v) => commit(ops(v))} /></div>
+      <div className="min-w-0 flex-1"><Slider value={animValue(clip, prop, t)} min={min} max={max} step={step} fmt={fmt} def={def} hardMin={hardMin} hardMax={hardMax}
+        changed={def === undefined ? undefined : keys.length > 0 || Math.abs(animValue(clip, prop, t) - def) > step / 2}
+        onReset={def === undefined ? undefined : () => commit([{ op: 'update_clip', clipId: clip.id, patch: { ...valuesPatch({ ...clip, anim: undefined }, { [prop]: def }, t), ...(keys.length ? { anim: { [prop]: null } } : {}) } }])}
+        onPreview={(v) => preview(ops(v))} onCommit={(v) => commit(ops(v))} /></div>
       <div className="key-nav" dir="ltr">
         <button className="key-step" disabled={!prev} title="المفتاح اللي قبل" aria-label="المفتاح اللي قبل" onClick={() => prev && seek(clip.start + prev.t)}>‹</button>
         <button className="key-btn" aria-pressed={!!here} data-keyed={keys.length > 0} aria-label={here ? 'احذف المفتاح عند المؤشر' : 'مفتاح حركة عند المؤشر'}

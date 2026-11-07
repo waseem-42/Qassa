@@ -6,4 +6,5 @@ projects/*/
 *.log
 __pycache__/
 artifacts/
+logs/
 packages/desktop/resources/

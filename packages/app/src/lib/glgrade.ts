@@ -127,6 +127,8 @@ export class GradeRenderer {
   private gl: WebGL2RenderingContext;
   private prog: WebGLProgram;
   private frameTex: WebGLTexture;
+  /** the still already in frameTex: a photo is uploaded once, not on every frame (a 4K still is ~25 MB per upload) */
+  private uploaded?: HTMLImageElement;
   private luts = new Map<string, { tex: WebGLTexture; size: number } | 'loading' | 'failed'>();
   private u: Record<string, WebGLUniformLocation | null> = {};
 
@@ -197,7 +199,8 @@ export class GradeRenderer {
     if (video instanceof HTMLImageElement ? !video.complete || !video.naturalWidth : video.readyState < 2) return;
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.frameTex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
+    if (!(video instanceof HTMLImageElement) || video !== this.uploaded) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
+    this.uploaded = video instanceof HTMLImageElement ? video : undefined;
     gl.uniform2f(this.u.uvOffset, ...view.uvOffset);
     gl.uniform2f(this.u.uvScale, ...view.uvScale);
 

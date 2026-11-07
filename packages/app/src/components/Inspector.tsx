@@ -1,6 +1,6 @@
 import { BrandKits } from './BrandKits.tsx';
 import { useEffect, useRef, useState } from 'react';
-import { clipDuration, clipEnd, fmtTime, Grade, MAIN_TRACK, Picture, Place, TextStyle, textLayerHtml, Theme, THEME_FONTS, transformAt, AUTO_MARK, SFX_TRACK, type Clip, type Op, type Project } from '@edit/shared';
+import { clipDuration, clipEnd, fmtTime, Grade, MAIN_TRACK, Picture, Place, PLACE_LIMITS, placeAt, TextStyle, textLayerHtml, Theme, THEME_FONTS, transformAt, AUTO_MARK, SFX_TRACK, type Clip, type Op, type Project } from '@edit/shared';
 import { useStore } from '../lib/store.ts';
 import { api, projectPath } from '../lib/api.ts';
 import { EaseRow, KeySlider, Row, Section, Slider } from './ui.tsx';
@@ -9,6 +9,8 @@ import { GraphicContent, GraphicPlace, MotionSection, TimingSection, TransitionS
 import { Icon } from './Brand.tsx';
 import { lookKind } from '../lib/look.ts';
 import { KEY_NEAR, valuesPatch, withZoomKey, zoomEasePatch } from '../lib/anim.ts';
+import { deleteOps, useLayout } from '../lib/layout.ts';
+import { anchorPatch } from './EditHandles.tsx';
 import { TranscriptNeeded } from './Transcribe.tsx';
 
 /** Captions from the transcript of what is left after the cuts — no AI, no cost. */
@@ -88,10 +90,10 @@ function ClipTabs({ kind, clip, count, project }: { kind: ClipKind; clip: Clip; 
       <ClipSummary clip={clip} count={count} project={project} kind={kind} />
       <TabBar tabs={tabs} tab={tab} setTab={setTab} />
       <div role="tabpanel" aria-label={TAB_LABEL[tab]}>
-        {tab === 'picture' && (main ? <><ZoomSection clip={clip} /><FrameSection clip={clip} /></> : <><PlaceSection clip={clip} /><FrameSection clip={clip} /><ZoomSection clip={clip} /></>)}
+        {tab === 'picture' && (main ? <><ZoomSection clip={clip} /><PlaceSection clip={clip} /><FrameSection clip={clip} /></> : <><PlaceSection clip={clip} /><FrameSection clip={clip} /><ZoomSection clip={clip} /></>)}
         {tab === 'audio' && <AudioSection clip={clip} />}
         {tab === 'time' && <>
-          {(kind === 'visual' || kind === 'audio') && <SpeedSection clip={clip} />}
+          {(kind === 'visual' && media?.kind !== 'image' || kind === 'audio') && <SpeedSection clip={clip} />}
           {!main && count === 1 && <TimingSection clip={clip} />}
           {main && count === 1 && <TransitionSection clip={clip} project={project} />}
           {!main && count === 1 && kind === 'visual' && <MotionSection clip={clip} />}
@@ -133,7 +135,7 @@ function ClipSummary({ clip, count, project, kind }: { clip: Clip; count: number
       {kind === 'visual' && graded && <p className="text-[11px] text-ink-400">عليه تلوين — <button className="underline" onClick={() => ops(ids.map((id) => ({ op: 'update_clip' as const, clipId: id, patch: { grade: project.settings.defaultGrade ? { ...NEUTRAL, lut: '' } : null } })))}>إزالة</button></p>}
       <div className="clip-summary-actions">
         {count === 1 && <ClipActions clip={clip} project={project} />}
-        <button className="btn btn-ghost clip-delete" title="حذف (Delete)" onClick={async () => { if (await ops(ids.map((id) => ({ op: 'delete' as const, clipId: id })))) select([]); }}><Icon name="trash" size={14} /> حذف</button>
+        <button className="btn btn-ghost clip-delete" title="حذف (Delete)" onClick={async () => { if (await ops(deleteOps(ids))) select([]); }}><Icon name="trash" size={14} /> حذف</button>
       </div>
     </div>
   );
@@ -183,6 +185,7 @@ function ZoomSection({ clip }: { clip: Clip }) {
   const zoomHere = tr?.keyframes.find((k) => Math.abs(k.t - local) < KEY_NEAR);
   const zoomNext = tr?.keyframes.some((k) => k.t > local + KEY_NEAR);
   const trOps = (patch: Partial<NonNullable<Clip['transform']>>): Op[] => [{ op: 'update_clip', clipId: clip.id, patch: { transform: patch } }];
+  const showFocus = useLayout((s) => s.showFocus);
   const setTr = (k: 'scale' | 'x' | 'y', v: number, c: boolean) => {
     // with keyframes, sliders edit the keyframe at the playhead
     if (tr?.keyframes.length) {
@@ -194,11 +197,12 @@ function ZoomSection({ clip }: { clip: Clip }) {
   return (
     <Section title={clip.trackId === MAIN_TRACK ? 'زوم وتركيز' : 'زوم داخل اللقطة'} actions={
       <>
+        <button className="btn btn-ghost h-6 text-xs" aria-pressed={showFocus} title="أظهر نقطة التركيز على المعاينة (ونقطة ارتكاز الطبقة) — واسحبها لتغيير التركيز" onClick={() => useLayout.getState().setShowFocus(!showFocus)}>◎ النقطة</button>
         <button className="btn btn-ghost h-6 text-xs" title="مفتاح حركة عند المؤشر: مفتاحين بقيم مختلفة والزوم يتحرك بينهم" onClick={() => ops(trOps({ keyframes: withZoomKey(tr?.keyframes, { t: local, ...now }) }))}>◆ مفتاح</button>
         {tr && <button className="btn btn-ghost h-6 text-xs" onClick={() => ops([{ op: 'update_clip', clipId: clip.id, patch: { transform: null } }])}>إعادة</button>}
       </>
     }>
-      <Row label="التكبير"><Slider value={now.scale} min={1} max={3} step={0.01} def={1} fmt={(v) => `${Math.round(v * 100)}%`} onPreview={(v) => setTr('scale', v, false)} onCommit={(v) => setTr('scale', v, true)} /></Row>
+      <Row label="التكبير"><Slider value={now.scale} min={1} max={5} step={0.01} def={1} hardMax={20} fmt={(v) => `${Math.round(v * 100)}%`} onPreview={(v) => setTr('scale', v, false)} onCommit={(v) => setTr('scale', v, true)} /></Row>
       <Row label="التركيز أفقي"><Slider value={now.x} min={0} max={1} step={0.005} def={0.5} onPreview={(v) => setTr('x', v, false)} onCommit={(v) => setTr('x', v, true)} /></Row>
       <Row label="التركيز عمودي"><Slider value={now.y} min={0} max={1} step={0.005} def={0.5} onPreview={(v) => setTr('y', v, false)} onCommit={(v) => setTr('y', v, true)} /></Row>
       {!!tr?.keyframes.length && (
@@ -238,12 +242,37 @@ function PlaceSection({ clip }: { clip: Clip }) {
           <button className="btn" title="أسفل يمين" onClick={() => ops(plOps(corner(1, 1)))}>↘</button>
         </div>
       </Row>
-      <Row label="الحجم"><KeySlider clip={clip} prop="scale" min={0.1} max={2} step={0.01} def={1} fmt={pct} /></Row>
-      <Row label="أفقي"><KeySlider clip={clip} prop="dx" min={-1} max={1} step={0.005} def={0} fmt={pct} /></Row>
-      <Row label="عمودي"><KeySlider clip={clip} prop="dy" min={-1} max={1} step={0.005} def={0} fmt={pct} /></Row>
-      <div className="text-[11px] text-ink-500">أو اسحبها على الفيديو، والزاوية للحجم.</div>
+      <Row label="الحجم"><KeySlider clip={clip} prop="scale" min={0.1} max={4} step={0.01} def={1} fmt={pct} hardMin={PLACE_LIMITS.scaleMin} hardMax={PLACE_LIMITS.scaleMax} /></Row>
+      <Row label="أفقي"><KeySlider clip={clip} prop="dx" min={-1.5} max={1.5} step={0.005} def={0} fmt={pct} hardMin={-PLACE_LIMITS.d} hardMax={PLACE_LIMITS.d} /></Row>
+      <Row label="عمودي"><KeySlider clip={clip} prop="dy" min={-1.5} max={1.5} step={0.005} def={0} fmt={pct} hardMin={-PLACE_LIMITS.d} hardMax={PLACE_LIMITS.d} /></Row>
+      <AnchorRow clip={clip} />
+      <div className="text-[11px] text-ink-500">أو اسحبها على الفيديو، والزاوية للحجم. اكتب أي رقم في الخانة لقيم أبعد من الشريط (الحجم لين {PLACE_LIMITS.scaleMax * 100}%).</div>
     </Section>
   );
+}
+
+/** Where the size grows from: 9 quick points, exact values, and ◎ to see / drag it on the preview. The picture never jumps. */
+function AnchorRow({ clip }: { clip: Clip }) {
+  const { commit } = useStore.getState();
+  const time = useStore((s) => s.time);
+  const showFocus = useLayout((s) => s.showFocus);
+  const pl = placeAt(clip, time - clip.start);
+  const set = (ax: number, ay: number) => commit([{ op: 'update_clip', clipId: clip.id, patch: anchorPatch(clip, pl, ax, ay) }]);
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  return <>
+    <Row label="الارتكاز" hint="النقطة اللي الحجم يكبر ويصغر حولها. تغييرها ما يحرّك الصورة.">
+      <div className="flex items-center gap-2">
+        <div className="anchor-grid" role="group" aria-label="نقطة الارتكاز">
+          {[0, 0.5, 1].flatMap((y) => [0, 0.5, 1].map((x) => (
+            <button key={`${x}-${y}`} type="button" aria-pressed={Math.abs(pl.ax - x) < 0.01 && Math.abs(pl.ay - y) < 0.01} title={`${pct(x)} · ${pct(y)}`} onClick={() => set(x, y)} />
+          )))}
+        </div>
+        <button type="button" className="btn btn-ghost h-6 px-2 text-[11px]" aria-pressed={showFocus} title="أظهر نقطة الارتكاز على المعاينة واسحبها لأي مكان" onClick={() => useLayout.getState().setShowFocus(!showFocus)}>◎ على المعاينة</button>
+      </div>
+    </Row>
+    <Row label="ارتكاز أفقي"><Slider value={pl.ax} min={0} max={1} step={0.01} def={0.5} fmt={pct} onPreview={() => {}} onCommit={(v) => set(v, pl.ay)} /></Row>
+    <Row label="ارتكاز عمودي"><Slider value={pl.ay} min={0} max={1} step={0.01} def={0.5} fmt={pct} onPreview={() => {}} onCommit={(v) => set(pl.ax, v)} /></Row>
+  </>;
 }
 
 /** How the picture fills the frame: fit, opacity, rotation, flip — and cropping its edges, folded away. */
@@ -255,6 +284,9 @@ function FrameSection({ clip }: { clip: Clip }) {
   const slide = (make: (v: number) => Op[]) => ({ onPreview: (v: number) => preview(make(v)), onCommit: (v: number) => commit(make(v)) });
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const cropped = pic.crop.l || pic.crop.r || pic.crop.t || pic.crop.b;
+  // opens by itself on a cropped clip, then only the user closes it (a slider dragged back to 0 must not fold it away)
+  const [cropOpen, setCropOpen] = useState(!!cropped);
+  useEffect(() => { if (cropped) setCropOpen(true); }, [clip.id, !!cropped]);
   return (
     <Section title="الإطار" actions={(clip.picture || clip.anim?.opacity) && <button className="btn btn-ghost h-6 text-xs" onClick={() => ops([{ op: 'update_clip', clipId: clip.id, patch: { picture: null, anim: { opacity: null } } }])}>إعادة</button>}>
       <Row label="الملاءمة">
@@ -284,7 +316,7 @@ function FrameSection({ clip }: { clip: Clip }) {
           <button className="btn" aria-pressed={pic.flipY} onClick={() => ops(picOps({ flipY: !pic.flipY }))}>⇅ عمودي</button>
         </div>
       </Row>
-      <details className="fold" open={!!cropped}>
+      <details className="fold" open={cropOpen} onToggle={(e) => setCropOpen(e.currentTarget.open)}>
         <summary>قص الأطراف{cropped ? ' ·' : ''}</summary>
         {([['l', 'يسار'], ['r', 'يمين'], ['t', 'فوق'], ['b', 'تحت']] as const).map(([k, label]) => (
           <Row key={k} label={label}><Slider value={pic.crop[k]} min={0} max={0.45} step={0.005} def={0} fmt={pct} {...slide((v) => picOps({ crop: { [k]: v } }))} /></Row>
@@ -399,7 +431,7 @@ function TextControls({ clip }: { clip: Clip }) {
           <option value="fade">ظهور</option><option value="slide-up">صعود</option><option value="pop">نبض</option><option value="none">بدون</option>
         </select>
       </Row>
-      <Row label="الحجم"><Slider value={st.size} min={20} max={180} step={1} fmt={(v) => `${v}px`} onPreview={(v) => style({ size: v }, false)} onCommit={(v) => style({ size: v })} /></Row>
+      <Row label="الحجم"><Slider value={st.size} min={20} max={180} step={1} def={TextStyle.parse({}).size} hardMin={6} hardMax={1200} fmt={(v) => `${v}px`} onPreview={(v) => style({ size: v }, false)} onCommit={(v) => style({ size: v })} /></Row>
       <Row label="الوزن">
         <select className="field" value={st.weight} onChange={(e) => style({ weight: Number(e.target.value) })}>
           {[400, 500, 600, 700].map((w) => <option key={w} value={w}>{w}</option>)}
@@ -412,8 +444,8 @@ function TextControls({ clip }: { clip: Clip }) {
           <button className="btn h-7 text-xs" onClick={() => style({ background: null })}>افتراضي</button>
         </div>
       </Row>
-      <Row label="أفقي"><Slider value={st.x} min={0} max={1} step={0.005} onPreview={(v) => style({ x: v }, false)} onCommit={(v) => style({ x: v })} /></Row>
-      <Row label="عمودي"><Slider value={st.y} min={0} max={1} step={0.005} onPreview={(v) => style({ y: v }, false)} onCommit={(v) => style({ y: v })} /></Row>
+      <Row label="أفقي"><Slider value={st.x} min={0} max={1} step={0.005} def={0.5} hardMin={-0.5} hardMax={1.5} onPreview={(v) => style({ x: v }, false)} onCommit={(v) => style({ x: v })} /></Row>
+      <Row label="عمودي"><Slider value={st.y} min={0} max={1} step={0.005} def={0.5} hardMin={-0.5} hardMax={1.5} onPreview={(v) => style({ y: v }, false)} onCommit={(v) => style({ y: v })} /></Row>
       <Row label="المحاذاة">
         <div className="flex gap-1">
           {(['start', 'center', 'end'] as const).map((a) => (

@@ -272,6 +272,25 @@ export function compile(p: Project, opts: RenderOptions): RenderPlan {
     const body = keyCommands(keys, len, fps, (v) => channels.map((ch) => `${name} ${ch} ${n(v, 3)}`).join(', '));
     return [`sendcmd=f=${cmdFile(body)}`, `${name}=${set('', keyAt(keys, 0, base)).join(':')}`];
   };
+  /**
+   * A main-track picture moved / resized (place, keyable): the framed picture scaled about the frame centre and
+   * shifted, over black — like a layer, but the frame below is empty. `off`: the piece starts that far into the clip.
+   */
+  const mainPlace = (c: Clip, off: number): string[] => {
+    const a = c.anim, pl = c.place;
+    const keyed = !!(a?.dx?.length || a?.dy?.length || a?.scale?.length);
+    if (!keyed && (!pl || (pl.scale === 1 && !pl.dx && !pl.dy))) return []; // at full size the anchor changes nothing
+    const tag = ++tags, s = pl?.scale ?? 1, sk = shiftKeys(a?.scale, off);
+    const max = sk?.length ? Math.max(...sk.map((k) => k.v)) : s;
+    const fg = sk?.length
+      ? ['format=rgba', `scale=w='max(2,2*trunc(iw*(${keyExpr(sk, s)})/2))':h='max(2,2*trunc(ih*(${keyExpr(sk, s)})/2))':eval=frame`, `pad=w=${Math.ceil((W * max) / 2) * 2 + 2}:h=${Math.ceil((H * max) / 2) * 2 + 2}:x='(ow-iw)/2':y='(oh-ih)/2':color=black@0:eval=frame`]
+      : s !== 1 ? [`scale=w='max(2,2*trunc(iw*${n(s)}/2))':h='max(2,2*trunc(ih*${n(s)}/2))'`] : ['null'];
+    const at = (keys: Key[] | undefined, base: number, size: number) => (keys?.length ? `(${keyExpr(keys, base)})*${size}` : n(base * size, 2));
+    const sv = sk?.length ? `(${keyExpr(sk, s)})` : n(s);
+    const lean = (k: number, size: number) => (Math.abs(k - 0.5) < 1e-6 ? '' : `+(${n(k - 0.5)})*${size}*(1-${sv})`);
+    const x = `(W-w)/2+${at(shiftKeys(a?.dx, off), pl?.dx ?? 0, W)}${lean(pl?.ax ?? 0.5, W)}`, y = `(H-h)/2+${at(shiftKeys(a?.dy, off), pl?.dy ?? 0, H)}${lean(pl?.ay ?? 0.5, H)}`;
+    return [`${fg.join(',')}[pf${tag}];color=c=black:s=${W}x${H}:r=${fps}[pb${tag}];[pb${tag}][pf${tag}]overlay=x='${x}':y='${y}':shortest=1:eval=${keyed ? 'frame' : 'init'}`];
+  };
   const videoChain = (c: Clip, m: Media, off: number, len: number) => {
     const src = sourceFilters(m, c.picture);
     const pic = c.picture, blur = pic?.fit === 'fit' && pic.bars === 'blur';
@@ -283,6 +302,7 @@ export function compile(p: Project, opts: RenderOptions): RenderPlan {
       // turned about the frame centre; the corners show black, like a rotated clip in any editor (on blurred bars only the picture turns)
       ...(pic?.rotate && !blur ? [`rotate=${radians(pic.rotate)}:ow=${W}:oh=${H}:c=black`] : []),
       ...gradeFilters(gradeOf(c), opts.lutFile, String(++tags)),
+      ...mainPlace(c, off),
       ...opacityFilters(shiftKeys(c.anim?.opacity, off), pic?.opacity ?? 1, len, ['rr', 'gg', 'bb']),
       `fps=${fps}`,
       'setsar=1',
@@ -488,7 +508,10 @@ export function compile(p: Project, opts: RenderOptions): RenderPlan {
         `pad=w=${Math.ceil((w * max) / 2) * 2 + 2}:h=${Math.ceil((h * max) / 2) * 2 + 2}:x='(ow-iw)/2':y='(oh-ih)/2':color=black@0:eval=frame`,
       ];
     }
-    return { grow, x: `(main_w-overlay_w)/2+${at(a?.dx, pl?.dx ?? 0, W)}`, y: `(main_h-overlay_h)/2+${at(a?.dy, pl?.dy ?? 0, H)}` };
+    // scaled about the anchor: a shift of (anchor − ½)·(1 − scale) frames
+    const s = a?.scale?.length ? `(${keyExpr(a.scale, pl?.scale ?? 1, tv)})` : n(pl?.scale ?? 1);
+    const lean = (k: number, size: number) => (Math.abs(k - 0.5) < 1e-6 ? '' : `+(${n(k - 0.5)})*${size}*(1-${s})`);
+    return { grow, x: `(main_w-overlay_w)/2+${at(a?.dx, pl?.dx ?? 0, W)}${lean(pl?.ax ?? 0.5, W)}`, y: `(main_h-overlay_h)/2+${at(a?.dy, pl?.dy ?? 0, H)}${lean(pl?.ay ?? 0.5, H)}` };
   }
   function moves(c: Clip) {
     return !!(c.anim?.dx?.length || c.anim?.dy?.length || c.anim?.scale?.length);
