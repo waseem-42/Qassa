@@ -516,7 +516,7 @@ function TrackHead({ track, ghost }: { track: Track; ghost?: boolean }) {
   const canMute = track.kind === 'audio' || track.kind === 'overlay' || track.id === MAIN_TRACK;
   const canHide = track.kind === 'overlay' || track.kind === 'text';
   const toggle = (on: boolean, label: string, onTitle: string, offTitle: string, icon: [IconName, IconName], patch: Partial<Track>) => (
-    <button className={`flex h-5 w-5 items-center justify-center rounded text-[13px] transition-colors ${on ? 'bg-cut/25 text-cut-text' : 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'}`}
+    <button className={`flex ${size === 'compact' ? 'h-4 w-4' : 'h-5 w-5'} items-center justify-center rounded text-[13px] transition-colors ${on ? 'bg-cut/25 text-cut-text' : 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'}`}
       title={on ? onTitle : offTitle} aria-label={label} aria-pressed={on}
       onClick={() => ops([{ op: 'set_track', trackId: track.id, patch }])}>
       <Icon name={on ? icon[1] : icon[0]} />
@@ -524,8 +524,8 @@ function TrackHead({ track, ghost }: { track: Track; ghost?: boolean }) {
   );
   const [manage, setManage] = useState(false);
   return (
-    <div data-track-head={track.id} data-ghost-track={ghost || undefined} className="flex flex-col justify-center gap-1 border-b border-ink-800 px-2 text-xs" style={{ height: rowHeight(track, size, largeWave), opacity: ghost ? .6 : 1 }} dir="rtl">
-      <div className="flex min-w-0 items-center gap-1 text-xs leading-4">
+    <div data-track-head={track.id} data-ghost-track={ghost || undefined} className="flex flex-col justify-center gap-0.5 border-b border-ink-800 px-2 text-xs" style={{ height: rowHeight(track, size, largeWave), opacity: ghost ? .6 : 1 }} dir="rtl">
+      <div className={`flex min-w-0 items-center gap-1 text-xs ${size === 'compact' ? 'leading-3' : 'leading-4'}`}>
         <span className="h-3 w-1 shrink-0 rounded" style={{ background: COLOR[track.kind] }} />
         {renaming ? <input autoFocus aria-label="تسمية المسار" className="min-w-0 flex-1 bg-ink-950 text-ink-200" value={label} maxLength={80} onChange={(e) => setLabel(e.target.value)} onBlur={saveName} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setRenaming(false); setLabel(track.name); } }} /> : <span onDoubleClick={() => { if (!ghost) { setLabel(track.name); setRenaming(true); } }} title="دبل كلك لتغيير اسم المسار" className={`flex-1 truncate ${track.muted || track.hidden ? 'text-ink-500 line-through' : 'text-ink-300'}`}>{ghost ? '＋ طبقة جديدة' : track.id === MAIN_TRACK && track.name === 'رئيسي' ? 'الأساسي' : track.name}</span>}
         {!ghost && <button className="text-ink-400 hover:text-ink-100" aria-label={`إدارة مسار ${track.name}`} onClick={() => setManage(true)}>⋯</button>}

@@ -18,4 +18,6 @@ it('physical Arabic-layout I/O and Shift+Space map to rebindable mark actions', 
   expect(actionFor(key('KeyI', 'ه'))).toBe('markIn');
   expect(actionFor(key('KeyO', 'خ'))).toBe('markOut');
   expect(actionFor(key('Space', ' ', true))).toBe('playMarked');
+  expect(actionFor(key('Comma', 'و'))).toBe('nudgeBack');
+  expect(actionFor(key('Period', 'ز', true))).toBe('nudgeFwd10');
 });

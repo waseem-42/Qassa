@@ -38,3 +38,13 @@ it('reports legacy overlaps without rejecting intentional add/move ops, includin
   const next = applyOps(p, [{ op: 'add_clip', clip: { id: 'inside', mediaId: 'v', trackId: 'V2', start: 6, in: 0, out: 1 } }]);
   expect(trackOverlaps(next, 'V2')).toEqual([{ start: 6, end: 7 }]);
 });
+
+it('preserves voice routing and text compatibility when finding another layer', () => {
+  const p = fixture();
+  p.tracks.push({ ...p.tracks.find((t) => t.kind === 'audio')!, id: 'voice', name: 'كلام', audio: 'voice' });
+  p.clips.push({ ...p.clips[0], id: 'voice1', trackId: 'voice' });
+  const plan = freeTrackFor(p, p.clips.at(-1)!, 5, 10, 'voice');
+  expect(plan.track.id).not.toBe('A2'); expect(plan.track.audio).toBe('voice');
+  const text = { ...p.clips[0], mediaId: undefined, text: 'عنوان', trackId: 'T1' };
+  expect(freeTrackFor(p, text, 0, 2, 'T1').track.id).toBe('T1');
+});

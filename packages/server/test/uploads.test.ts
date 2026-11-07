@@ -39,10 +39,11 @@ describe('role-free uploads', () => {
       store.undo('test'); expect(store.get('test').project.media.find((m) => m.id === more.id)?.role).toBe('broll');
       const main = await upload('clip.mp4', '?trackId=V1&at=0');
       expect(main.statusCode).toBe(200); expect(mainClips(store.get('test').project)[0].mediaId).toBe(main.json().added[0].id);
-      const fresh = await upload('song.wav', '?newTrack=1&at=4');
+      const fresh = await upload('song.wav', '?newTrack=1&trackIndex=2&at=4');
       expect(fresh.statusCode).toBe(200);
       const c = store.get('test').project.clips.find((c) => c.mediaId === fresh.json().added[0].id)!;
       expect(c.start).toBe(4); expect(c.trackId).not.toBe('A2');
+      expect(store.get('test').project.tracks[2].id).toBe(c.trackId);
       const unicode = '🎙️【302】 تيك توك.wav';
       const named = (await upload('song.wav', '?trackId=A2&at=1', unicode)).json().added[0];
       expect(named.name).toBe(unicode); expect(named.role).toBe('music');
