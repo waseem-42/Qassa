@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { CAPTION_TRACK, EXPORT_PRESETS, ExportSettings, fmtTime, isAudioFormat, markedRange, projectDuration, outputSize, type Settings } from '@edit/shared';
+import { CAPTION_TRACK, EXPORT_PRESETS, ExportSettings, fmtTime, isAudioFormat, markedRange, projectDuration, outputSize, type ReviewFinding, type Settings } from '@edit/shared';
 type Aspect = Settings['aspect'];
 import { useStore, type Job, type RenderVersion } from '../lib/store.ts';
 import { api, ApiError, projectPath } from '../lib/api.ts';
@@ -162,6 +162,7 @@ export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs';
             {stale && <div className="notice"><p>حمّل آخر تعديل للمشروع، ثم راجع الفحص قبل التصدير.</p><button className="btn mt-2" disabled={busy || connection !== 'connected'} onClick={refreshProject}>تحديث بيانات المشروع</button></div>}
             {!!check.blockers.length && <div className="export-issues export-blockers"><h4>مطلوب قبل التصدير</h4><ul>{check.blockers.map((issue, i) => <li key={`${issue.code}-${i}`}><p>{issue.message}</p>{issue.path && <code dir="ltr">{issue.path}</code>}</li>)}</ul></div>}
             {!!check.warnings.length && <details className="export-issues export-warnings"><summary>ملاحظات للمراجعة ({check.warnings.length}) — يمكنك التصدير</summary><ul>{check.warnings.map((issue, i) => <li key={`${issue.code}-${i}`}><p>{issue.message}</p>{issue.path && <code dir="ltr">{issue.path}</code>}</li>)}</ul></details>}
+            {!!check.review?.length && <ReviewList findings={check.review} />}
           </> : <p className="text-ink-400">سيُفحص المشروع قبل بدء التصدير.</p>}
         </section>
         <RenderCache name={name} active={Object.values(jobs).some((j) => ['running', 'queued'].includes(j.status))} />
@@ -200,4 +201,22 @@ function ExportedActions({ url, output, reveal }: { url: string; output: string;
 
 function Version({ version }: { version: { rev: number; snapshotId: string } }) {
   return <span className="export-version num" title={`معرّف النسخة: ${version.snapshotId}`}>r{version.rev}<span aria-hidden="true"> · </span><span>{version.snapshotId.slice(0, 8)}</span></span>;
+}
+
+/** What a viewer would notice: click one to see it on the timeline (the dialog stays open). */
+function ReviewList({ findings }: { findings: ReviewFinding[] }) {
+  const warn = findings.filter((f) => f.severity === 'warn').length;
+  const { seek, select } = useStore.getState();
+  return (
+    <details className="export-issues export-warnings export-review" open={warn > 0}>
+      <summary>مراجعة المونتاج ({warn ? `${warn} للإصلاح، ` : ''}{findings.length - warn} للنظر)</summary>
+      <ul>{findings.map((f, i) => (
+        <li key={`${f.code}-${i}`} data-severity={f.severity}>
+          <button type="button" dir="rtl" className="export-review-item" title="اعرضها في التايملاين" onClick={() => { seek(f.at); if (f.clipIds.length) select(f.clipIds); }}>
+            <span className="num" dir="ltr">{fmtTime(f.at, 1)}</span><span dir="auto">{f.message}</span>
+          </button>
+        </li>
+      ))}</ul>
+    </details>
+  );
 }

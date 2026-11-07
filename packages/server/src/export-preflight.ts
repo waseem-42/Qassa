@@ -5,7 +5,7 @@ import { isAbsolute, join, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { CAPTION_TRACK, captionsSrt, clipDuration, clipEnd, exportBaseName, exportRange, ExportSettings, graphicEntry, isAudioFormat, mainClips, markedRange, OpError, projectDuration, MAIN_TRACK, type Project } from '@edit/shared';
-import { trackOverlaps } from '@edit/shared';
+import { editReview, trackOverlaps, type ReviewFinding } from '@edit/shared';
 import { BROWSER, GRAPHICS_LIB_DIR } from './config.ts';
 import { assertNoLink, assertWithin, ProjectManagementError } from './project-paths.ts';
 import { fontFiles } from './textimg.ts';
@@ -32,6 +32,8 @@ export interface ExportPreflight {
   blockers: ExportIssue[];
   warnings: ExportIssue[];
   resources: ExportResource[];
+  /** what a viewer would notice (never blocks) */
+  review?: ReviewFinding[];
 }
 export interface RenderInfo {
   rev: number; snapshotId: string; quality: RenderQuality; output: string;
@@ -199,8 +201,15 @@ export function registerExportRoutes(app: FastifyInstance, store: Store, jobs: J
       const problems = cutReport(project, (id) => store.transcript(name, id)?.words).filter((c) => c.problems.length);
       if (problems.length) report.warnings.push({ code: 'cut_problems', message: `توجد ${problems.length} نقاط قص تحتاج مراجعة؛ الفحص اقتراح وليس حكمًا على جودة المونتاج.` });
     } catch { report.warnings.push({ code: 'cut_check_unavailable', message: 'تعذر قراءة التفريغ لفحص حدود القص؛ يمكن متابعة التصدير.' }); }
+    report.review = editReview(project);
+    const flagged = report.review.filter((f) => f.severity === 'warn').length;
+    if (flagged) report.warnings.push({ code: 'edit_review', message: `مراجعة المونتاج: ${flagged} ملاحظة قد يلاحظها المشاهد (التفاصيل في «مراجعة المونتاج»).` });
     return report;
   };
+  app.get<{ Params: { name: string }; Querystring: { aspect?: string } }>('/api/projects/:name/review', async (req) => {
+    const aspect = z.enum(['16:9', '9:16', '1:1', '4:5']).optional().parse(req.query.aspect);
+    return editReview(store.get(req.params.name).project, { aspect });
+  });
   app.get<{ Params: { name: string }; Querystring: { quality?: string } }>('/api/projects/:name/render/preflight', async (req) => {
     const quality = Quality.parse(req.query.quality ?? 'final');
     const entry = store.get(req.params.name);

@@ -321,3 +321,19 @@ Walked through as a new user on a fresh project (new project → drop a talking 
   - never follows links and never touches anything outside those two folders.
   - The export dialog shows the cache size with «تنظيف الملفات المؤقتة». A dry run on «تشويقة» would free 7.39 GB, leaving the project at 0.41 GB; nothing was deleted during QA.
 - sol hit its usage limit before the report. Claude finished the review, fixed the cap rule, re-ran 303 tests, typecheck and build, and did an isolated end-to-end final export with a library graphic and a lower third (12 s in 24 s; graphic cache 4.4 MB; transparency correct).
+
+## Edit review before export (Task 17, 2026-11-07, built by Claude while sol was at its usage limit)
+
+- `editReview(project, {aspect?})` in `shared/src/edit-review.ts` reads the edit as a viewer would, without rendering. It finds:
+  - flash frames under 0.25 s;
+  - text gone before it can be read (0.5 s + 3 words/s; captions linked to speech are exempt);
+  - two texts in the same place at the same time (estimated boxes);
+  - text under the Shorts/Reels buttons or description in 9:16 (one finding per track);
+  - black picture, or one note for a mostly sound-only edit;
+  - music above 0.8 under speech;
+  - more than three same-shot jump cuts within 10 s with no framing change;
+  - overlaps on free tracks, open comments and waiting ideas, with their times.
+  Each finding has a time, clip ids and a fix hint. Findings never block an export.
+- MCP `review {project, aspect?, max?}`: one line per finding. The skill now has a «مراجعة» gate between the cut check and the contact sheet.
+- Export dialog: «مراجعة المونتاج (N للإصلاح، M للنظر)». Clicking a finding seeks the timeline and selects its clips. Preflight adds one summary warning when there is something to fix.
+- Verified: 9 new tests (a positive and a negative case per check, Arabic reading speed included); 312 tests, typecheck and app build pass. On a copy of night-qa (isolated server and UI), 16:9 shows only the deliberate b-roll overlap. 9:16 groups the 22 captions at y 0.86 into one finding. Clicking selects the overlapping clips, and the RTL layout is checked.

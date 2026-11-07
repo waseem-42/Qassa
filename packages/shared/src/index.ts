@@ -16,3 +16,4 @@ export * from './placement.ts';
 export * from './speech.ts';
 
 export const TRASH_RETENTION_DAYS = 30;
+export * from './edit-review.ts';

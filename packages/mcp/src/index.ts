@@ -5,7 +5,7 @@ import { McpServer, type ToolCallback } from '@modelcontextprotocol/sdk/server/m
 import { ListToolsRequestSchema, type Tool } from '@modelcontextprotocol/sdk/types.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { ExportSettings, Op } from '@edit/shared';
+import { ExportSettings, Op, reviewLine, type ReviewFinding } from '@edit/shared';
 import { desktopConnection } from './connection.ts';
 import { toolSchema } from './tool-schema.ts';
 
@@ -423,6 +423,15 @@ tool('render_preflight', 'Check export readiness and revision. Returns blockers,
     const resourceCounts: Record<string, number> = {};
     for (const resource of r.resources) resourceCounts[resource.kind] = (resourceCounts[resource.kind] ?? 0) + 1;
     return text(JSON.stringify({ ...r, resourceCounts, resources: a.verbose ? r.resources : r.resources.filter((resource: any) => resource.status !== 'ready') }));
+  } catch (e) { return fail(e); }
+});
+
+tool('review', 'Review the whole edit for what a viewer would notice, before the preview render: flash frames, text too short to read or on top of other text, 9:16 text under the platform buttons, black picture, music loud under speech, runs of same-shot jump cuts, overlaps, open comments, waiting ideas. One line each with timeline time, clip ids and a fix hint. Run after check_cuts; findings never block export.', { project, aspect: z.enum(['16:9', '9:16', '1:1', '4:5']).optional().describe('check for an export aspect other than the project\'s'), max: z.number().int().min(1).max(100).default(30) }, async (a) => {
+  try {
+    const findings: ReviewFinding[] = await call(`${p(a.project)}/review${a.aspect ? `?aspect=${encodeURIComponent(a.aspect)}` : ''}`);
+    if (!findings.length) return text('review: nothing a viewer would notice.');
+    const warn = findings.filter((f) => f.severity === 'warn').length;
+    return text([`review: ${warn} to fix, ${findings.length - warn} to consider`, ...findings.slice(0, a.max).map(reviewLine), ...(findings.length > a.max ? [`… ${findings.length - a.max} more`] : [])].join('\n'));
   } catch (e) { return fail(e); }
 });
 

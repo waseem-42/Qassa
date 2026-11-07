@@ -628,6 +628,46 @@ You (sol) build; Claude is the project manager and reviews your work. The user w
 
 ---
 
+## Task 17 — Edit review: catch what a viewer would notice, before export (after Task 16)
+
+**Why:** Claude edits through MCP and can only check its work piece by piece: `check_cuts` for cuts, `contact_sheet` to look, and preflight for missing files. Nothing checks the edit as a whole for what a viewer would notice. The project vision lists automated continuity checks as still open. Make one shared review that the export dialog and Claude both use.
+
+**Do:**
+1. **A shared, pure review** in `packages/shared/src/` (e.g. `editReview(project, ctx)`). It returns findings with `{code, severity: 'warn'|'info', at (timeline s), end?, clipIds, message (Arabic, short), fix? (an op hint for Claude)}`. Cheap checks that need no rendering:
+   - **Flash frames:** a visible clip, or a V1 piece between two cuts, shorter than about 0.25 s (unless it is a deliberate freeze or transition).
+   - **Text on screen too briefly to read:** compare words against duration, about 3 words/s, Arabic included; captions are exempt when linked to speech.
+   - **Text collisions:** two text layers, or text and a graphic, visible at the same time in the same screen band. Use `y` and preset heights; e.g. a lower third over the captions at y≈0.86.
+   - **9:16 safe area:** text or graphic boxes inside the bottom ~20% or right ~12% where Shorts/Reels/TikTok put their buttons. Only when the aspect or export is 9:16.
+   - **Black picture:** time where nothing visible covers an absent V1. Info only when intended, e.g. the start of a podcast.
+   - **Music under speech:** a music clip with volume above about 0.6 while speech plays and ducking can't bring it down enough. Use the same numbers as the render's ducking.
+   - **Abrupt audio:** a music/voice clip that starts or ends mid-timeline with no fade, and is not at a cut of V1.
+   - **Jump-cut runs:** more than 3 consecutive same-shot V1 cuts within 10 s with no zoom/transform change. Info, with the skill's tip (1.08–1.15 zoom on alternating pieces).
+   - **Leftovers:** open comments, pending suggestions or ideas, overlaps on free tracks (from Task 14), and caption overlaps (Task 13). Reuse the existing checks; don't duplicate them.
+2. **MCP tool `review`** `{project, max?}`: the findings, most important first, one line each with timeline time and the fix hint. Add the summary counts to `render_preflight` warnings, so a render shows them without another call. Update the skill's gates: run `review` after `check_cuts` and before the preview render. Update both skill copies.
+3. **Editor:**
+   - The export dialog shows the review findings (collapsed, with counts) next to the existing preflight warnings. Clicking one seeks the timeline and selects its clips.
+   - Findings never block export.
+   - Optional: a small badge on the export button when there are warnings.
+4. **Tests** in `packages/shared/test`: one positive and one negative case per check, Arabic text reading speed included.
+
+**Done when:** on a temporary project built to trip each check (and on night-qa), `review` lists each one with the right times, and the export dialog shows them and seeks on click. A clean temporary edit gives no warnings. Tests, typecheck and build pass. No user project changes.
+
+---
+
+## Task 18 — Desktop build of tonight's work (last task of the night)
+
+**Do:**
+- Rebuild the Windows installer with Tasks 14–17 (`npm run dist:win`) and bump the patch version once.
+- Then repeat Task 12's packaged smoke on an isolated data root with a clean PATH:
+  - start, single instance, import a video, place b-roll, add a title;
+  - export an MP4 with a graphic (Task 16's cache codec inside the package);
+  - run `review`, and the bundled MCP smoke against the running app;
+  - close.
+- Report the installer path, size, SHA-256 and anything that differs from dev.
+- Don't touch the user's installed copy or the user's Documents\Qassa data.
+
+---
+
 ## Report
 
 (sol: one block per task — status, files changed, tests, open questions for Claude)
@@ -770,4 +810,9 @@ You (sol) build; Claude is the project manager and reviews your work. The user w
 - Numbers: 64 s full-screen 9:16 graphic 3.74 GB → 0.69 GB (5.4×), 787 s → 460 s. Library template composite PSNR 58 dB / SSIM 0.9997. «تشويقة» dry run: 7.8 GB → 0.41 GB; nothing deleted.
 - Validation by Claude: 303 tests in 51 files, typecheck clean, app build passes. Isolated server (port 4381, temporary EDIT_DATA_DIR): real final export with footage, a `lib/chapter` graphic and a lower third: 12 s rendered in 24 s (graphics 18.7 s, segments 1.1 s, final 3.4 s), cache 4.4 MB, transparency correct in extracted frames.
 - Note: the user's running server on :4317 still runs the old code. The first start with this code cleans «تشويقة»'s stale 7.4 GB of graphics cache automatically (regenerable; the next export re-renders its two graphics in the new format).
+
+### Task 17 — done by Claude (sol at its usage limit until 07:10)
+- Files: `shared/src/edit-review.ts` (+ index export), `shared/test/edit-review.test.ts`; server `export-preflight.ts` (`review` in the preflight report, summary warning, `GET /api/projects/:name/review?aspect=`); MCP `review` tool; app `ExportDialog.tsx` `ReviewList`, `lib/export.ts` type, `index.css`; both skill copies (new gate 2.5), CLAUDE.md/AGENTS.md.
+- Not done from the spec: «abrupt audio» was dropped, because the render already auto-fades music and voice gets the 12 ms cut fade. The optional badge on the export button is not done.
+- Validation: 312 tests in 52 files, typecheck clean, app build passes. Isolated server and UI on a night-qa copy: correct findings in 16:9 and 9:16, click seeks and selects, RTL checked. No user project touched.
 

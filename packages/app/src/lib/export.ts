@@ -1,9 +1,11 @@
+import type { ReviewFinding } from '@edit/shared';
 export type ExportQuality = 'preview' | 'final';
 export interface ExportIssue { code: string; message: string; clipId?: string; mediaId?: string; path?: string }
 export interface ExportPreflight {
   ready: boolean; rev: number; snapshotId: string; quality: ExportQuality;
   blockers: ExportIssue[]; warnings: ExportIssue[];
   resources: { kind: 'media' | 'proxy' | 'graphic' | 'lut' | 'font' | 'browser'; path: string; status: 'ready' | 'missing' | 'unverified'; mediaId?: string; clipId?: string }[];
+  review?: ReviewFinding[];
 }
 
 /** A check applies only to the exact edit and requested quality it inspected. */
