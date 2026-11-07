@@ -740,6 +740,124 @@ Also check RTL in each panel, empty states, error messages (bad file, missing me
 
 ---
 
+## UX plan (2026-11-07 evening) — Tasks 22–25: an editor a first-time user gets without help
+
+The user asked: make the platform easier to use; sol builds it. Claude walked through the web editor as a new user on an isolated server (4391/5191, `artifacts/qa/claude-1107/ux1-walk.mjs`, `ux3-flows.mjs`, `ux4-text.mjs`; screenshots `artifacts/qa/claude-1107/ux-*.png`). The editor works with no page errors. These tasks fix what made it hard to follow. Do them in order, one per run, as in **How to work**. Each one needs before/after screenshots at 1600×1000 **and** 1366×768 in `artifacts/qa/task<N>/`.
+
+Uncommitted work from Claude is in the tree when you start (styles library rebuild, the Space fix, version 0.1.8). Leave it as it is.
+
+---
+
+## Task 22 — Small things a new user trips over (first)
+
+What Claude saw:
+
+1. **A new title can't be seen.** «نص» in the timeline toolbar (`Timeline.tsx:508`), the inspector button (`Inspector.tsx:687`) and the shortcut (`App.tsx:270`) each add a text with different defaults. The text starts at the playhead with `slide-up`, so on the paused frame it is still invisible (`ux-16-text-later.png`). It is not selected, and the right panel stays on the assistant. Its 4 s also ran past a 3 s video, so the project got 1 s of black at the end.
+2. **A gold bar lights up between tracks on plain hover** (`.track-insert-zone:hover`, `index.css:706`; `ux-03-editor-empty.png`). It is 8 px and sits above the clips (z-index 50), so it also takes clicks meant for the top and bottom edges of a clip.
+3. **Two magnet buttons with the same icon** next to each other: «الأساسي» (main-track magnet) and the snapping magnet (N) with no text (`Timeline.tsx:512–514`).
+4. **The music track head says «موسيقى» twice**: the name, then the voice/music toggle (`Timeline.tsx:709`).
+5. **The empty viewer** still says «أفلت مقطعك هنا» after media was imported but nothing was placed. It also offers the فيديو / صوت / فارغ starts again, although Home already asked for one (`Viewer.tsx:~442`).
+6. **Timeline toolbar buttons don't show their shortcut**, for example «نص», «تقسيم», «حذف المحدد», «إضافة تعليق». The shortcuts live in `lib/keys.ts`, and the tooltips should read from there (they are rebindable).
+
+Do:
+- One shared helper for «add a title at the playhead», used by all three entry points. When it runs:
+  - Select the new clip and open the text properties with the text ready to type.
+  - Shorten the duration so it ends where the content ends, when there is content after the playhead (minimum 1 s). With no content, keep 4 s.
+  - The paused preview must show it straight away. Suggested: while paused, a selected text whose entrance animation covers the playhead is drawn in its settled state. Playback and export stay unchanged.
+- Show the insert zone only while something is being dragged (media, clip or track). Plain hover shows nothing, and the zone doesn't catch clicks.
+- Give the snapping magnet a short label, «التصاق», and make the two buttons tell apart at a glance.
+- Track head: show the voice/music toggle as a small chip that says what it does («ينخفض تحت الكلام» / «كلام»). Don't repeat the name.
+- Empty viewer:
+  - No media: one line «أضف ملفاتك» with the import button.
+  - Media but nothing placed: «اسحب من المكتبة للتايملاين، أو اضغط ＋ على الملف» and a button **«ضع الكل على التايملاين»**. The button places the library's videos/images in library order on V1 as one undo step, through the existing placement path.
+  - Remove the start buttons from the viewer.
+- Tooltips with the current shortcut on the timeline toolbar and the viewer transport, read from `keys.ts`.
+
+**Done when:**
+- A new title is visible, selected and editable straight after you press «نص».
+- No gold bar appears without a drag.
+- Tests cover the shared title helper (duration clamp) and «ضع الكل» as one undo step.
+- `npm test`, `npm run typecheck` and the app build pass.
+
+---
+
+## Task 23 — Export: simple first, details on request (after Task 22)
+
+What Claude saw (`ux-08-export.png`):
+- The dialog shows seven presets and then every setting at once: name, format, aspect, resolution, fps, quality, codec, range, details.
+- Readiness sits at the bottom, below the fold.
+- «صوت فقط» sits alone on its own row.
+
+Do:
+- **Default view:** the presets, the file name, «الجزء المصدَّر» (whole edit / marked part), the readiness line and «ابدأ التصدير».
+- **«إعدادات متقدمة»:** a closed section holding format, aspect, resolution, fps, quality and codec. It opens by itself when the user's last export changed one of them; remember that per viewer.
+- Show a one-line summary of the chosen output next to the button, e.g. «يوتيوب · 1920×1080 · 30fps · ~3 ث». Move readiness up next to it.
+- Lay out the preset grid so no tile sits alone; audio can be a smaller tile or a row.
+- Don't change the export contract, preflight or the review list. Only the dialog layout changes.
+
+**Done when:**
+- At 1366×768, a default export takes no scrolling: preset → name → start.
+- Advanced settings still reach every option, and an export with them gives the same file as before (compare ffprobe output).
+
+---
+
+## Task 24 — Words a beginner understands, and a first-run guide (after Task 23)
+
+What Claude saw:
+- Jargon in the timeline:
+  - «حدود التصدير» in the ruler corner, and «اسحب I / O لتحديد التصدير» (`Timeline.tsx:527, 547`).
+  - «بي-رول».
+  - «ملاءمة».
+  - «زوم وتركيز» with «◎ النقطة» and «◆ مفتاح».
+  - The position buttons in the inspector are bare arrows (↖ ↗ ↙ ↘ كامل وسط).
+- The assistant panel opens by default and, right after the first import, adds a long «أفكار بصرية» card and a transcription prompt (`ux-13-text.png`) before the user has done anything.
+
+Do:
+- Rename for a creator, keeping the meaning and the tooltips:
+  - «حدود التصدير» → «جزء التصدير»; the hint becomes «اسحب المقبضين لتصدير جزء فقط».
+  - «بي-رول» → «لقطات فوقية». Change the default track name for new projects only; existing projects keep theirs.
+  - «ملاءمة» → «ملاءمة الكل».
+  - «◆ مفتاح» → «◆ حركة» (tooltip: «أضف نقطة حركة عند المؤشر»).
+  - The position arrows → a 3×3 grid of small boxes with a tooltip on each, e.g. «أعلى اليمين».
+  - Keep RTL in mind: right is the start.
+- **Assistant panel:** «أفكار بصرية» and the transcription offer shrink to one line each, with a «اعرض» button. The request box comes first. Nothing changes for projects that already have ideas.
+- **First-run guide:** a short checklist inside the editor, shown once per viewer, dismissable, stored with localStorage in try/catch:
+  1. أضف ملفاتك
+  2. ضعها على التايملاين
+  3. قص أو أضف نص
+  4. صدّر
+  - Each step ticks itself from project state (media exists / a clip exists / an edit op happened / an export finished).
+  - Each step has a «وريني» button that points at the control (flash its outline).
+  - Settings has «أعد عرض دليل البداية».
+- Update the skill docs only if a name the MCP tools use changes. They shouldn't: these are UI labels.
+
+**Done when:**
+- A fresh viewer sees the checklist, it ticks through the four steps in a real walk, and it never comes back after closing.
+- All renamed labels are checked at 1366×768 RTL.
+- Tests pass.
+
+---
+
+## Task 25 — Laptop screens (after Task 24)
+
+What Claude saw at 1280×720 (`ux-10-small.png`):
+- The media library is gone, with nothing saying where it went.
+- The viewer is about 240 px high.
+- The timeline shows only 3 tracks, with no visible way to give it more room.
+
+Do:
+- Check 1280×720, 1366×768 and 1536×864 (Windows 125% scaling of 1920×1080).
+- When a panel hides because of width, show a visible tab/button where it was («مكتبة المشروع») that opens it as an overlay.
+- Give the viewer/timeline split a visible grip. Remember the split per viewer, the same way the timeline height is saved today.
+- Toolbars wrap or collapse into «⋯»; no button is cut off or hidden behind another.
+- Text and buttons keep at least the design system's minimum sizes.
+
+**Done when:**
+- At each size, every panel can be reached with the mouse and the three main steps (import, edit, export) work.
+- Screenshots at all three sizes are in `artifacts/qa/task25/`.
+
+---
+
 ## Report
 
 (sol: one block per task — status, files changed, tests, open questions for Claude)

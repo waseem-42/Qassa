@@ -9,8 +9,9 @@ import { useFavorites } from '../lib/favorites.ts';
 import { RecentStyles, rememberStyle, StyleUsage } from './RecentStyles.tsx';
 import { Modal } from './Modal.tsx';
 
-// The styles page: a library of whole looks (theme + grade + captions + transition) previewed on
-// a real frame of the project, the user's saved styles, and building one from a reference.
+// The styles window, in three places: apply now (looks and editing recipes, one click, undoable), discover ideas
+// (the reference libraries sorted by what they are for, built with the assistant), and mine (favourites, recent,
+// saved styles).
 
 type Saved = StyleDef & { saved: true; createdAt: string; from?: string };
 
@@ -27,10 +28,10 @@ export function Styles() {
   const [transitions, setTransitions] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [busy, setBusy] = useState<string>();
-  const [tab, setTab] = useState<'library' | 'favorites' | 'editing' | 'looks' | 'saved' | 'recent'>('library');
+  const [tab, setTab] = useState<'apply' | 'discover' | 'mine'>('apply');
   useEffect(() => {
     if (!open || !target) return;
-    setTab(target.source === 'library' ? 'library' : target.source === 'saved' ? 'saved' : 'looks');
+    setTab(target.source === 'library' ? 'discover' : target.source === 'saved' ? 'mine' : 'apply');
     setLookQuery(target.source === 'library' ? '' : target.id);
     setDetail(undefined);
   }, [open, target]);
@@ -39,7 +40,7 @@ export function Styles() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Saved>();
   const [deleting, setDeleting] = useState(false);
-  const [lookQuery, setLookQuery] = useState('');
+  const [lookQuery, setLookQuery] = useState(''), [kind, setKind] = useState('');
 
   const [loading, setLoading] = useState(true), [loadError, setLoadError] = useState('');
   const loadRequest = useRef(0);
@@ -57,7 +58,7 @@ export function Styles() {
     load();
     return () => { ++loadRequest.current; };
   }, [open, name, load]);
-  const showLooks = !!detail || tab === 'looks' || tab === 'saved' || tab === 'favorites';
+  const showLooks = !!detail || tab === 'apply' || tab === 'mine';
   useEffect(() => {
     if (!open || !name) return;
     if (!showLooks) return;
@@ -123,51 +124,60 @@ export function Styles() {
   const looks: StyleDef[] = [...lib.presets, ...lib.saved];
   const favLooks = favIds.flatMap((id) => looks.filter((s) => s.id === id));
   const view = (s: StyleDef) => { setDetail(s); rememberStyle(s.id, lib.presets.some((p) => p.id === s.id) ? 'preset' : 'saved'); };
-  const card = (s: StyleDef) => <StyleCard key={s.id} s={s} frame={frame} project={project} busy={!!busy} current={isCurrent(s)} used={project.stylesUsed.some((u) => u.id === s.id)} onApply={() => apply(s)} onView={() => view(s)} onDelete={tab === 'saved' && !busy ? () => setDeleteTarget(s as Saved) : undefined} />;
+  const card = (s: StyleDef) => <StyleCard key={s.id} s={s} frame={frame} project={project} busy={!!busy} current={isCurrent(s)} used={project.stylesUsed.some((u) => u.id === s.id)} onApply={() => apply(s)} onView={() => view(s)} onDelete={lib.saved.some((x) => x.id === s.id) && !busy ? () => setDeleteTarget(s as Saved) : undefined} />;
+  const matches = (s: StyleDef) => `${s.id} ${s.name} ${s.description} ${(s.tags ?? []).join(' ')}`.toLocaleLowerCase().includes(lookQuery.trim().toLocaleLowerCase());
+  // the built-in looks: one gallery, narrowed by what the video is (any of a look's tags)
+  const kinds = [...new Set(lib.presets.flatMap((s) => s.tags ?? []))].filter((k) => lib.presets.filter((s) => s.tags?.includes(k)).length > 1);
+  const shownLooks = lib.presets.filter((s) => matches(s) && (!kind || s.tags?.includes(kind)));
+  const gallery = (list: StyleDef[]) => <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-4" onKeyDown={(e) => { if (navigateGallery(e.currentTarget, e.target, e.key, '.style-look-open')) { e.preventDefault(); e.stopPropagation(); } }}>{list.map(card)}</div>;
+  const lookControls = <div className="style-look-controls">
+    <input className="field" aria-label="البحث في الهويات" placeholder="ابحث عن هوية… مثل شرح أو إعلان" value={lookQuery} onChange={(e) => setLookQuery(e.target.value)} />
+    <label><input type="checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} /> تحديث تنسيق الكابشن</label>
+    <label><input type="checkbox" checked={transitions} onChange={(e) => setTransitions(e.target.checked)} /> انتقالات على كل القصات</label>
+  </div>;
+  const status = loadError ? <div className="style-empty" role="alert"><h3>تعذّر تحميل الستايلات</h3><p>{loadError}</p><button className="btn" onClick={load}>إعادة المحاولة</button></div> : loading ? <p role="status" className="py-8 text-center text-sm text-ink-400">جارٍ تحميل الستايلات…</p> : null;
 
   return (
     <Modal title="مكتبة الستايلات" subtitle="اختر أسلوب المونتاج أو اضبط الهوية البصرية لمشروعك." full onClose={() => setStylesOpen(false)}>
     <div className="styles-window flex flex-col" dir="rtl">
       <nav className="styles-navigation" aria-label="أقسام الستايلات">
-        {([['library', 'استكشف المكتبات', 'مراجع ومشاهد'], ['recent', 'الأخيرة', 'آخر ما استخدمت'], ['favorites', '♥ المفضلة', `${favIds.length}`], ['editing', 'مونتاج جاهز', 'طبّق على مشروعك'], ['looks', 'الألوان والهوية', 'معاينة وتطبيق'], ['saved', 'ستايلاتي', `${lib.saved.length} محفوظ`]] as const).map(([id, label, detail]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}><b>{label}</b><span>{detail}</span></button>)}
+        {([['apply', 'طبّق على مشروعك', 'هويات ووصفات بضغطة'], ['discover', 'اكتشف أفكار', 'مراجع مرتبة حسب الاستخدام'], ['mine', 'مكتبتي', `${favIds.length} مفضلة · ${lib.saved.length} محفوظ`]] as const).map(([id, label, detail]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}><b>{label}</b><span>{detail}</span></button>)}
       </nav>
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        {tab === 'recent' ? <RecentStyles onUse={(id, source) => { if (source === 'library') useStore.getState().openStyle(id, source); else { const style = looks.find((s) => s.id === id); if (style) view(style); } }} /> : tab === 'library' ? <SourceLibrary key={name} initialId={target?.source === 'library' ? target.id : undefined} /> : tab === 'editing' ? <EditingStyles key={name} /> : tab === 'favorites' ? <>
-          {!!favLooks.length && <section className="style-fav-section">
-            <h3 className="style-section-title">ألوان وهويات <span className="num">{favLooks.length}</span></h3>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-4">{favLooks.map(card)}</div>
-          </section>}
+        {tab === 'discover' ? <SourceLibrary key={name} initialId={target?.source === 'library' ? target.id : undefined} /> : tab === 'apply' ? <>
+          <div className="style-intro"><div><span className="style-eyebrow">يتطبق الحين، ويتراجع بـ Ctrl+Z</span><h2>نفس اللقطة. إحساس مختلف.</h2><p>الهوية تغيّر ألوان النصوص والرسوم والكابشن ودرجة الألوان، والمعاينة على لقطة من مشروعك. الوصفات تحت ترتب الحركة والكابشن والعناوين.</p></div></div>
+          {lookControls}
+          {status ?? <>
+            <div className="style-kinds" role="group" aria-label="نوع الفيديو"><button aria-pressed={!kind} onClick={() => setKind('')}>الكل <span className="num">{lib.presets.length}</span></button>{kinds.map((k) => <button key={k} aria-pressed={kind === k} onClick={() => setKind(kind === k ? '' : k)}>{k} <span className="num">{lib.presets.filter((s) => s.tags?.includes(k)).length}</span></button>)}</div>
+            {gallery(shownLooks)}
+            {!shownLooks.length && <div className="style-empty"><h3>لا توجد هوية بهذا البحث</h3><p>جرّب كلمة ثانية أو نوع آخر.</p><button className="btn" onClick={() => { setLookQuery(''); setKind(''); }}>عرض الكل</button></div>}
+          </>}
+          <section className="style-fav-section"><h3 className="style-section-title">وصفات مونتاج</h3><EditingStyles key={name} /></section>
+        </> : <>
           <section className="style-fav-section">
-            {!!favLooks.length && <h3 className="style-section-title">من المكتبات</h3>}
+            <h3 className="style-section-title">♥ المفضلة <span className="num">{favIds.length}</span></h3>
+            {!!favLooks.length && <div className="mb-5">{gallery(favLooks)}</div>}
             <SourceLibrary key={`favorites-${name}`} favoritesOnly />
           </section>
-        </> : <>
-        <div className="style-intro"><div><span className="style-eyebrow">هوية مشروعك</span><h2>{tab === 'saved' ? 'أسلوبك، جاهز لكل قصة.' : 'نفس اللقطة. إحساس مختلف.'}</h2><p>معاينة تقريبية للألوان والنصوص. التطبيق يغيّر هوية المشروع ويمكن التراجع عنه.</p></div></div>
-        {tab === 'saved' && <>
-        <section className="mb-6 flex flex-wrap items-center gap-2 rounded-xl border border-ink-800 bg-ink-900 p-3">
-          <span className="text-sm text-ink-300">احفظ شكل هذا المشروع كستايل تستخدمه بعدين:</span>
-          <input className="field h-8 w-56" aria-label="اسم الستايل المحفوظ" placeholder="اسم الستايل… مثلاً: قناتي" value={saveName} onChange={(e) => setSaveName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
-          <button className="btn btn-primary h-8" disabled={saving || !saveName.trim()} onClick={save}>{saving ? 'جارٍ الحفظ…' : 'احفظ الهوية الحالية'}</button>
-          <div className="flex-1" />
-          {refs.length > 0 ? refs.map((m) => (
-            <button key={m.id} className="btn h-8 text-xs" onClick={() => api.post(`${projectPath(name)}/style`, { refMediaId: m.id, strength: 0.6, apply: 'default' }).then(() => notify(`يبني ألوان من «${m.name}»…`, 'info')).catch((e) => notify(e.message))}>
-              ✦ ألوان من الرفرنس «{m.name}»
-            </button>
-          )) : <span className="text-xs text-ink-500">عندك مقطع بستايل تحبه؟ ارفعه كـ «رفرنس» من الوسائط وتقدر تاخذ ألوانه.</span>}
-        </section>
-
-        </>}
-        <div className="style-look-controls">
-          <input className="field" aria-label="البحث في الألوان والهوية" placeholder="ابحث عن ستايل…" value={lookQuery} onChange={(e) => setLookQuery(e.target.value)} />
-          <label><input type="checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} /> تحديث تنسيق الكابشن</label>
-          <label><input type="checkbox" checked={transitions} onChange={(e) => setTransitions(e.target.checked)} /> انتقالات على كل القصات</label>
-        </div>
-        {loadError ? <div className="style-empty" role="alert"><h3>تعذّر تحميل الستايلات</h3><p>{loadError}</p><button className="btn" onClick={load}>إعادة المحاولة</button></div> : loading ? <p role="status" className="py-8 text-center text-sm text-ink-400">جارٍ تحميل الستايلات…</p> : <>
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,280px),1fr))] gap-4" onKeyDown={(e) => { if (navigateGallery(e.currentTarget, e.target, e.key, '.style-look-open')) { e.preventDefault(); e.stopPropagation(); } }}>
-          {(tab === 'saved' ? lib.saved : lib.presets).filter((s) => `${s.id} ${s.name} ${s.description}`.toLocaleLowerCase().includes(lookQuery.trim().toLocaleLowerCase())).map(card)}
-        </div>
-        {!(tab === 'saved' ? lib.saved : lib.presets).some((s) => `${s.id} ${s.name} ${s.description}`.toLocaleLowerCase().includes(lookQuery.trim().toLocaleLowerCase())) && <div className="style-empty"><h3>{lookQuery ? 'لا توجد نتائج بهذا الاسم' : 'اصنع أول ستايل خاص فيك'}</h3><p>{lookQuery ? 'جرّب اسمًا آخر أو امسح البحث.' : 'اضبط ألوان المشروع والنصوص، ثم احفظ هويتك من الحقل بالأعلى.'}</p>{lookQuery && <button className="btn" onClick={() => setLookQuery('')}>مسح البحث</button>}</div>}
-        </>}
+          <section className="style-fav-section">
+            <h3 className="style-section-title">آخر ما استخدمت</h3>
+            <RecentStyles onUse={(id, source) => { if (source === 'library') useStore.getState().openStyle(id, source); else { const style = looks.find((s) => s.id === id); if (style) view(style); } }} />
+          </section>
+          <section className="style-fav-section">
+            <h3 className="style-section-title">ستايلاتي المحفوظة <span className="num">{lib.saved.length}</span></h3>
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-ink-800 bg-ink-900 p-3">
+              <span className="text-sm text-ink-300">احفظ شكل هذا المشروع كستايل تستخدمه بعدين:</span>
+              <input className="field h-8 w-56" aria-label="اسم الستايل المحفوظ" placeholder="اسم الستايل… مثلاً: قناتي" value={saveName} onChange={(e) => setSaveName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
+              <button className="btn btn-primary h-8" disabled={saving || !saveName.trim()} onClick={save}>{saving ? 'جارٍ الحفظ…' : 'احفظ الهوية الحالية'}</button>
+              <div className="flex-1" />
+              {refs.length > 0 ? refs.map((m) => (
+                <button key={m.id} className="btn h-8 text-xs" onClick={() => api.post(`${projectPath(name)}/style`, { refMediaId: m.id, strength: 0.6, apply: 'default' }).then(() => notify(`يبني ألوان من «${m.name}»…`, 'info')).catch((e) => notify(e.message))}>
+                  ✦ ألوان من الرفرنس «{m.name}»
+                </button>
+              )) : <span className="text-xs text-ink-500">عندك مقطع بستايل تحبه؟ ارفعه كـ «رفرنس» من الوسائط وتقدر تاخذ ألوانه.</span>}
+            </div>
+            {status ?? (lib.saved.length ? gallery(lib.saved) : <p className="style-empty-line">اضبط ألوان المشروع والنصوص، ثم احفظ هويتك من الحقل بالأعلى — تقدر تطبّقها على أي مشروع.</p>)}
+          </section>
         </>}
       </div>
     </div>

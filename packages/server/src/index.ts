@@ -364,12 +364,13 @@ app.post<P & { Body: { author?: string } }>('/api/projects/:name/sfx/auto', asyn
 
 app.get('/api/styles', async () => ({ presets: STYLE_PRESETS, saved: savedStyles() }));
 
-app.get<{ Querystring: { q?: string; source?: string; offset?: string; limit?: string; category?: string; sort?: string; preview?: string; favorites?: string } }>('/api/style-library', async (req) => {
+app.get<{ Querystring: { q?: string; source?: string; offset?: string; limit?: string; category?: string; sort?: string; preview?: string; favorites?: string; use?: string; all?: string } }>('/api/style-library', async (req) => {
   const offset = Number(req.query.offset ?? 0), limit = Number(req.query.limit ?? 30);
   if (!Number.isSafeInteger(offset) || offset < 0) throw new OpError('invalid offset');
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 60) throw new OpError('limit must be 1–60');
   return searchStyleCatalog(req.query.q, req.query.source, offset, limit, req.query.category, {
     previewFirst: req.query.sort === 'preview', onlyPreview: req.query.preview === '1', favorites: req.query.favorites === '1' ? favorites() : undefined,
+    curated: req.query.sort === 'curated', use: req.query.use || undefined, all: req.query.all === '1',
   });
 });
 

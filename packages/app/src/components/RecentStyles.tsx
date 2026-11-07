@@ -25,10 +25,10 @@ export function RecentStyles({ onUse }: { onUse(id: string, source: StyleUse['so
     catch (e) { setError((e as Error).message); }
   };
   return <section className="style-recent">
-    <div className="style-recent-heading"><div><span className="eyebrow">بين كل مشاريعك</span><h2>ارجع لآخر أسلوب ألهمك.</h2><p>الستايلات التي طبّقتها أو فتحت تفاصيلها، الأحدث أولًا.</p></div>{!!rows.length && <button className="btn btn-ghost" onClick={() => remove()}>مسح السجل</button>}</div>
+    {!!rows.length && <div className="style-recent-heading">{!!rows.length && <button className="btn btn-ghost" onClick={() => remove()}>مسح السجل</button>}</div>}
     {error && <p className="text-cut-text" role="alert">{error}<button className="btn" onClick={load}>إعادة المحاولة</button></p>}
     {loading && <p role="status">جارٍ تحميل الأخيرة…</p>}
-    {!loading && !rows.length && !error && <div className="style-empty"><Icon name="clock" size={28} /><h3>أول أسلوب ينتظرك</h3><p>افتح تفاصيل ستايل أو استخدمه في مشروع، وسيظهر هنا مع اسم المشروع لتعود إليه بسهولة.</p></div>}
+    {!loading && !rows.length && !error && <p className="style-empty-line"><Icon name="clock" size={15} /> اللي تطبّقه أو تفتح تفاصيله يظهر هنا، الأحدث أولًا، من كل مشاريعك.</p>}
     {['اليوم', 'أمس', 'هذا الأسبوع', 'أقدم'].map((group) => {
       const list = rows.filter((r) => dayGroup(r.at) === group);
       return !!list.length && <section key={group}><h3 className="style-section-title">{group}</h3><div className="style-recent-list">{list.map((row) => <article key={`${row.source}:${row.id}:${row.project}`} className="style-recent-row"><div><strong dir="auto">{row.name}</strong><p>{row.project || 'خارج مشروع'} · {({ preset: 'جاهز', saved: 'محفوظ', library: 'مرجع مكتبة' })[row.source]} · {new Date(row.at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</p>{!row.available && <small>لم يعد هذا الستايل متاحًا في المكتبة</small>}</div><button className="btn" disabled={!row.available} onClick={() => onUse(row.id, row.source)}>استخدم مجددًا</button><button className="icon-button" aria-label={`إزالة ${row.name} من الأخيرة`} onClick={() => remove(row)}><Icon name="close" size={16} /></button></article>)}</div></section>;

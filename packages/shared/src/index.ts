@@ -5,6 +5,7 @@ export * from './text.ts';
 export * from './captions.ts';
 export * from './graphics.ts';
 export * from './styles.ts';
+export * from './style-uses.ts';
 export * from './sfx.ts';
 export * from './review.ts';
 export * from './ideas.ts';

@@ -186,7 +186,6 @@ function useShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (document.querySelector('dialog[open]') || e.defaultPrevented) return;
-      if (e.code === 'Space' && !e.shiftKey && e.target instanceof Element && e.target.closest('button,a,summary,[role="button"]')) return;
       // in a field: text fields keep their own keys (and their own undo); after a slider, a checkbox or a list was used,
       // focus stays on it, and Ctrl+Z / Ctrl+Shift+Z must still undo the edit it made
       const field = e.target instanceof Element ? e.target.closest('input,textarea,select,[contenteditable]') : null;
@@ -196,7 +195,14 @@ function useShortcuts() {
       const combo = comboOf(e);
       if (!combo) return;
       const action = actionFor(combo);
-      if (!action || (field && action !== 'undo' && action !== 'redo')) return;
+      // the play key works from anywhere but a text field or an open menu: the button, slider or list used last keeps
+      // the focus, and used to take Space for itself (the button ran again, the slider ignored it) — playback "stuck"
+      const inMenu = e.target instanceof Element && !!e.target.closest('[role="menu"]');
+      const play = action === 'play' && !inMenu;
+      if (!action || (field && action !== 'undo' && action !== 'redo' && !play)) return;
+      if (play && e.target instanceof Element && e.target.closest('button,a,summary,[role="button"],input,select')) (document.activeElement as HTMLElement | null)?.blur();
+      // held down, the key repeats: one press is one toggle
+      if (play && e.repeat) { e.preventDefault(); return; }
       // the panels answer their own keys while open
       if (keys.open || useStore.getState().stylesOpen) {
         if (action === 'deselect') { e.preventDefault(); keys.setOpen(false); useStore.getState().setStylesOpen(false); }

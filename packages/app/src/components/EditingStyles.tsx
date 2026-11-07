@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { EDITING_RECIPES, editingPlan, fmtTime } from '@edit/shared';
+import { EDITING_RECIPES, editingPlan, fmtTime, STYLE_USES } from '@edit/shared';
 import { api } from '../lib/api.ts';
 import { useStore } from '../lib/store.ts';
 import { Icon } from './Brand.tsx';
@@ -8,9 +8,10 @@ import { navigateGallery } from '../lib/keys.ts';
 import { Modal } from './Modal.tsx';
 import { useFavorites, useIsFavorite } from '../lib/favorites.ts';
 
-interface Entry { id: string; source: string; title: string; category: string; description: string; tags: string[]; url: string; demoUrl?: string; requirements: string; prompt?: string; thumb?: string; video?: string; videoStart?: number; duration?: number }
+interface Entry { id: string; source: string; title: string; author?: string; use?: string; category: string; description: string; tags: string[]; url: string; demoUrl?: string; requirements: string; prompt?: string; thumb?: string; video?: string; videoStart?: number; duration?: number }
 interface Source { id: string; name: string; license: string; licenseUrl: string; revision: string; count: number }
-interface Catalog { sources: Source[]; categories: string[]; entries: Entry[]; total: number; withPreview: number; syncedAt: string }
+interface Catalog { sources: Source[]; categories: string[]; uses: { id: string; count: number }[]; entries: Entry[]; total: number; withPreview: number; syncedAt: string }
+const useLabel = (id?: string) => STYLE_USES.find((u) => u.id === id)?.label ?? '';
 
 export function EditingStyles() {
   const project = useStore((s) => s.project)!;
@@ -58,8 +59,8 @@ const PAGE = 40;
 export function SourceLibrary({ favoritesOnly = false, initialId }: { favoritesOnly?: boolean; initialId?: string }) {
   const used = useStore((s) => s.project?.stylesUsed ?? []);
   const favIds = useFavorites((s) => s.ids);
-  const [query, setQuery] = useState(''), [source, setSource] = useState(''), [category, setCategory] = useState('');
-  const [onlyPreview, setOnlyPreview] = useState(false), [retry, setRetry] = useState(0);
+  const [query, setQuery] = useState(''), [use, setUse] = useState('');
+  const [everything, setEverything] = useState(false), [retry, setRetry] = useState(0);
   const [catalog, setCatalog] = useState<Catalog>(), [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true), [more, setMore] = useState(false), [error, setError] = useState('');
   const [chosen, setChosen] = useState<Entry>(), [brief, setBrief] = useState(''), [busy, setBusy] = useState(false);
@@ -67,7 +68,7 @@ export function SourceLibrary({ favoritesOnly = false, initialId }: { favoritesO
   const detailRequest = useRef(0);
   // one id per filter set: replies to an older search (or its "show more") are dropped
   const search = useRef(0);
-  const url = (offset: number) => `/api/style-library?q=${encodeURIComponent(query)}&source=${encodeURIComponent(source)}&category=${encodeURIComponent(category)}&offset=${offset}&limit=${PAGE}&sort=preview${onlyPreview ? '&preview=1' : ''}${favoritesOnly ? '&favorites=1' : ''}`;
+  const url = (offset: number) => `/api/style-library?q=${encodeURIComponent(query)}&use=${encodeURIComponent(use)}&offset=${offset}&limit=${PAGE}&sort=curated${everything ? '&all=1' : '&preview=1'}${favoritesOnly ? '&favorites=1' : ''}`;
   // the favourites list follows hearts given here or in another window
   const favKey = favoritesOnly ? favIds.join() : '';
   useEffect(() => {
@@ -81,7 +82,7 @@ export function SourceLibrary({ favoritesOnly = false, initialId }: { favoritesO
     }, 180);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, source, category, onlyPreview, retry, favKey]);
+  }, [query, use, everything, retry, favKey]);
   const loadMore = async () => {
     const id = search.current;
     setMore(true);
@@ -116,8 +117,8 @@ export function SourceLibrary({ favoritesOnly = false, initialId }: { favoritesO
   };
   const sourceName = (id: string) => catalog?.sources.find((s) => s.id === id)?.name ?? id;
   const license = catalog?.sources.find((s) => s.id === chosen?.source);
-  const filtered = !!(query || source || category || onlyPreview);
-  const reset = () => { setQuery(''); setSource(''); setCategory(''); setOnlyPreview(false); };
+  const filtered = !!(query || use || everything);
+  const reset = () => { setQuery(''); setUse(''); setEverything(false); };
   // an entry un-hearted in the favourites view leaves at once, before the list reloads
   const shown = favoritesOnly ? entries.filter((e) => favIds.includes(e.id)) : entries;
   const total = favoritesOnly ? Math.min(catalog?.total ?? 0, favIds.length) : catalog?.total ?? 0;
@@ -130,35 +131,38 @@ export function SourceLibrary({ favoritesOnly = false, initialId }: { favoritesO
     api.get<Entry>(`/api/style-library/${encodeURIComponent(initialId)}`).then((entry) => { if (requestId === detailRequest.current) setChosen(entry); }).catch((e) => { if (requestId === detailRequest.current) setDetailError(e.message); }).finally(() => { if (requestId === detailRequest.current) setDetailLoading(false); });
     return () => { ++detailRequest.current; };
   }, [initialId]);
-  return <section className="style-discovery">
-    <div className="style-filter-panel"><div className="style-toolbar">
-      <div className="style-search"><Icon name="search" size={18} /><input className="field" aria-label="البحث في مكتبات الستايلات" placeholder="ابحث عن فكرة أو حركة… مثل collage أو kinetic" value={query} onChange={(e) => setQuery(e.target.value)} />{query && <button className="icon-button" aria-label="مسح البحث" onClick={() => setQuery('')}><Icon name="close" /></button>}</div>
-
-      <label className="style-toggle"><input type="checkbox" checked={onlyPreview} onChange={(e) => setOnlyPreview(e.target.checked)} /> بمعاينة فقط</label>
+  const visibleUses = STYLE_USES.filter((u) => everything || !u.hidden);
+  const count = (id: string) => catalog?.uses?.find((u) => u.id === id)?.count ?? 0;
+  const allCount = visibleUses.reduce((n, u) => n + count(u.id), 0);
+  return <section className="style-discovery" data-favorites={favoritesOnly || undefined}>
+    {/* what it is for, on the side: the gallery is sorted by use, not by where an entry came from */}
+    {!favoritesOnly && <nav className="style-uses" aria-label="حسب الاستخدام">
+      <button aria-pressed={!use} onClick={() => setUse('')}><b>كل الأفكار</b><span className="num">{catalog ? allCount : '—'}</span></button>
+      {visibleUses.map((u) => <button key={u.id} aria-pressed={use === u.id} disabled={!!catalog && !count(u.id) && use !== u.id} title={u.hint} onClick={() => setUse(use === u.id ? '' : u.id)}><b>{u.label}</b><span className="num">{catalog ? count(u.id) : '—'}</span></button>)}
+      <label className="style-toggle style-uses-all"><input type="checkbox" checked={everything} onChange={(e) => { setEverything(e.target.checked); if (!e.target.checked && STYLE_USES.find((u) => u.id === use)?.hidden) setUse(''); }} /> أظهر الكل (بدون معاينة والتجارب التفاعلية)</label>
+    </nav>}
+    <div className="style-discovery-main">
+    {!(favoritesOnly && !favIds.length) && <div className="style-filter-panel"><div className="style-toolbar">
+      <div className="style-search"><Icon name="search" size={18} /><input className="field" aria-label="البحث في مكتبات الستايلات" placeholder={use ? `ابحث في «${useLabel(use)}»…` : 'ابحث عن فكرة… مثل collage أو kinetic أو map'} value={query} onChange={(e) => setQuery(e.target.value)} />{query && <button className="icon-button" aria-label="مسح البحث" onClick={() => setQuery('')}><Icon name="close" /></button>}</div>
+      {filtered && <button className="style-reset" onClick={reset}>مسح الفلاتر ×</button>}
     </div>
-    {/* the library counts are of the whole catalog: they would mislead in the favourites */}
-    {!favoritesOnly && <div className="style-sources" aria-label="مكتبات المصادر">
-      <button className="style-source" aria-pressed={!source} onClick={() => { setSource(''); setCategory(''); }}><b>كل المكتبات</b><span className="num">{catalog?.sources.reduce((n, s) => n + s.count, 0) ?? '—'}</span></button>
-      {catalog?.sources.map((s) => <button key={s.id} className="style-source" data-source={s.id} aria-pressed={source === s.id} onClick={() => { setSource(s.id); setCategory(''); }}><i aria-hidden="true" /><b>{s.name}</b><span className="num">{s.count}</span></button>)}
+    {use && <p className="style-use-hint">{STYLE_USES.find((u) => u.id === use)?.hint}</p>}
     </div>}
-    <div className="style-category-chips" aria-label="تصنيف الستايل"><button aria-pressed={!category} onClick={() => setCategory('')}>كل التصنيفات</button>{catalog?.categories.map((c) => <button key={c} aria-pressed={category === c} onClick={() => setCategory(c)}>{categoryLabel(c)}</button>)}</div>
-    </div>
-    {favoritesOnly ? (filtered && <div className="style-suggestions"><button className="style-reset" onClick={reset}>مسح الفلاتر ×</button></div>)
-      : <div className="style-suggestions"><span>جرّب:</span>{[['كولاج', 'collage'], ['تايبوغرافي', 'typography'], ['سينمائي', 'cinematic'], ['ثلاثي الأبعاد', '3d'], ['خرائط', 'map'], ['رسوم بيانية', 'chart']].map(([label, value]) => <button key={value} aria-pressed={query === value} onClick={() => setQuery(query === value ? '' : value)}>{label}</button>)}{filtered && <button className="style-reset" onClick={reset}>مسح الفلاتر ×</button>}</div>}
     {/* skeleton only the first time: a new search keeps the old cards (dimmed) until the answer lands */}
     <div className="style-results" aria-busy={loading}>
       {error ? <div className="style-empty" role="alert"><h3>تعذّر تحميل المكتبة</h3><p>{error}</p><button className="btn" onClick={() => setRetry((n) => n + 1)}>إعادة المحاولة</button></div> : loading && !catalog ? <><p role="status" className="sr-only">جارٍ البحث في المكتبات…</p><div className="style-gallery">{Array.from({ length: 10 }, (_, i) => <div key={i} className="style-skeleton"><span /><i /><i /></div>)}</div></> : <>
-      <div className="style-result-count" role="status"><span><b className="num">{total}</b> {favoritesOnly ? 'في المفضلة' : 'أسلوب'}{!favoritesOnly && !!catalog?.withPreview && <> · <span className="num">{catalog.withPreview}</span> بمعاينة</>}</span><span>{favoritesOnly ? 'مشتركة بين كل مشاريعك — والمساعد يقدر يقرأها' : 'مراجع تُجهَّز مع المساعد قبل دخولها مشروعك'}</span></div>
+      {!(favoritesOnly && !shown.length && !filtered) && <div className="style-result-count" role="status"><span><b className="num">{total}</b> {favoritesOnly ? 'في المفضلة' : use ? `في «${useLabel(use)}»` : 'فكرة'}</span><span>{favoritesOnly ? 'مشتركة بين كل مشاريعك — والمساعد يقدر يقرأها' : 'اختر فكرة واكتب كيف تبيها في مشروعك، ويبنيها المساعد'}</span></div>}
       <div className="style-gallery" onKeyDown={(e) => {
         if (navigateGallery(e.currentTarget, e.target, e.key)) { e.preventDefault(); e.stopPropagation(); }
-      }}>{shown.map((entry) => <StyleTile key={entry.id} entry={entry} sourceName={sourceName(entry.source)} used={used.some((u) => u.id === entry.id)} onOpen={() => select(entry)} />)}</div>
+      }}>{shown.map((entry) => <StyleTile key={entry.id} entry={entry} sourceName={sourceName(entry.source)} used={used.some((u) => u.id === entry.id)} showUse={!use} onOpen={() => select(entry)} />)}</div>
       {!shown.length && (favoritesOnly && !filtered
-        ? <div className="style-empty"><Icon name="heart" size={28} /><h3>{favIds.length ? 'ما في مراجع من المكتبات في مفضلتك بعد' : 'ما في مفضلة بعد'}</h3><p>اضغط على القلب في أي ستايل يعجبك من «استكشف المكتبات» أو «الألوان والهوية»، ويجتمع هنا.</p></div>
+        ? <p className="style-empty-line"><Icon name="heart" size={15} /> {favIds.length ? 'ما في أفكار من المكتبات في مفضلتك بعد.' : 'ما في مفضلة بعد.'} اضغط القلب على أي هوية في «طبّق على مشروعك» أو أي فكرة في «اكتشف أفكار»، وتجتمع هنا.</p>
         : <div className="style-empty"><Icon name="search" size={28} /><h3>ما لقينا ستايل بهذا البحث</h3><p>جرّب كلمة أوسع أو كلمة إنجليزية لأن أوصاف المكتبات بلغتها الأصلية.</p><button className="btn" onClick={reset}>{favoritesOnly ? 'عرض كل المفضلة' : 'عرض كل الستايلات'}</button></div>)}
-      {shown.length < total &&<div className="style-more"><button className="btn" disabled={more} onClick={loadMore}>{more ? 'جارٍ التحميل…' : 'عرض المزيد'}</button><span><span className="num">{shown.length}</span> من <span className="num">{total}</span></span></div>}
+      {shown.length < total && <div className="style-more"><button className="btn" disabled={more} onClick={loadMore}>{more ? 'جارٍ التحميل…' : 'عرض المزيد'}</button><span><span className="num">{shown.length}</span> من <span className="num">{total}</span></span></div>}
     </>}
     </div>
-    {chosen && head && <Modal wide title={head.title} subtitle={`${sourceName(chosen.source)} · ${categoryLabel(chosen.category)}`} onClose={() => setChosen(undefined)}>
+    </div>
+    {chosen && head && <Modal wide title={head.title} subtitle={`${useLabel(chosen.use) || categoryLabel(chosen.category)} · ${sourceName(chosen.source)}`} onClose={() => setChosen(undefined)}>
       <div className="style-detail">
         <div className="style-detail-media"><Preview key={chosen.id} entry={chosen} playing full /></div>
         <div className="style-detail-info">
@@ -182,7 +186,7 @@ export function SourceLibrary({ favoritesOnly = false, initialId }: { favoritesO
   </section>;
 }
 
-function StyleTile({ entry, sourceName, used, onOpen }: { entry: Entry; sourceName: string; used: boolean; onOpen(): void }) {
+function StyleTile({ entry, sourceName, used, showUse, onOpen }: { entry: Entry; sourceName: string; used: boolean; showUse: boolean; onOpen(): void }) {
   const [hover, setHover] = useState(false);
   const t = displayTitle(entry);
   return <div className="style-tile" data-source={entry.source} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
@@ -190,13 +194,12 @@ function StyleTile({ entry, sourceName, used, onOpen }: { entry: Entry; sourceNa
       <span className="style-tile-media">
         <Preview entry={entry} playing={hover} lazy />
         {used && <span className="style-used-badge">مستخدم في هذا المشروع</span>}
-        <span className="style-tile-source"><i aria-hidden="true" />{sourceName}</span>
         {entry.video && <span className="style-tile-play" title="مرّر المؤشر لتشوف المقطع"><Icon name="play" size={11} />{entry.duration ? <span className="num">{fmtTime(entry.duration, 0)}</span> : 'مقطع'}</span>}
       </span>
       <span className="style-tile-info">
-        <span className="style-tile-eyebrow" dir="auto">{sourceName}{t.eyebrow ? ` · ${t.eyebrow}` : ''}</span>
+        {showUse && <span className="style-tile-eyebrow">{useLabel(entry.use) || categoryLabel(entry.category)}</span>}
         <b dir="auto">{t.title}</b>
-        <span className="style-tile-meta">{categoryLabel(entry.category)}{entry.tags[0] ? <> · <span dir="auto">{entry.tags[0]}</span></> : null}</span>
+        <span className="style-tile-meta" dir="auto">{sourceName}{t.eyebrow ? ` · ${t.eyebrow}` : ''}</span>
       </span>
     </button>
     <FavoriteButton id={entry.id} label={t.title} />
@@ -261,16 +264,9 @@ function Cover({ entry }: { entry: Entry }) {
   </span>;
 }
 
-/** Awesome entries are titled "author · slug": the author becomes an eyebrow, the start of the prompt the title. */
+/** The server gives every entry a readable title; a prompt's author is shown beside its source. */
 function displayTitle(entry: Entry): { title: string; eyebrow?: string } {
-  if (entry.source !== 'awesome' || !entry.description) return { title: entry.title };
-  // whole sentences until there is something to read (prompts often open with a short greeting)
-  let first = '';
-  for (const sentence of entry.description.split(/(?<=[.!?؟])\s/)) {
-    first = `${first} ${sentence}`.trim();
-    if (first.length >= 45) break;
-  }
-  return { title: first.length > 110 ? `${first.slice(0, 107).trimEnd()}…` : first, eyebrow: `@${entry.title.split(' · ')[0]}` };
+  return { title: entry.title, eyebrow: entry.author ? `@${entry.author}` : undefined };
 }
 
 function categoryLabel(category: string) { return ({ 'hyperframes:block': 'مشاهد جاهزة للبناء', 'hyperframes:component': 'عناصر ومؤثرات', motion: 'موشن جرافيك', explainer: 'شرح وتوضيح', interactive: 'تفاعلي', '3d': 'ثلاثي الأبعاد', workflow: 'سير عمل', 'Graphic & Type': 'جرافيك وتايبوغرافي', 'Cinema & Eras': 'سينما وعصور', 'Edit & Documentary': 'مونتاج ووثائقي', 'Materials & 3D': 'خامات وثلاثي الأبعاد', 'Cartoon & Anime': 'كرتون وأنمي', 'Hand-drawn & Painting': 'رسم وتلوين', 'Information & Keynote': 'معلومات وعروض', 'Print & Printmaking': 'طباعة', Games: 'ألعاب', 'Evidence Films': 'أفلام توثيقية', 'East Asian Traditions': 'فنون شرق آسيا' } as Record<string, string>)[category] ?? category; }
