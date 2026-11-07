@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { LOUDNESS_GAIN, type FfmpegJob, type RenderPlan } from './compile.ts';
 
@@ -100,6 +100,10 @@ export async function runPlan(plan: RenderPlan, cwd: string, onProgress: (p: Run
   }
   const todo = plan.segments.filter((s) => !existsSync(join(cwd, s.output)));
   const cached = plan.segments.length - todo.length;
+  for (const s of plan.segments) if (existsSync(join(cwd, s.output))) {
+    const file = join(cwd, s.output), stat = statSync(file);
+    utimesSync(file, new Date(), stat.mtime);
+  }
   const total = todo.reduce((t, s) => t + s.duration, 0) || 1;
   const prog = new Map<string, number>();
   let done = 0;
@@ -122,6 +126,7 @@ export async function runPlan(plan: RenderPlan, cwd: string, onProgress: (p: Run
 
   writeFileSync(join(cwd, plan.concatList.path), plan.concatList.body, 'utf8');
   if (signal?.aborted) throw new Error('cancelled');
+  onProgress({ stage: 'final', progress: 0, done, total: todo.length, cached });
   const gain = plan.measure ? await measureGain(plan.measure, cwd, signal) : 0;
   plan = { ...plan, final: { ...plan.final, args: plan.final.args.map((a) => a.replaceAll(LOUDNESS_GAIN, String(gain))) } };
   await runJob(plan.final, cwd, (p) => onProgress({ stage: 'final', progress: p, done, total: todo.length, cached }), signal);

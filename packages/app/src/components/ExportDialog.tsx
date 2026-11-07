@@ -7,6 +7,7 @@ import { api, ApiError, projectPath } from '../lib/api.ts';
 import { canSubmitExport, parseTimecode, type ExportPreflight, type ExportQuality } from '../lib/export.ts';
 import { Icon, Spinner } from './Brand.tsx';
 import { Modal } from './Modal.tsx';
+import { RenderCache } from './RenderCache.tsx';
 
 const NAME_SUFFIX: Record<string, string> = { youtube: 'يوتيوب', shorts: 'شورتس', instagram: 'إنستقرام', '4k': '4K', review: 'مراجعة', audio: 'صوت' };
 interface Saved { preset: string; quality: ExportQuality; settings: Partial<ExportSettings> }
@@ -163,6 +164,7 @@ export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs';
             {!!check.warnings.length && <details className="export-issues export-warnings"><summary>ملاحظات للمراجعة ({check.warnings.length}) — يمكنك التصدير</summary><ul>{check.warnings.map((issue, i) => <li key={`${issue.code}-${i}`}><p>{issue.message}</p>{issue.path && <code dir="ltr">{issue.path}</code>}</li>)}</ul></details>}
           </> : <p className="text-ink-400">سيُفحص المشروع قبل بدء التصدير.</p>}
         </section>
+        <RenderCache name={name} active={Object.values(jobs).some((j) => ['running', 'queued'].includes(j.status))} />
         {connection !== 'connected' && <p className="notice" role="status">أعد الاتصال بالخادم لفحص المشروع وتصديره.</p>}
         {draftBase && <p className="notice" role="status">أكمل التعديل الجاري قبل التصدير.</p>}
         {error && <p className="notice text-cut-text" role="alert">{error}</p>}

@@ -226,4 +226,27 @@ export const GRAPHIC_RUNTIME = `(() => {
     await Promise.all(waits);
     apply();
   };
+  // Only certify idle intervals whose paint is entirely controlled by this runtime. Custom
+  // drawing, media, SMIL and GSAP callbacks remain on the screenshot path.
+  window.__graphicIdle = (from, to) => {
+    if (typeof window.renderFrame === 'function' || Object.keys(window.__timelines || {}).length ||
+        document.querySelector('canvas,video,audio,img,iframe,object,embed,svg image,svg animate,svg animateTransform,svg animateMotion,svg set')) return false;
+    // A filled transform can re-rasterize at fractional preview scales when its clock is set.
+    if (document.getAnimations().length && Math.abs(devicePixelRatio - Math.round(devicePixelRatio)) > 0.000001) return false;
+    const lo = Math.min(from, to), hi = Math.max(from, to);
+    for (const el of document.querySelectorAll('[data-start]')) {
+      const s = Number(el.dataset.start) || 0;
+      const e = s + (el.dataset.duration === undefined ? Infinity : Number(el.dataset.duration));
+      if ((lo < s && hi >= s) || (lo < e && hi >= e)) return false;
+    }
+    for (const a of document.getAnimations()) {
+      if (!a.effect) return false;
+      const timing = a.effect.getComputedTiming();
+      const delay = Number(timing.delay), active = Number(timing.activeDuration);
+      const rate = a.playbackRate;
+      if (rate !== 1 || !Number.isFinite(delay) || Number.isNaN(active)) return false;
+      if (hi * 1000 >= delay && lo * 1000 <= delay + active) return false;
+    }
+    return true;
+  };
 })();`;

@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+export function lutCachePath(text: string, mix: number): string {
+  return `cache/luts/${createHash('sha1').update(text).update(mix.toFixed(3)).digest('hex').slice(0, 16)}.cube`;
+}
+
 /**
  * A LUT with its strength baked in: identity·(1−mix) + LUT·mix at every grid point.
  * Trilinear interpolation of that equals mixing after interpolation, so the render matches
@@ -11,8 +15,7 @@ import { join } from 'node:path';
 export function bakedLut(projectDir: string, lut: string, mix: number): string {
   const src = join(projectDir, lut);
   const text = readFileSync(src, 'utf8');
-  const hash = createHash('sha1').update(text).update(mix.toFixed(3)).digest('hex').slice(0, 16);
-  const rel = `cache/luts/${hash}.cube`;
+  const rel = lutCachePath(text, mix);
   const dest = join(projectDir, rel);
   if (existsSync(dest)) return rel;
 

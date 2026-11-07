@@ -34,6 +34,7 @@ import { registerExportRoutes } from './export-preflight.ts';
 import { registerClipTools } from './clip-tools.ts';
 import { projectCover, STRIP_FRAMES } from './covers.ts';
 import { routeTask, runAgent, setAgentProjectDir, taskLog, type AgentRequest } from './agent.ts';
+import { recordCacheUse, registerRenderCache } from './render-cache.ts';
 
 const store = new Store();
 const jobs = new Jobs(DESKTOP ? join(DATA_DIR, 'logs/jobs.json') : undefined);
@@ -90,6 +91,7 @@ registerClipTools(app, store, jobs);
 registerBrands(app, store, agentJobs);
 registerRecentStyles(app, store);
 registerRuntime(app);
+registerRenderCache(app, store, [jobs, agentJobs]);
 
 app.get('/api/health', async () => ({ ok: true, app: 'qassa', pid: process.pid, dataDir: DATA_DIR, nvenc: hasNvenc(), python: PYTHON, analysisReady: analysisReady() }));
 app.get('/api/projects', async () => store.list());
@@ -465,15 +467,20 @@ app.post<P & { Body: { graphic: string; duration: number; data?: Record<string, 
 // ---------------------------------------------------------------- render & style jobs
 
 registerExportRoutes(app, store, jobs, async ({ name, project: p, dir, quality, output, export: e, range }, ctx) => {
+    const began = performance.now();
+    const timings = { graphics: 0, segments: 0, final: 0 };
     const size = outputSize({ ...p.settings, resolution: quality === 'preview' ? Math.min(720, p.settings.resolution) : p.settings.resolution });
     const audio = e?.format === 'mp3' || e?.format === 'wav' ? e.format : undefined;
     ctx.update({ stage: 'text', progress: 0 });
     // sound only: no picture to draw text or graphics on
     const texts = await renderTextImages(dir, audio ? [] : p.clips.filter((c) => c.text && !p.tracks.find((t) => t.id === c.trackId)?.hidden), size.width, size.height, p.settings.theme);
     const shown = (c: { trackId: string; start: number }) => !audio && !p.tracks.find((t) => t.id === c.trackId)?.hidden && c.start < projectDuration(p);
+    const graphicStart = performance.now();
+    const captures: import('./graphics.ts').GraphicCaptureStats[] = [];
     const graphics = await renderGraphics(name, dir, p.clips.filter((c) => c.graphic && shown(c)), p.settings, size.width, p.settings.fps,
       (g) => ctx.update({ stage: 'graphics', progress: g * 0.3, message: `رسوم ${Math.round(g * 100)}%` }), ctx.signal,
-      quality === 'final' ? p.settings.motionBlur : 1); // motion blur only where it's worth the time
+      quality === 'final' ? p.settings.motionBlur : 1, { onStats: (s) => captures.push(s) }); // motion blur only where it's worth the time
+    timings.graphics = (performance.now() - graphicStart) / 1000;
     const plan = compile(p, {
       quality, nvenc: hasNvenc(), fileKey: fileKey(dir), output,
       ...(e ? { codec: e.codec, level: e.level, range, audio } : {}),
@@ -482,9 +489,17 @@ registerExportRoutes(app, store, jobs, async ({ name, project: p, dir, quality, 
       blankImage: blankImage(dir, size.width, size.height),
       lutFile: (lut, mix) => bakedLut(dir, lut, mix),
     });
-    const started = Date.now();
-    const out = await runPlan(plan, dir, (r) => ctx.update({ stage: r.stage, progress: r.stage === 'segments' ? 0.3 + r.progress * 0.5 : 0.8 + r.progress * 0.2, message: `${r.done}/${r.total} مقاطع${r.cached ? ` (${r.cached} من الكاش)` : ''}` }), ctx.signal);
-    return { output: out, url: `/files/${encodeURIComponent(name)}/${out}`, duration: plan.duration, seconds: (Date.now() - started) / 1000, segments: plan.segments.length };
+    let stage: 'segments' | 'final' = 'segments', stageStart = performance.now();
+    const out = await runPlan(plan, dir, (r) => {
+      if (r.stage !== stage) { timings[stage] += (performance.now() - stageStart) / 1000; stage = r.stage; stageStart = performance.now(); }
+      ctx.update({ stage: r.stage, progress: r.stage === 'segments' ? 0.3 + r.progress * 0.5 : 0.8 + r.progress * 0.2, message: `${r.done}/${r.total} مقاطع${r.cached ? ` (${r.cached} من الكاش)` : ''}` });
+    }, ctx.signal);
+    timings[stage] += (performance.now() - stageStart) / 1000;
+    recordCacheUse(dir, p, [
+      ...[...graphics].map(([clipId, path]) => ({ path, clipIds: [clipId] })),
+      ...plan.segments.map((s) => ({ path: s.output, clipIds: p.clips.some((c) => c.id === s.clipId) ? [s.clipId] : p.clips.filter((c) => c.trackId === 'V1').map((c) => c.id) })),
+    ]);
+    return { output: out, url: `/files/${encodeURIComponent(name)}/${out}`, duration: plan.duration, seconds: (performance.now() - began) / 1000, timings, captures, segments: plan.segments.length };
 });
 
 app.post<P & { Body: { refMediaId: string; strength?: number; apply?: 'default' | 'all' | 'none' } }>('/api/projects/:name/style', async (req) => {

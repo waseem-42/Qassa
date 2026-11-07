@@ -17,6 +17,13 @@ const base = () =>
 const opts = { quality: 'final' as const, nvenc: true, fileKey: () => 'k' };
 
 describe('compile', () => {
+  it('restores lossless alpha from dual-stream graphic caches at the project frame rate', () => {
+    const p = applyOps(base(), [{ op: 'add_clip', clip: { trackId: 'V2', graphic: 'lib/chapter', in: 0, out: 4, start: 2 } }]);
+    const graph = compile(p, { ...opts, graphicVideo: () => 'cache/graphics/layer.rgba.mkv' }).final.args.join(' ');
+    expect(graph).toContain(':v:0]fps=30'); expect(graph).toContain(':v:1]fps=30,format=gray'); expect(graph).toContain('alphamerge');
+    const legacy = compile(p, { ...opts, graphicVideo: () => 'cache/graphics/legacy.mov' }).final.args.join(' ');
+    expect(legacy).not.toContain('alphamerge');
+  });
   it('voice audio is not auto-faded or ducked and becomes a key for the music', () => {
     let p = applyOps(base(), [{ op: 'add_track', track: { id: 'voice', kind: 'audio', name: 'كلام', audio: 'voice' } }, { op: 'add_clip', clip: { trackId: 'voice', mediaId: 'mu', in: 0, out: 10, start: 0, denoise: .5 } }]);
     let graph = compile(p, opts).final.args.join(' ');

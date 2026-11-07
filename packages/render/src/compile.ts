@@ -502,12 +502,14 @@ export function compile(p: Project, opts: RenderOptions): RenderPlan {
       const g = track.kind !== 'audio' && visible(track.id) ? opts.graphicVideo?.(c) : undefined;
       if (!g) return;
       finalInputs.push('-t', n(end - start), '-i', g);
+      const separateAlpha = g.endsWith('.rgba.mkv');
+      if (separateAlpha) vSteps.push(`[${idx}:v:0]fps=${fps}[gc${idx}];[${idx}:v:1]fps=${fps},format=gray[ga${idx}];[gc${idx}][ga${idx}]alphamerge[gr${idx}]`);
       // moved / resized by the user: scale the layer about the frame centre, then shift it (over time, with keys)
       const pl = moves(c) ? undefined : placeFilter(c.place, W, H), mo = moves(c) ? motion(c, W, H) : undefined;
       const chain = ['format=rgba', ...(mo?.grow ?? (pl?.scale ? [pl.scale] : [])), ...opacityFilters(c.anim?.opacity, c.picture?.opacity ?? 1, end - start, ['aa']), `setpts=PTS-STARTPTS+${n(start)}/TB`];
       const at = mo ?? pl;
       vSteps.push(
-        `[${idx}:v]${chain.join(',')}[gx${idx}]`,
+        `[${separateAlpha ? `gr${idx}` : `${idx}:v`}]${chain.join(',')}[gx${idx}]`,
         `[${vLabel}][gx${idx}]overlay=${at ? `x='${at.x}':y='${at.y}':` : ''}eof_action=pass:format=auto:enable='between(t,${n(start)},${n(end)})'[vo${idx}]`,
       );
       vLabel = `vo${idx}`;
