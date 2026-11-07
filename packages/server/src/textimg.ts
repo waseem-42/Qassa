@@ -53,13 +53,17 @@ export async function closeBrowser() {
   browser = undefined;
 }
 
-/** Render every text clip to a full-frame transparent PNG (cached by content). Returns clipId -> project-relative path. */
-export async function renderTextImages(projectDir: string, clips: Clip[], W: number, H: number, theme?: Theme): Promise<Map<string, string>> {
+/**
+ * Render every text clip to a full-frame transparent PNG (cached by content). Returns clipId -> project-relative path.
+ * `active`: the lit word of each highlighted-caption piece (expandHighlights).
+ */
+export async function renderTextImages(projectDir: string, clips: Clip[], W: number, H: number, theme?: Theme, active?: Map<string, number>): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   const todo: { clip: Clip; rel: string }[] = [];
   for (const c of clips) {
     if (!c.text) continue;
-    const hash = createHash('sha1').update(JSON.stringify([c.text, c.textStyle, theme ?? null, W, H, 3])).digest('hex').slice(0, 16);
+    const lit = active?.get(c.id);
+    const hash = createHash('sha1').update(JSON.stringify([c.text, c.textStyle, theme ?? null, W, H, 3, ...(lit === undefined ? [] : [lit])])).digest('hex').slice(0, 16);
     const rel = `cache/text/${hash}.png`;
     out.set(c.id, rel);
     if (!existsSync(join(projectDir, rel))) todo.push({ clip: c, rel });
@@ -74,7 +78,7 @@ export async function renderTextImages(projectDir: string, clips: Clip[], W: num
     const css = fontFaceCss(undefined, [...new Set(['IBM Plex Sans Arabic', theme?.font ?? '', ...todo.map(({ clip }) => clip.textStyle?.font ?? '')])]);
     for (const { clip, rel } of todo) {
       await page.setContent(
-        `<!doctype html><html><head><meta charset="utf-8"><style>${css}html,body{margin:0;width:${W}px;height:${H}px;background:transparent;overflow:hidden}</style></head><body><div style="position:relative;width:${W}px;height:${H}px">${textLayerHtml(clip, H, theme)}</div></body></html>`,
+        `<!doctype html><html><head><meta charset="utf-8"><style>${css}html,body{margin:0;width:${W}px;height:${H}px;background:transparent;overflow:hidden}</style></head><body><div style="position:relative;width:${W}px;height:${H}px">${textLayerHtml(clip, H, theme, active?.get(clip.id))}</div></body></html>`,
         { waitUntil: 'load' },
       );
       await page.evaluate(() => document.fonts.ready);

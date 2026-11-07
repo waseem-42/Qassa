@@ -1,6 +1,6 @@
 import { BrandKits } from './BrandKits.tsx';
 import { useEffect, useRef, useState } from 'react';
-import { clipDuration, clipEnd, fmtTime, Grade, MAIN_TRACK, Picture, Place, PLACE_LIMITS, placeAt, TextStyle, textLayerHtml, Theme, THEME_FONTS, transformAt, AUTO_MARK, SFX_TRACK, type Clip, type Op, type Project } from '@edit/shared';
+import { captionWordStarts, clipDuration, clipEnd, fmtTime, Grade, MAIN_TRACK, Picture, Place, PLACE_LIMITS, placeAt, TextStyle, textLayerHtml, Theme, THEME_FONTS, transformAt, AUTO_MARK, SFX_TRACK, type Clip, type Op, type Project } from '@edit/shared';
 import { useStore } from '../lib/store.ts';
 import { api, projectPath } from '../lib/api.ts';
 import { EaseRow, KeySlider, Row, Section, Slider } from './ui.tsx';
@@ -412,6 +412,32 @@ function ClipActions({ clip, project }: { clip: Clip; project: Project }) {
   );
 }
 
+/** Word-linked captions can light the word being spoken; set on all captions of the track at once (and for new ones). */
+function SpokenWord({ clip }: { clip: Clip }) {
+  const project = useStore((s) => s.project)!;
+  const transcripts = useStore((s) => s.transcripts);
+  const color = clip.textStyle?.highlight;
+  const captions = project.clips.filter((c) => c.trackId === clip.trackId && c.text && c.words);
+  const matches = !!captionWordStarts(project, clip, (m) => transcripts[m]?.words);
+  const apply = (highlight: string | null) => {
+    const { highlight: _, ...rest } = project.settings.captionStyle ?? {};
+    const captionStyle = highlight ? { ...rest, highlight } : Object.keys(rest).length ? rest : null;
+    useStore.getState().commit([
+      ...captions.map((c) => ({ op: 'update_clip' as const, clipId: c.id, patch: { textStyle: { highlight } } })),
+      { op: 'set_settings', patch: { captionStyle } },
+    ]);
+  };
+  return (
+    <Row label="الكلمة المنطوقة">
+      <div className="spoken-word">
+        <label><input type="checkbox" checked={!!color} onChange={(e) => apply(e.target.checked ? project.settings.theme.accent : null)} /> لوّنها أثناء الكلام</label>
+        {color && <input type="color" aria-label="لون الكلمة المنطوقة" value={color.startsWith('#') ? color.slice(0, 7) : project.settings.theme.accent} onChange={(e) => apply(e.target.value)} />}
+        <p>{color && !matches ? 'هذا السطر اتعدّل أو كلامه ما انفرّغ — يظهر بدون تلوين.' : `لكل الكابشن في هذا المسار (${captions.length})، وللكابشن الجديد.`}</p>
+      </div>
+    </Row>
+  );
+}
+
 function TextControls({ clip }: { clip: Clip }) {
   const { preview, commit, ops } = useStore.getState();
   const st = TextStyle.parse(clip.textStyle ?? {});
@@ -444,6 +470,7 @@ function TextControls({ clip }: { clip: Clip }) {
           <option value="fade">ظهور</option><option value="slide-up">صعود</option><option value="pop">نبض</option><option value="none">بدون</option>
         </select>
       </Row>
+      {clip.words && <SpokenWord clip={clip} />}
       <Row label="الحجم"><Slider value={st.size} min={20} max={180} step={1} def={TextStyle.parse({}).size} hardMin={6} hardMax={1200} fmt={(v) => `${v}px`} onPreview={(v) => style({ size: v }, false)} onCommit={(v) => style({ size: v })} /></Row>
       <Row label="الوزن">
         <select className="field" value={st.weight} onChange={(e) => style({ weight: Number(e.target.value) })}>

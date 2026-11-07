@@ -239,7 +239,7 @@ tool(
 
 tool(
   'captions',
-  'Generate (or regenerate) captions on the caption track from the transcript — only surviving words, timed to the edited timeline. Generated clips store words:{mediaId,from,to,clipId?}; subsequent source cuts/deletes/speed/moves update or remove them in the same undo step. Regenerate legacy captions without links, or to include newly added speech. Plain text stays independent. Export preflight warns about overlapping captions. style overrides the caption look (size, color, background, y, preset).',
+  'Generate (or regenerate) captions on the caption track from the transcript — only surviving words, timed to the edited timeline. Generated clips store words:{mediaId,from,to,clipId?}; subsequent source cuts/deletes/speed/moves update or remove them in the same undo step. Regenerate legacy captions without links, or to include newly added speech. Plain text stays independent. Export preflight warns about overlapping captions. style overrides the caption look (size, color, background, y, preset). style.highlight = a colour (e.g. the theme accent) lights the word being spoken (CapCut-style word captions): the preview colours it and the export draws one still per word; captions whose text was hand-edited show without it.',
   { project, maxWords: z.number().int().min(2).max(14).default(7), style: z.record(z.any()).optional() },
   async (a) => {
     try {

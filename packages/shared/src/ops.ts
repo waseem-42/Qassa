@@ -73,7 +73,7 @@ export const Op = z.discriminatedUnion('op', [
         /** keyframes per property: an array replaces that property's keys ([] or null removes them); null removes all */
         anim: z.object({ dx: animKeys('dx'), dy: animKeys('dy'), scale: animKeys('scale'), opacity: animKeys('opacity'), volume: animKeys('volume') }).nullable().optional(),
         /** null on background / color / font = back to the preset's or the project identity's */
-        textStyle: TextStyle.partial().extend({ background: z.string().nullable().optional(), color: z.string().nullable().optional(), font: z.string().nullable().optional() }).optional(),
+        textStyle: TextStyle.partial().extend({ background: z.string().nullable().optional(), color: z.string().nullable().optional(), font: z.string().nullable().optional(), highlight: z.string().nullable().optional() }).optional(),
         /** hand edits of elements inside a graphic page: the whole list (null or [] removes them) */
         graphicEdits: z.array(GraphicEdit).nullable().optional(),
       }),
@@ -800,10 +800,10 @@ function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
       if (place === null) delete c.place;
       else if (place) c.place = Place.parse({ ...c.place, ...place });
       if (textStyle) {
-        const { background, color, font, ...restStyle } = textStyle;
+        const { background, color, font, highlight, ...restStyle } = textStyle;
         const next: Record<string, unknown> = { ...c.textStyle, ...restStyle };
-        // null = the text's own value goes, and it follows the preset / the project identity again
-        for (const [k, v] of [['background', background], ['color', color], ['font', font]] as const) {
+        // null = the text's own value goes, and it follows the preset / the project identity again (highlight: off)
+        for (const [k, v] of [['background', background], ['color', color], ['font', font], ['highlight', highlight]] as const) {
           if (v === null) delete next[k];
           else if (v !== undefined) next[k] = v;
         }

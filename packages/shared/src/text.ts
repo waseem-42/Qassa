@@ -81,6 +81,14 @@ export function textBoxStyle(clip: Pick<Clip, 'textStyle' | 'text'>, height: num
   return [...base, ...preset[s.preset]].join(';');
 }
 
-export function textLayerHtml(clip: Pick<Clip, 'text' | 'textStyle'>, height: number, theme?: Theme): string {
-  return `<div style="${textBoxStyle(clip, height, theme)}">${esc(clip.text ?? '')}</div>`;
+/** `active`: index of the spoken word (its text's nth word) for a caption with a highlight colour. */
+export function textLayerHtml(clip: Pick<Clip, 'text' | 'textStyle'>, height: number, theme?: Theme, active?: number): string {
+  const highlight = clip.textStyle?.highlight;
+  let body = esc(clip.text ?? '');
+  if (highlight && active !== undefined && active >= 0) {
+    // whitespace stays as it was (line breaks too); the whole word sits in the span, so Arabic letters still join
+    let k = -1;
+    body = (clip.text ?? '').split(/(\s+)/).map((part) => (/^\s*$/.test(part) ? part : ++k === active ? `<span style="color:${esc(highlight)}">${esc(part)}</span>` : esc(part))).join('');
+  }
+  return `<div style="${textBoxStyle(clip, height, theme)}">${body}</div>`;
 }

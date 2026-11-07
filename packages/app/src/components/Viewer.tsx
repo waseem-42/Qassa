@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   MAIN_TRACK, clipDuration, clipEnd, clipsAt, fmtTime, GRAPHIC_RUNTIME, graphicBaseSize, graphicTime, graphicUrl, placeCss, transitionHalf, mainClips, mainDuration, outputSize,
-  opacityAt, placeAt, anchoredShift, projectDuration, textLayerHtml, transformAt, volumeAt,
+  opacityAt, placeAt, anchoredShift, projectDuration, textLayerHtml, transformAt, volumeAt, activeWord, captionWordStarts,
   type Clip, type GraphicEdit, type Media, type Op, type Project, type Theme,
 } from '@edit/shared';
 import { withEdit } from '../lib/graphic-edit.ts';
@@ -68,6 +68,7 @@ export function Viewer() {
   const selected = useStore((s) => s.selected);
   const time = useStore((s) => s.time);
   const graphicPick = useStore((s) => s.graphicPick);
+  const transcripts = useStore((s) => s.transcripts);
   const size = outputSize(project.settings);
   const segs = useMemo(() => segments(project, name), [project, name]);
 
@@ -405,12 +406,14 @@ export function Viewer() {
               const d = Math.min(0.35, dur / 3);
               // Editing an entrance on a paused frame must leave its words visible.
               const local = !playing && selected.includes(c.id) ? Math.max(d, time - c.start) : time - c.start;
-              const anim = c.textStyle?.animation ?? 'fade';
+              // a highlighted caption lights its spoken word and, like its export, does not animate
+              const starts = c.textStyle?.highlight ? captionWordStarts(project, c, (m) => transcripts[m]?.words) : null;
+              const anim = starts ? 'none' : c.textStyle?.animation ?? 'fade';
               const a = anim === 'none' ? 1 : Math.min(1, local / d, (dur - local) / d);
               const dy = anim === 'slide-up' ? Math.max(0, 1 - local / d) * size.height * 0.04 : 0;
               const sc = anim === 'pop' ? 0.92 + 0.08 * Math.min(1, local / d) : 1;
               return (
-                <div key={c.id} data-clip={c.id} className="absolute inset-0" style={{ opacity: Math.max(0, a), transform: `translateY(${dy}px) scale(${sc})` }} dangerouslySetInnerHTML={{ __html: textLayerHtml(c, size.height, project.settings.theme) }} />
+                <div key={c.id} data-clip={c.id} className="absolute inset-0" style={{ opacity: Math.max(0, a), transform: `translateY(${dy}px) scale(${sc})` }} dangerouslySetInnerHTML={{ __html: textLayerHtml(c, size.height, project.settings.theme, starts ? activeWord(starts, time) : undefined) }} />
               );
             })}
           </div>

@@ -23,7 +23,7 @@ import { addMedia, queueAnalysis, readAnalysis } from './media.ts';
 import { registerUploads } from './uploads.ts';
 import { ensureImageProxies } from './image-proxy.ts';
 import { registerAudioTracks } from './audio-tracks.ts';
-import { ProjectStart, speechClips } from '@edit/shared';
+import { expandHighlights, ProjectStart, speechClips } from '@edit/shared';
 import { fontFaceCss, fontFiles, renderTextImages } from './textimg.ts';
 import { graphicStills, renderGraphics } from './graphics.ts';
 import { deleteStyle, resolveStyle, saveStyle, savedStyles } from './styles.ts';
@@ -477,14 +477,16 @@ app.post<P & { Body: { graphic: string; duration: number; data?: Record<string, 
 
 // ---------------------------------------------------------------- render & style jobs
 
-registerExportRoutes(app, store, jobs, async ({ name, project: p, dir, quality, output, export: e, range }, ctx) => {
+registerExportRoutes(app, store, jobs, async ({ name, project: edited, dir, quality, output, export: e, range }, ctx) => {
     const began = performance.now();
+    // highlighted captions export as one still per spoken word
+    const { project: p, active } = expandHighlights(edited, (m) => store.transcript(name, m)?.words);
     const timings = { graphics: 0, segments: 0, final: 0 };
     const size = outputSize({ ...p.settings, resolution: quality === 'preview' ? Math.min(720, p.settings.resolution) : p.settings.resolution });
     const audio = e?.format === 'mp3' || e?.format === 'wav' ? e.format : undefined;
     ctx.update({ stage: 'text', progress: 0 });
     // sound only: no picture to draw text or graphics on
-    const texts = await renderTextImages(dir, audio ? [] : p.clips.filter((c) => c.text && !p.tracks.find((t) => t.id === c.trackId)?.hidden), size.width, size.height, p.settings.theme);
+    const texts = await renderTextImages(dir, audio ? [] : p.clips.filter((c) => c.text && !p.tracks.find((t) => t.id === c.trackId)?.hidden), size.width, size.height, p.settings.theme, active);
     const shown = (c: { trackId: string; start: number }) => !audio && !p.tracks.find((t) => t.id === c.trackId)?.hidden && c.start < projectDuration(p);
     const graphicStart = performance.now();
     const captures: import('./graphics.ts').GraphicCaptureStats[] = [];
@@ -506,7 +508,7 @@ registerExportRoutes(app, store, jobs, async ({ name, project: p, dir, quality, 
       ctx.update({ stage: r.stage, progress: r.stage === 'segments' ? 0.3 + r.progress * 0.5 : 0.8 + r.progress * 0.2, message: `${r.done}/${r.total} مقاطع${r.cached ? ` (${r.cached} من الكاش)` : ''}` });
     }, ctx.signal);
     timings[stage] += (performance.now() - stageStart) / 1000;
-    recordCacheUse(dir, p, [
+    recordCacheUse(dir, edited, [
       ...[...graphics].map(([clipId, path]) => ({ path, clipIds: [clipId] })),
       ...plan.segments.map((s) => ({ path: s.output, clipIds: p.clips.some((c) => c.id === s.clipId) ? [s.clipId] : p.clips.filter((c) => c.trackId === 'V1').map((c) => c.id) })),
     ]);

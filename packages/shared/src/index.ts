@@ -3,6 +3,7 @@ export * from './timeline.ts';
 export * from './ops.ts';
 export * from './text.ts';
 export * from './captions.ts';
+export * from './caption-highlight.ts';
 export * from './graphics.ts';
 export * from './styles.ts';
 export * from './style-uses.ts';

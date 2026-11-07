@@ -120,6 +120,8 @@ export const TextStyle = z.object({
   y: z.number().min(-0.5).max(1.5).default(0.5),
   align: z.enum(['start', 'center', 'end']).default('center'),
   animation: z.enum(['none', 'fade', 'pop', 'slide-up', 'typewriter']).default('fade'),
+  // word-linked captions: the word being spoken takes this colour (absent = off), see caption-highlight.ts
+  highlight: z.string().optional(),
 });
 export type TextStyle = z.infer<typeof TextStyle>;
 
