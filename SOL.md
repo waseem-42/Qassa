@@ -852,6 +852,7 @@ Do:
 - Give the viewer/timeline split a visible grip. Remember the split per viewer, the same way the timeline height is saved today.
 - Toolbars wrap or collapse into «⋯»; no button is cut off or hidden behind another.
 - Text and buttons keep at least the design system's minimum sizes.
+- From the Task 24 review: the start guide takes a full row above the workspace (about 60 px at 1366×768). On short screens, make it one slim line, or fold it into a button in the header that shows the progress («2/4»).
 
 **Done when:**
 - At each size, every panel can be reached with the mouse and the three main steps (import, edit, export) work.
