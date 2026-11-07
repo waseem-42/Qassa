@@ -76,6 +76,8 @@ export async function routeTask(text: string): Promise<Route> {
 
 // The agent says how far it is with `[[40%]] <stage>` lines; the job shows them as its progress.
 const PROGRESS_RULE = `- Report progress so the user sees how far you are: once you know the plan, and after each stage, write a line on its own: \`[[N%]] <the stage, a few Arabic words>\` — N is your honest estimate of the share of the whole job done (0–99, only goes up). Keep these lines out of your final reply.`;
+/** Clips the assistant adds never hide others, and it looks at the whole edit before saying it is done. */
+const CHECK_RULE = `- When you add or move a clip on a layer track, pass free:true (or a track kind as trackId) so it never covers another clip. After changing the timeline, run \`review\` and fix any ⚠ your own changes caused; mention older ones in your reply instead of fixing them unasked.`;
 const TRANSCRIPTION_RULE = `Transcription is opt-in. Never transcribe for placing, playback, visual edits, or energy-based silence detection. If this user request actually requires spoken words (word cuts, retakes, captions, or speech-based ideas), read project_summary first; for missing speech transcripts tell the user "المساعد يحتاج التفريغ — يبدأ الآن", call analyze with explicit steps ['transcribe','silence','summary'], wait for completion, then read the transcript. Do not transcribe unrelated music or references. A missing transcript in notes context does not itself authorize transcription for an unrelated visual edit.`;
 const PROGRESS_LINE = /\[\[\s*(\d{1,3})\s*%?\s*\]\][^\S\n]*([^\n]*)/g;
 
@@ -105,6 +107,7 @@ Do it with the edit-tool MCP tools (read .claude/skills/edit-tool/SKILL.md first
 - Do not ask questions: if something is unclear, take the most sensible reading and say what you chose.
 - Do only what was asked. No final render unless asked.
 ${PROGRESS_RULE}
+${CHECK_RULE}
 - Finish with a short reply in Arabic (two or three lines): what you changed, and anything the user should check.`;
 }
 
@@ -117,6 +120,7 @@ Call the edit-tool \`notes\` tool first (it shows each comment's time, the words
 - If a comment is unclear or cannot be done, reply on it (update_note with a reply, status stays open) saying what you need — do not guess at something destructive.
 - No final render unless a comment asks for one.
 ${PROGRESS_RULE}
+${CHECK_RULE}
 - Finish with a short reply in Arabic (one line per comment).`;
 }
 
