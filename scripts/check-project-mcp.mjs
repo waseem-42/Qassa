@@ -102,7 +102,10 @@ try {
   assert.match(cut, /pause across cut shortened.*0.12s/);
   assert.doesNotMatch(await invoke('check_cuts', { project: 'mcp-check', images: false }), /cuts inside/);
   await invoke('captions', { project: 'mcp-check' });
-  const slim = JSON.parse(await invoke('render_preflight', { project: 'mcp-check' }));
+  const review = await invoke('review', { project: 'mcp-check' });
+  assert.match(review, /^review: /);
+  assert.ok(tools.tools.some((t) => t.name === 'review'));
+  const slim =JSON.parse(await invoke('render_preflight', { project: 'mcp-check' }));
   const verbose = JSON.parse(await invoke('render_preflight', { project: 'mcp-check', verbose: true }));
   assert.ok(verbose.resources.some((r) => r.kind === 'font' && r.status === 'ready'));
   assert.ok(slim.resourceCounts.font > 0);
