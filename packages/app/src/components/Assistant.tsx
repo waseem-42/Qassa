@@ -5,6 +5,7 @@ import { api, projectPath } from '../lib/api.ts';
 import { AgentTasks } from './AgentTasks.tsx';
 import { Ideas } from './Ideas.tsx';
 import { TranscriptNeeded } from './Transcribe.tsx';
+import { acceptOps, readTuning, saveTuning, tooShort, tunedRanges, type SilenceTuning } from '../lib/silence-tuning.ts';
 
 const reasons: Record<Suggestion['reason'], string> = {
   silence: 'صمت', retake: 'إعادة تسجيل', filler: 'كلمات زائدة', mistake: 'خطأ', other: 'أخرى',
@@ -20,9 +21,14 @@ export function Assistant() {
   const [excluded, setExcluded] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const visible = useMemo(() => project.suggestions.filter((s) => filter === 'all' || s.reason === filter), [project.suggestions, filter]);
+  const [tuning, setTuningState] = useState(readTuning);
+  const setTuning = (t: SilenceTuning) => { setTuningState(t); saveTuning(t); };
   const picked = project.suggestions.filter((s) => !excluded.includes(s.id));
   const ticked = (id: string) => !excluded.includes(id);
-  const saved = reviewSavings(project, picked);
+  const toCut = tunedRanges(picked, tuning);
+  const saved = reviewSavings(project, toCut);
+  const silences = project.suggestions.filter((s) => s.reason === 'silence');
+  const leftAlone = silences.filter((s) => tooShort(s, tuning)).length;
   const duration = mainDuration(project);
   const active = Object.values(jobs).filter((j) => j.kind === 'analyze' && ['queued', 'running'].includes(j.status));
   const sources = project.media.filter((m) => m.role === 'source' && m.kind !== 'image');
@@ -38,7 +44,7 @@ export function Assistant() {
   const resolve = async (accept: boolean) => {
     setBusy(true);
     try {
-      if (await ops([{ op: 'resolve_suggestions', ids: picked.map((s) => s.id), accept }])) {
+      if (await ops(accept ? acceptOps(picked, tuning) : [{ op: 'resolve_suggestions', ids: picked.map((s) => s.id), accept }])) {
         setExcluded([]);
         notify(accept ? 'تم تطبيق القص — يمكنك التراجع بخطوة واحدة' : 'تم استبعاد الاقتراحات المحددة', 'info');
       }
@@ -53,8 +59,13 @@ export function Assistant() {
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2"><span className="num text-base">{fmtTime(duration, 1)} ← {fmtTime(Math.max(0, duration - saved), 1)}</span><span className="text-xs text-ink-400">توفير {fmtTime(saved, 1)}</span></div>
         <p className="mt-2 text-[11px] leading-5 text-ink-400">{picked.length} من {project.suggestions.length} محددة — شيل علامة اللي تبي تخليه، و«انتقل» يوريك المكان قبل القص.</p>
+        {silences.length > 0 && <div className="silence-tuning">
+          <label><span>أقصر سكتة تُقص</span><input type="range" min={0} max={3} step={0.1} value={tuning.min} onChange={(e) => setTuning({ ...tuning, min: Number(e.target.value) })} aria-valuetext={tuning.min ? `${tuning.min} ثانية` : 'كل السكتات'} /><output className={tuning.min ? 'num' : undefined}>{tuning.min ? `${tuning.min.toFixed(1)} ث` : 'الكل'}</output></label>
+          <label title="يترك هذا القدر من الصمت عند طرفي كل سكتة، عشان الكلام ما يلتصق ببعضه"><span>نَفَس عند الأطراف</span><input type="range" min={0} max={0.5} step={0.05} value={tuning.pad} onChange={(e) => setTuning({ ...tuning, pad: Number(e.target.value) })} aria-valuetext={tuning.pad ? `${tuning.pad} ثانية` : 'بدون'} /><output className={tuning.pad ? 'num' : undefined}>{tuning.pad ? `${tuning.pad.toFixed(2)} ث` : 'بدون'}</output></label>
+          {leftAlone > 0 && <p>{leftAlone} سكتة أقصر من الحد تبقى كما هي.</p>}
+        </div>}
         <div className="mt-3 flex gap-2">
-          <button className="btn btn-primary flex-1 justify-center" disabled={busy || !picked.length || !saved || saved >= duration} onClick={() => resolve(true)}>قص المحدد ({picked.length})</button>
+          <button className="btn btn-primary flex-1 justify-center" disabled={busy || !toCut.length || !saved || saved >= duration} onClick={() => resolve(true)}>قص المحدد ({toCut.length})</button>
           <button className="btn" disabled={busy || !picked.length} title="تجاهل هذي الاقتراحات" onClick={() => resolve(false)}>تجاهل</button>
         </div>
         {saved > 0 && saved >= duration && <p className="mt-2 text-xs text-cut-text">هذه الاقتراحات تحذف المقطع كاملًا؛ قلّل التحديد.</p>}
@@ -69,11 +80,12 @@ export function Assistant() {
       </div>
       {!visible.length && <p className="rounded-lg border border-dashed border-ink-700 p-4 text-xs leading-6 text-ink-400">لا توجد اقتراحات في هذه الفئة.</p>}
       {visible.map((s) => {
-        const at = reviewTime(project, s);
-        return <div key={s.id} className="rounded-lg border border-ink-700 bg-ink-850 p-3">
+        const at = reviewTime(project, s), short = tooShort(s, tuning);
+        return <div key={s.id} className="rounded-lg border border-ink-700 bg-ink-850 p-3" data-left-alone={short || undefined}>
           <label className="flex cursor-pointer items-center gap-2">
             <input type="checkbox" disabled={busy} checked={ticked(s.id)} onChange={(e) => setExcluded(e.target.checked ? excluded.filter((id) => id !== s.id) : [...excluded, s.id])} />
             <span className="text-sm">{reasons[s.reason]}</span>
+            {short && <span className="text-[11px] text-ink-500">أقصر من الحد — تبقى</span>}
             <span className="num mr-auto text-xs text-ink-400">{fmtTime(s.t0, 1)}–{fmtTime(s.t1, 1)}</span>
           </label>
           <p className="mt-2 truncate text-xs text-ink-500">{project.media.find((m) => m.id === s.mediaId)?.name ?? s.mediaId}</p>
