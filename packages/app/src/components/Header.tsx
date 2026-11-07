@@ -6,7 +6,8 @@ import { Checkpoints } from './Checkpoints.tsx';
 import { ExportDialog } from './ExportDialog.tsx';
 import { RuntimeSettings, useRuntime } from './RuntimeSettings.tsx';
 import { PopupMenu, type MenuItem } from './PopupMenu.tsx';
-import { useKeys } from '../lib/keys.ts';
+import { keysFor, prettyKey, useKeys } from '../lib/keys.ts';
+import { useHeaderDialog, usePalette } from '../lib/palette.ts';
 import { useLayout } from '../lib/layout.ts';
 import { useMediaQuery } from '../lib/workspace-layout.ts';
 import { StartGuide } from './StartGuide.tsx';
@@ -46,7 +47,8 @@ function WindowsMenu({ onDialog }: { onDialog(d: 'jobs' | 'checkpoints'): void }
 
 export function Header() {
   const { name, projects, project, history, connection, jobs } = useStore(useShallow(({ name, projects, project, history, connection, jobs }) => ({ name, projects, project, history, connection, jobs })));
-  const [dialog, setDialog] = useState<'export' | 'jobs' | 'checkpoints'>();
+  const dialog = useHeaderDialog((s) => s.dialog), setDialog = useHeaderDialog.getState().setDialog;
+  const paletteKey = useKeys((s) => keysFor('palette', s.custom)[0]);
   useEffect(() => { setDialog(undefined); }, [name]);
   const active = Object.values(jobs).filter((j) => ['queued', 'running'].includes(j.status));
   return <>
@@ -58,6 +60,7 @@ export function Header() {
         <div className="history-controls"><button className="icon-button" aria-label="تراجع" title="تراجع · Ctrl+Z" disabled={!history.undo} onClick={() => useStore.getState().undo()}>↶</button><button className="icon-button" aria-label="إعادة" title="إعادة · Ctrl+Shift+Z" disabled={!history.redo} onClick={() => useStore.getState().redo()}>↷</button></div>
       </> : <span className="header-caption">استوديو المونتاج بالذكاء الاصطناعي</span>}
       <div className="header-spacer" />
+      {project && <button className="btn command-trigger" aria-keyshortcuts={paletteKey} title="ابحث عن أي أمر بالاسم" onClick={() => usePalette.getState().setOpen(true)}><Icon name="search" size={16} /><span>ابحث عن أمر</span>{paletteKey && <kbd dir="ltr">{paletteKey.split('+').map(prettyKey).join('+')}</kbd>}</button>}
       <button className="btn btn-ghost" onClick={() => useRuntime.getState().setOpen(true)}>الإعدادات</button>
       {project && <WindowsMenu onDialog={(d) => { useStore.getState().setPlaying(false); setDialog(d); }} />}
       {project && <StartGuide key={name} compact />}

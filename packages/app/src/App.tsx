@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { clipEnd, freeMoveOps, mainClips, mainDuration, projectDuration, timelineToSource } from '@edit/shared';
 import { useTimelineView } from './lib/timeline-view.ts';
 import { actionFor, comboOf, useKeys } from './lib/keys.ts';
 import { Shortcuts } from './components/Shortcuts.tsx';
 import { Styles } from './components/Styles.tsx';
 import { BOTH_PANELS, connectLive, useStore } from './lib/store.ts';
 import { Viewer } from './components/Viewer.tsx';
-import { deleteSelectedKey, Timeline, useKeySel } from './components/Timeline.tsx';
+import { Timeline } from './components/Timeline.tsx';
 import { Transcript } from './components/Transcript.tsx';
 import { Inspector } from './components/Inspector.tsx';
 import { MediaPanel } from './components/MediaPanel.tsx';
@@ -15,10 +14,12 @@ import { Assistant } from './components/Assistant.tsx';
 import { Icon } from './components/Brand.tsx';
 import { Header } from './components/Header.tsx';
 import { Home as ProjectHome } from './components/Home.tsx';
-import { importFiles, isFileDrag, placeMediaRun, removeMedia, useMediaSelection } from './lib/import.ts';
+import { importFiles, isFileDrag } from './lib/import.ts';
 import { Uploads } from './components/Uploads.tsx';
 import { RangeDeleteHint } from './components/RangeDeleteHint.tsx';
-import { deleteOps, useLayout } from './lib/layout.ts';
+import { useLayout } from './lib/layout.ts';
+import { runAction } from './lib/actions.ts';
+import { CommandPalette } from './components/CommandPalette.tsx';
 import { StartGuide } from './components/StartGuide.tsx';
 import { readSplit, saveSplit, timelineSize, useMediaQuery } from './lib/workspace-layout.ts';
 
@@ -67,6 +68,7 @@ export function App() {
       {fileOver && name && <div className="pointer-events-none fixed inset-2 z-50 rounded-xl border-2 border-dashed border-accent" aria-hidden="true" />}
       {name && !mediaOpen && <div className="fixed bottom-12 left-4 z-50 w-72"><Uploads /></div>}
       <Shortcuts />
+      <CommandPalette />
       <Styles />
       <RangeDeleteHint />
     </div>
@@ -243,78 +245,12 @@ function useShortcuts() {
         if (action === 'deselect') { e.preventDefault(); keys.setOpen(false); useStore.getState().setStylesOpen(false); }
         return;
       }
-      const s = useStore.getState();
-      const p = s.project;
       if (action === 'shortcuts') { e.preventDefault(); return keys.setOpen(true); }
-      if (!p) return;
+      if (!useStore.getState().project) return;
       // text selected on the page (the transcript…): Ctrl+C copies that text, as usual
       if (action === 'copy' && String(window.getSelection() ?? '').trim()) return;
-      const fps = p.settings.fps;
       e.preventDefault();
-      switch (action) {
-        case 'timelineMax': return useTimelineView.getState().toggleMax();
-        case 'addMedia': { const { ids } = useMediaSelection.getState(); if (ids.length) return placeMediaRun(ids, s.time); return; }
-        case 'nudgeBack': case 'nudgeFwd': case 'nudgeBack10': case 'nudgeFwd10': {
-          const clips = p.clips.filter((c) => s.selected.includes(c.id) && c.trackId !== 'V1');
-          const delta = (action.includes('Back') ? -1 : 1) * (action.endsWith('10') ? 10 : 1) / fps;
-          if (clips.length) return s.ops(freeMoveOps(p, clips, delta));
-          return;
-        }
-        case 'markIn': return s.ops([{ op: 'set_marks', in: s.time }]);
-        case 'markOut': return s.ops([{ op: 'set_marks', out: s.time }]);
-        case 'clearIn': return s.ops([{ op: 'set_marks', in: null }]);
-        case 'clearOut': return s.ops([{ op: 'set_marks', out: null }]);
-        case 'clearMarks': return s.ops([{ op: 'set_marks', in: null, out: null }]);
-        case 'playMarked': return s.playMarked();
-        case 'play': return s.setPlaying(!s.playing);
-        case 'frameBack': return s.seek(s.time - 1 / fps);
-        case 'frameFwd': return s.seek(s.time + 1 / fps);
-        case 'secBack': return s.seek(s.time - 1);
-        case 'secFwd': return s.seek(s.time + 1);
-        case 'jumpBack': return s.seek(s.time - 5);
-        case 'jumpFwd': return s.seek(s.time + 5);
-        case 'start': return s.seek(0);
-        case 'end': return s.seek(projectDuration(p));
-        case 'prevCut': case 'nextCut': {
-          const cuts = [0, ...mainClips(p).map((c) => c.start), mainDuration(p)];
-          const next = action === 'nextCut' ? cuts.find((c) => c > s.time + 1e-3) : [...cuts].reverse().find((c) => c < s.time - 1e-3);
-          if (next !== undefined) s.seek(next);
-          return;
-        }
-        case 'split': {
-          // the selected clip, or the main-track clip under the playhead
-          const target = p.clips.find((c) => s.selected.includes(c.id) && s.time > c.start && s.time < clipEnd(c)) ?? timelineToSource(p, s.time)?.clip;
-          if (target) s.ops([{ op: 'split', clipId: target.id, at: s.time }]);
-          return;
-        }
-        case 'delete':
-          // a picked ◆ on the timeline goes first
-          if (deleteSelectedKey()) return;
-          // focus in the project library: delete the picked files, not timeline clips
-          if (e.target instanceof Element && e.target.closest('[data-media-list]')) return removeMedia(useMediaSelection.getState().ids);
-          if (s.selected.length) {
-            s.ops(deleteOps(s.selected));
-            s.select([]);
-          } else return s.deleteMarkedRange();
-          return;
-        case 'deselect': s.setGraphicPick(undefined); useKeySel.setState({ key: undefined }); return s.select([]);
-        case 'undo': return s.undo();
-        case 'redo': return s.redo();
-        case 'comment': return s.startNote();
-        case 'addText':
-          return s.addTitle();
-        case 'zoomIn': return s.setZoom(s.zoom * 1.25);
-        case 'zoomOut': return s.setZoom(s.zoom / 1.25);
-        case 'zoomFit': return s.setZoom((window.innerWidth - 160) / Math.max(5, projectDuration(p)));
-        case 'styles': return s.setStylesOpen(true);
-        case 'largeWave': return s.setLargeWave(!s.largeWave);
-        case 'magnet': return s.setMagnet(!s.magnet);
-        case 'copyLook': return s.copyLook();
-        case 'pasteLook': return s.pasteLook();
-        case 'copy': return s.copyClips();
-        case 'paste': return s.pasteClips();
-        case 'duplicate': return s.duplicateClips();
-      }
+      runAction(action, e.target);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

@@ -3,6 +3,7 @@ import { useStore } from '../lib/store.ts';
 import { lookKind } from '../lib/look.ts';
 import { PopupMenu, type MenuItem } from './PopupMenu.tsx';
 import { deleteOps } from '../lib/layout.ts';
+import { trimToPlayhead } from '../lib/trim-playhead.ts';
 
 // Right-click on a timeline clip: what can be done to it, with the shortcut beside each (CapCut / Resolve style).
 
@@ -18,10 +19,16 @@ export function ClipMenu({ clip, x, y, onClose }: { clip: Clip; x: number; y: nu
   const video = media?.kind === 'video' && project.tracks.find((t) => t.id === clip.trackId)?.kind !== 'audio';
   const inside = time > clip.start && time < clipEnd(clip);
   const ids = selected.includes(clip.id) ? selected : [clip.id];
+  const trim = (side: 'start' | 'end') => {
+    const plan = trimToPlayhead(project, [clip.id], time, side);
+    if (plan) s.ops(plan.ops).then((ok) => { if (ok && plan.seek !== undefined) s.seek(plan.seek); });
+  };
 
   const groups: MenuItem[][] = [
     [
       { label: 'قص عند المؤشر', key: 'split', disabled: !inside, run: () => s.ops([{ op: 'split', clipId: clip.id, at: time }]) },
+      { label: 'احذف ما قبل المؤشر', key: 'trimStart', disabled: !inside, run: () => trim('start') },
+      { label: 'احذف ما بعد المؤشر', key: 'trimEnd', disabled: !inside, run: () => trim('end') },
       { label: 'نسخ', key: 'copy', run: () => s.copyClips() },
       { label: 'لصق عند المؤشر', key: 'paste', disabled: !clipboard?.length, run: () => s.pasteClips() },
       { label: 'تكرار', key: 'duplicate', run: () => s.duplicateClips() },

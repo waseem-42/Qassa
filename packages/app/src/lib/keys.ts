@@ -6,7 +6,7 @@ import { create } from 'zustand';
 export type ActionId =
   | 'markIn' | 'markOut' | 'clearIn' | 'clearOut' | 'clearMarks' | 'playMarked' | 'timelineMax' | 'nudgeBack' | 'nudgeFwd' | 'nudgeBack10' | 'nudgeFwd10' | 'addMedia'
   | 'play' | 'frameBack' | 'frameFwd' | 'secBack' | 'secFwd' | 'jumpBack' | 'jumpFwd' | 'start' | 'end' | 'prevCut' | 'nextCut'
-  | 'split' | 'delete' | 'deselect' | 'undo' | 'redo' | 'comment' | 'addText' | 'zoomIn' | 'zoomOut' | 'zoomFit' | 'shortcuts' | 'styles' | 'largeWave' | 'magnet' | 'copyLook' | 'pasteLook' | 'copy' | 'paste' | 'duplicate';
+  | 'split' | 'delete' | 'deselect' | 'undo' | 'redo' | 'comment' | 'addText' | 'zoomIn' | 'zoomOut' | 'zoomFit' | 'shortcuts' | 'styles' | 'largeWave' | 'magnet' | 'copyLook' | 'pasteLook' | 'copy' | 'paste' | 'duplicate' | 'trimStart' | 'trimEnd' | 'palette';
 
 export interface Action { id: ActionId; label: string; group: string; keys: string[] }
 
@@ -35,6 +35,8 @@ export const ACTIONS: Action[] = [
   { id: 'prevCut', label: 'القصة اللي قبل', group: 'التشغيل', keys: ['ArrowUp'] },
   { id: 'nextCut', label: 'القصة اللي بعد', group: 'التشغيل', keys: ['ArrowDown'] },
   { id: 'split', label: 'قص عند المؤشر', group: 'التعديل', keys: ['S'] },
+  { id: 'trimStart', label: 'احذف ما قبل المؤشر من اللقطة', group: 'التعديل', keys: ['Q'] },
+  { id: 'trimEnd', label: 'احذف ما بعد المؤشر من اللقطة', group: 'التعديل', keys: ['W'] },
   { id: 'delete', label: 'حذف المحدد', group: 'التعديل', keys: ['Delete', 'Backspace'] },
   { id: 'deselect', label: 'إلغاء التحديد', group: 'التعديل', keys: ['Escape'] },
   { id: 'undo', label: 'تراجع', group: 'التعديل', keys: ['Ctrl+Z'] },
@@ -52,6 +54,7 @@ export const ACTIONS: Action[] = [
   { id: 'zoomOut', label: 'تصغير التايملاين', group: 'العرض', keys: ['-'] },
   { id: 'zoomFit', label: 'التايملاين كامل', group: 'العرض', keys: ['Shift+Z'] },
   { id: 'shortcuts', label: 'الاختصارات', group: 'العرض', keys: ['?'] },
+  { id: 'palette', label: 'ابحث عن أمر', group: 'العرض', keys: ['Ctrl+K'] },
   { id: 'styles', label: 'الستايلات', group: 'العرض', keys: ['Shift+S'] },
 ];
 
