@@ -61,7 +61,8 @@ export function runJob(job: FfmpegJob, cwd: string, onProgress?: (p: number) => 
       if (signal?.aborted) return reject(new Error('cancelled'));
       if (stalled) return reject(new Error(`ffmpeg made no progress for ${STALL_MS / 1000}s and was stopped (${job.output}). ${err.trim()}`));
       if (code !== 0) return reject(new Error(`ffmpeg exited ${code}: ${err.trim()}`));
-      renameSync(join(cwd, tmp), join(cwd, job.output));
+      // a throw here would escape the promise and take the whole server down
+      try { renameSync(join(cwd, tmp), join(cwd, job.output)); } catch (e) { return reject(e); }
       onProgress?.(1);
       resolve();
     });
@@ -98,8 +99,9 @@ export async function runPlan(plan: RenderPlan, cwd: string, onProgress: (p: Run
     mkdirSync(join(cwd, dirname(f.path)), { recursive: true });
     writeFileSync(join(cwd, f.path), f.body, 'utf8');
   }
-  const todo = plan.segments.filter((s) => !existsSync(join(cwd, s.output)));
-  const cached = plan.segments.length - todo.length;
+  // identical segments share one cached file: render it once (two runs would race on the same .part file)
+  const todo = plan.segments.filter((s, i, all) => !existsSync(join(cwd, s.output)) && all.findIndex((x) => x.output === s.output) === i);
+  const cached = plan.segments.filter((s) => existsSync(join(cwd, s.output))).length;
   for (const s of plan.segments) if (existsSync(join(cwd, s.output))) {
     const file = join(cwd, s.output), stat = statSync(file);
     utimesSync(file, new Date(), stat.mtime);
