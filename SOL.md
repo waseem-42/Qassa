@@ -898,6 +898,7 @@ Also check RTL in each panel, empty states, error messages (bad file, missing me
 - Not repeated from Task 12: single-instance, the first-run setup download, and the bundled MCP launcher against the packaged app. The app was killed with taskkill /F at the end, so `.port` stayed; that is expected for a forced kill, and a normal close removes it, as checked in Task 12.
 - The user's installed copy and Documents\Qassa were not touched.
 - Rebuilt at 08:02 as **0.1.5** with everything up to `822ea27` (rename, agent rule, export crash fix, capture speedup, Task 20). `Qassa-Setup.exe` 202,688,114 bytes, SHA-256 154fc3602a412d3d21ee8add94518a94c1d996e40cc0a1f39dce9c4877eda8c8; Qassa.exe reports 0.1.5. Same packaged smoke (`artifacts/qa/desktop-0.1.5/`): health, review clean, preflight ready, final 10 s export in 25.3 s (graphics 20.7 s), frames correct.
+- Rebuilt at 08:41 as **0.1.6** with Task 21 and Claude's follow-ups (up to `036b28c`). `Qassa-Setup.exe` 202,876,399 bytes, SHA-256 2747fc780fc35495953941ecd6ff631cbc1050821874a33ac866a4456d70d36f; Qassa.exe reports 0.1.6. Same packaged smoke (`artifacts/qa/desktop-0.1.6/`): passed, final 10 s export in 25.2 s, frames correct.
 
 ### Task 20 — done (sol, 2026-11-07)
 
