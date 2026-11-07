@@ -38,9 +38,13 @@ export function fontFaceCss(url: (file: string) => string = (f) => `data:font/${
 }
 
 let browser: Promise<Browser> | undefined;
-export function getBrowser(): Promise<Browser> {
+/** A fresh browser process with the same settings as the shared one (pages of one process paint one at a time). */
+export function launchBrowser(): Promise<Browser> {
   if (!BROWSER) throw new Error('no Chrome or Edge found for text rendering (set EDIT_BROWSER)');
-  browser ??= puppeteer.launch({ executablePath: BROWSER, headless: true, args: ['--allow-file-access-from-files', '--disable-gpu'] });
+  return puppeteer.launch({ executablePath: BROWSER, headless: true, args: ['--allow-file-access-from-files', '--disable-gpu'] });
+}
+export function getBrowser(): Promise<Browser> {
+  browser ??= launchBrowser();
   return browser;
 }
 

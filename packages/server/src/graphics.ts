@@ -2,12 +2,12 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { Page } from 'puppeteer-core';
+import type { Browser, Page } from 'puppeteer-core';
 import {
   GRAPHIC_RUNTIME, GRAPHICS_LIB_PREFIX, clipDuration, graphicBaseSize, graphicEntry, graphicUrl, isLibraryGraphic, retimedToPage, type Clip, type Settings,
 } from '@edit/shared';
 import { GRAPHICS_LIB_DIR, PORT } from './config.ts';
-import { getBrowser } from './textimg.ts';
+import { getBrowser, launchBrowser } from './textimg.ts';
 import { encodeGraphicParts } from './graphic-encoding.ts';
 import { assertNoLink, assertWithin } from './project-paths.ts';
 
@@ -43,11 +43,11 @@ export function graphicFile(projectDir: string, graphic: string): { file: string
 type GraphicRef = Pick<Clip, 'graphic' | 'out' | 'graphicData' | 'graphicEdits' | 'retime'>;
 
 /** Open a graphic page at the 1080p authoring size, scaled to `width` output pixels. */
-async function openGraphic(project: string, projectDir: string, c: GraphicRef, settings: Pick<Settings, 'aspect' | 'theme'>, width: number, isolated = false): Promise<Page> {
+async function openGraphic(project: string, projectDir: string, c: GraphicRef, settings: Pick<Settings, 'aspect' | 'theme'>, width: number, isolated = false, own?: Browser): Promise<Page> {
   const entry = graphicEntry(c.graphic!);
   if (!existsSync(graphicFile(projectDir, c.graphic!).file)) throw new Error(`graphic ${entry} not found`);
   const base = graphicBaseSize(settings);
-  const browser = await getBrowser();
+  const browser = own ?? await getBrowser();
   const context = isolated ? await browser.createBrowserContext() : browser.defaultBrowserContext();
   const page = await context.newPage();
   try {
@@ -94,9 +94,11 @@ async function renderOne(project: string, projectDir: string, c: Clip, settings:
   const frameHashes: string[] = new Array(frames);
   try {
     const results = await Promise.allSettled(Array.from({ length: workers }, async (_, w) => {
-      const page = await openGraphic(project, projectDir, c, settings, W, true).catch((e) => { ctrl.abort(); throw e; });
+      // the first worker shares the app's browser; the others get their own process, since one process paints its pages in turn
+      const own = w > 0 ? await launchBrowser().catch((e) => { ctrl.abort(); throw e; }) : undefined;
+      const page = await openGraphic(project, projectDir, c, settings, W, true, own).catch(async (e) => { await own?.close().catch(() => {}); ctrl.abort(); throw e; });
       try {
-        let lastTime: number | undefined, lastPng: Uint8Array | undefined, lastHash = '', fastPng = true;
+        let lastTime: number | undefined, lastPng: Uint8Array | undefined, lastHash = '';
         const runs: { file: string; count: number }[] = [];
         const shot = async (t: number): Promise<Uint8Array> => {
           if (ctrl.signal.aborted) throw new Error('cancelled');
@@ -105,14 +107,10 @@ async function renderOne(project: string, projectDir: string, c: Clip, settings:
           if (idle) { stats.reused++; return lastPng!; }
           await seek(page, at);
           lastTime = at;
-          lastPng = await page.screenshot({ type: 'png', omitBackground: true, optimizeForSpeed: fastPng });
+          // the fast encoder only compresses less: decoded RGBA (alpha edges included) matched the default
+          // encoder byte for byte on library templates and long user graphics (~1.5× faster on templates)
+          lastPng = await page.screenshot({ type: 'png', omitBackground: true, optimizeForSpeed: true });
           stats.screenshots++;
-          // Keep transparent edges on the established capture path; fast PNGs help opaque footage.
-          if (fastPng && lastPng[25] === 6) {
-            fastPng = false;
-            lastPng = await page.screenshot({ type: 'png', omitBackground: true });
-            stats.screenshots++;
-          }
           return lastPng;
         };
         const write = (png: Uint8Array) => {
@@ -125,6 +123,12 @@ async function renderOne(project: string, projectDir: string, c: Clip, settings:
         };
         const from = Math.floor(w * frames / workers), to = Math.floor((w + 1) * frames / workers);
         const shutter = (0.5 / fps) * c.speed;
+        // some pages draw from the frames painted before (a fresh page differed for its first two frames, and
+        // seeking alone did not help): paint the three frames before this range and throw them away
+        for (let i = Math.max(0, from - 3); i < from; i++) {
+          await seek(page, retimedToPage(c.retime, Math.max(c.in, Math.min(c.out, c.in + (i / fps) * c.speed))));
+          await page.screenshot({ type: 'png', omitBackground: true, optimizeForSpeed: true });
+        }
         for (let i = from; i < to; i++) {
           const t = c.in + (i / fps) * c.speed;
           if (k === 1) frameHashes[i] = write(await shot(t));
@@ -142,7 +146,7 @@ async function renderOne(project: string, projectDir: string, c: Clip, settings:
         writeFileSync(join(scratch, list), graphicFrameList(runs, fps * k));
         return { list, frames: to - from, w };
       } catch (e) { ctrl.abort(); throw e; }
-      finally { await page.browserContext().close(); }
+      finally { await page.browserContext().close(); await own?.close().catch(() => {}); }
     }));
     stats.captureSeconds = (performance.now() - started) / 1000;
     if (k === 1) stats.sourceDigest = createHash('sha256').update(frameHashes.join('')).digest('hex');
