@@ -14,7 +14,7 @@ import { assertNoLink, assertWithin } from './project-paths.ts';
 // HTML graphics are rendered by stepping the page's clock frame by frame in the headless browser
 // and encoding 4:4:4 colour plus lossless alpha, cached by the folder's content.
 
-export const GRAPHIC_CACHE_VERSION = 3;
+export const GRAPHIC_CACHE_VERSION = 4;
 
 /** size+mtime of every file in the composition folder, so any edit re-renders it */
 function folderKey(dir: string): string {
@@ -42,6 +42,23 @@ export function graphicFile(projectDir: string, graphic: string): { file: string
 
 type GraphicRef = Pick<Clip, 'graphic' | 'out' | 'graphicData' | 'graphicEdits' | 'retime'>;
 
+/** Future titles may use a face which has not appeared in the initial frame yet. */
+export async function readyGraphicFonts(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.allSettled(Array.from(document.fonts, (face) => face.load()));
+    await document.fonts.ready;
+  });
+}
+
+/** Let changed SVG layers paint before capture; a throttled page keeps the previous screenshot path. */
+export function settleGraphicPaint(page: Page): Promise<boolean> {
+  return page.evaluate(() => new Promise<boolean>((done) => {
+    const timer = setTimeout(() => done(false), 250);
+    requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(timer); done(true); }));
+  })).catch(() => false);
+}
+
 /** Open a graphic page at the 1080p authoring size, scaled to `width` output pixels. */
 async function openGraphic(project: string, projectDir: string, c: GraphicRef, settings: Pick<Settings, 'aspect' | 'theme'>, width: number, isolated = false, own?: Browser): Promise<Page> {
   const entry = graphicEntry(c.graphic!);
@@ -56,7 +73,7 @@ async function openGraphic(project: string, projectDir: string, c: GraphicRef, s
     await page.setViewport({ width: base.width, height: base.height, deviceScaleFactor: width / base.width });
     await page.goto(`http://127.0.0.1:${PORT}${graphicUrl(project, c, base, settings.theme)}`, { waitUntil: 'networkidle0', timeout: 30_000 });
     await page.evaluate(GRAPHIC_RUNTIME);
-    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    await readyGraphicFonts(page);
     if (errors.length) throw new Error(`graphic ${entry}: ${errors[0]}`);
     return page;
   } catch (e) {
@@ -67,7 +84,7 @@ async function openGraphic(project: string, projectDir: string, c: GraphicRef, s
 
 const seek = (page: Page, t: number) => page.evaluate((s) => (window as unknown as { __graphicSeek: (t: number) => Promise<void> }).__graphicSeek(s), t);
 
-export interface GraphicCaptureStats { frames: number; screenshots: number; reused: number; unique: number; pages: number; captureSeconds: number; encodeSeconds: number; sourceDigest?: string }
+export interface GraphicCaptureStats { frames: number; screenshots: number; reused: number; unique: number; pages: number; captureSeconds: number; encodeSeconds: number; sourceDigest?: string; encodingFallbacks?: number; paintFallbacks?: number }
 
 /** Adjacent equal PNGs become one timed packet; retain a final frame to bound the hold exactly. */
 export function graphicFrameList(runs: { file: string; count: number }[], fps: number): string {
@@ -106,6 +123,7 @@ async function renderOne(project: string, projectDir: string, c: Clip, settings:
           const idle = lastPng && lastTime !== undefined && await page.evaluate((a, b) => (window as unknown as { __graphicIdle: (a: number, b: number) => boolean }).__graphicIdle(a, b), lastTime, at);
           if (idle) { stats.reused++; return lastPng!; }
           await seek(page, at);
+          if (!isLibraryGraphic(c.graphic!) && !await settleGraphicPaint(page)) stats.paintFallbacks = (stats.paintFallbacks ?? 0) + 1;
           lastTime = at;
           // the fast encoder only compresses less: decoded RGBA (alpha edges included) matched the default
           // encoder byte for byte on library templates and long user graphics (~1.5× faster on templates)
@@ -154,7 +172,8 @@ async function renderOne(project: string, projectDir: string, c: Clip, settings:
     if (failed?.status === 'rejected') throw failed.reason;
     const encodeStart = performance.now();
     // Keep the previous 180° shutter averaging exactly, including all k samples in moving frames.
-    await encodeGraphicParts(scratch, results.flatMap((r) => r.status === 'fulfilled' ? [r.value] : []), fps, k, ctrl.signal);
+    const encoded = await encodeGraphicParts(scratch, results.flatMap((r) => r.status === 'fulfilled' ? [r.value] : []), fps, k, ctrl.signal, !isLibraryGraphic(c.graphic!));
+    stats.encodingFallbacks = encoded.fallbacks;
     assertNoLink(join(projectDir, rel));
     renameSync(join(scratch, 'joined.mkv'), join(projectDir, rel));
     stats.encodeSeconds = (performance.now() - encodeStart) / 1000;

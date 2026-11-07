@@ -12,8 +12,9 @@ export const GRAPHIC_ENCODING = [
   '-c:v:1', 'ffv1', '-level:v:1', '3', '-pix_fmt:v:1', 'gray', '-threads:v:0', '2', '-threads:v:1', '1',
 ];
 
-export async function encodeGraphicParts(dir: string, parts: { list: string; frames: number; w: number }[], fps: number, samples: number, signal?: AbortSignal) {
+export async function encodeGraphicParts(dir: string, parts: { list: string; frames: number; w: number }[], fps: number, samples: number, signal?: AbortSignal, fast = false) {
   const queue = [...parts], files: string[] = [];
+  let fallbacks = 0;
   const ctrl = new AbortController(), abort = () => ctrl.abort();
   signal?.addEventListener('abort', abort, { once: true });
   if (signal?.aborted) ctrl.abort();
@@ -22,8 +23,18 @@ export async function encodeGraphicParts(dir: string, parts: { list: string; fra
       for (let job = queue.shift(); job; job = queue.shift()) {
         const { list, frames, w } = job, part = `${w}.mkv`;
         const encoding = [...GRAPHIC_ENCODING];
+        // Superfast is ~3× faster on the grain-heavy fixture, with better PSNR/SSIM at the same CRF.
+        // Keep library templates on their original encoder so their decoded frames stay exact.
+        if (fast) encoding[encoding.indexOf('-preset:v:0') + 1] = 'superfast';
         if (samples > 1) encoding[1] = `[0:v]fps=${fps * samples},tmix=frames=${samples},select=eq(mod(n\\,${samples})\\,${samples - 1}),setpts=N/(${fps}*TB),fps=${fps},format=rgba,split[colour][a];[a]alphaextract[alpha]`;
-        await graphicEncode(['-filter_complex_threads', '1', '-threads', '2', '-f', 'concat', '-safe', '0', '-i', list, ...encoding, '-enc_time_base:v', `1:${fps}`, '-fps_mode:v', 'vfr', '-t', String(frames / fps), part], dir, ctrl.signal);
+        const encode = () => graphicEncode(['-filter_complex_threads', '1', '-threads', '2', '-f', 'concat', '-safe', '0', '-i', list, ...encoding, '-enc_time_base:v', `1:${fps}`, '-fps_mode:v', 'vfr', '-t', String(frames / fps), part], dir, ctrl.signal);
+        try { await encode(); }
+        catch (e) {
+          if (!fast || ctrl.signal.aborted) throw e;
+          encoding[encoding.indexOf('-preset:v:0') + 1] = 'fast';
+          fallbacks++;
+          await encode();
+        }
         files[w] = part;
       }
     } catch (e) { ctrl.abort(); throw e; }
@@ -34,6 +45,7 @@ export async function encodeGraphicParts(dir: string, parts: { list: string; fra
     if (failed?.status === 'rejected') throw failed.reason;
     writeFileSync(join(dir, 'join.txt'), files.map((f) => `file '${f}'`).join('\n'));
     await graphicEncode(['-f', 'concat', '-safe', '0', '-i', 'join.txt', '-map', '0', '-c', 'copy', 'joined.mkv'], dir, ctrl.signal);
+    return { fallbacks };
   } finally { signal?.removeEventListener('abort', abort); }
 }
 
