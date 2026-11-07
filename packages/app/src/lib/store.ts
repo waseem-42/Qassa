@@ -7,6 +7,7 @@ import type { ExportQuality } from './export.ts';
 import { lookOf, pasteLookOps, type Look } from './look.ts';
 import { duplicateOps, pasteOps } from './clipboard.ts';
 import { titlePlan } from './title.ts';
+import { useStartGuide } from './start-guide.ts';
 
 export interface Job {
   mediaId?: string; steps?: string[];
@@ -367,6 +368,7 @@ export const useStore = create<State>((set, get) => ({
     }
     try {
       const r = await api.post(`${projectPath(name)}/ops`, { ops, author: 'user' });
+      useStartGuide.getState().record(project, ops);
       if (sequence === openSequence && name === get().name && r.rev >= get().rev) set({ project: r.project, rev: r.rev, history: r.history });
       return true;
     } catch (e) {

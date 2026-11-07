@@ -316,7 +316,7 @@ export type ProjectStart = z.infer<typeof ProjectStart>;
 export function defaultTracks(start: ProjectStart = 'video'): Track[] {
   const tracks = [
     { id: 'V1', kind: 'video', name: 'الأساسي', magnetic: true, muted: false, hidden: false },
-    { id: 'V2', kind: 'overlay', name: 'بي-رول', magnetic: false, muted: false, hidden: false },
+    { id: 'V2', kind: 'overlay', name: 'لقطات فوقية', magnetic: false, muted: false, hidden: false },
     { id: 'T1', kind: 'text', name: 'نصوص', magnetic: false, muted: false, hidden: false },
     { id: 'A2', kind: 'audio', name: 'موسيقى', magnetic: false, muted: false, hidden: false },
   ];

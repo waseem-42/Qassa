@@ -107,7 +107,7 @@ export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs';
             <div className="export-name"><input className="field" value={fileName} maxLength={100} disabled={busy} onChange={(e) => { setFileName(e.target.value); setNameTouched(true); }} /><span className="num" dir="ltr">.{ext}</span></div>
           </label>
           <fieldset className="export-field export-field-wide"><legend>الجزء المُصدَّر</legend>
-            {marks && part === 'range' && r0 === marks[0] && r1 === marks[1] && <p className="mb-2 text-xs text-accent">من العلامات I/O</p>}
+            {marks && part === 'range' && r0 === marks[0] && r1 === marks[1] && <p className="mb-2 text-xs text-accent">جزء التصدير</p>}
             <div className="export-part">
               <label><input type="radio" name="export-part" checked={part === 'all'} disabled={busy} onChange={() => setPart('all')} />المونتاج كامل</label>
               <label><input type="radio" name="export-part" checked={part === 'range'} disabled={busy} onChange={() => setPart('range')} />جزء منه</label>

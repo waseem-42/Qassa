@@ -236,7 +236,7 @@ export function GraphicPlace({ clip }: { clip: Clip }) {
         <Row label="عمودي"><KeySlider clip={clip} prop="dy" min={-0.5} max={0.5} step={0.005} def={0} fmt={pct} /></Row>
         <Row label="الحجم"><KeySlider clip={clip} prop="scale" min={0.2} max={2} step={0.01} def={1} fmt={pct} /></Row>
         <Row label="الشفافية"><KeySlider clip={clip} prop="opacity" min={0} max={1} step={0.01} def={1} fmt={pct} /></Row>
-        <div className="text-[11px] text-ink-500">أو اسحب الرسمة على الفيديو، والزاوية للحجم. ◆ مفتاح حركة عند المؤشر: مفتاحين بقيم مختلفة وتتحرك بينهم.</div>
+        <div className="text-[11px] text-ink-500">أو اسحب الرسمة على الفيديو، والزاوية للحجم. ◆ حركة عند المؤشر: أضف نقطتين بقيم مختلفة وتتحرك بينها.</div>
       </Section>
       <MotionSection clip={clip} />
     </>

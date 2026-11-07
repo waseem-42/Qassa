@@ -396,3 +396,11 @@ Walked through as a new user on a fresh project (new project → drop a talking 
 ## Plain video exports a part again (Claude, after Task 23)
 
 - Found by sol in Task 23: exporting a marked part, H.265 or a small file of a timeline with no text or graphics failed in the final pass (`Output with label '0:v' does not exist`). With no video filters the compiler mapped `[0:v]` as if it were a filter output; it now maps the input stream `0:v`. Compiler test asserts it; real isolated exports (2 s marked 9:16 MOV, H.265, small) all finish.
+
+
+## Beginner labels and first-run guide (Task 24, 2026-11-08)
+
+- Timeline/export now say «جزء التصدير» with «اسحب المقبضين لتصدير جزء فقط»; fit is «ملاءمة الكل» and keyframes are «حركة» / «نقطة حركة». New projects call V2 «لقطات فوقية»; saved track names stay intact. The inspector has nine named position boxes and a separate full-frame action; position and anchor grids start at the right in RTL.
+- The assistant request comes first. With no existing ideas, visual ideas and transcription offers are single-line disclosures with «اعرض»; opening them never starts transcription or AI. Existing idea cards stay expanded.
+- The editor's compact «دليل البداية» checks import, placement, an edit and a finished export. «وريني» reveals/highlights each control without executing it. Dismissal and edit milestones are saved per viewer with guarded localStorage; Settings can reopen the guide. Placement/setup do not count as the edit; exports from before the project's creation do not count after reusing a deleted project name.
+- Verified 342 tests / 67 files, clean typecheck, successful app build, and a real 1366×768 Chrome walkthrough with an actual 3 s / 1920×1080 / 30 fps MP4. Checked all highlights, dismissal/reload/project switching, Settings replay, storage failure, RTL grid operations and old names/ideas. Evidence is in artifacts/qa/task24/. Isolated projects/trash were purged through validated routes and QA servers stopped; no user data, transcription, paid AI, installer rebuild or commit.

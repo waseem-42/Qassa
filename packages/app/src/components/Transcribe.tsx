@@ -21,12 +21,14 @@ export function TranscribeButton({ mediaId, label = 'فرّغ الكلام' }: {
   }}>{setupNeeded ? 'يحتاج إكمال التجهيز' : job ? job.message?.startsWith('المساعد يحتاج التفريغ') ? job.message : `يفرّغ الكلام · ${Math.round(job.progress * 100)}٪` : busy ? 'يرسل الطلب…' : label}</button>;
 }
 
-export function TranscriptNeeded({ mediaIds, text = 'يحتاج تفريغ' }: { mediaIds?: string[]; text?: string }) {
+export function TranscriptNeeded({ mediaIds, text = 'يحتاج تفريغ', compact = false }: { mediaIds?: string[]; text?: string; compact?: boolean }) {
+  const [expanded, setExpanded] = useState(false);
   const project = useStore((s) => s.project)!;
   const ids = mediaIds ?? speechMediaIds(project);
-  const missing = project.media.filter((m) => ids.includes(m.id) && !m.analyzed.includes('transcribe'));
+  const missing = project.media.filter((m) => (ids.includes(m.id) || compact && mediaIds === undefined && !ids.length && m.role === 'source' && m.hasAudio) && !m.analyzed.includes('transcribe'));
   if (!missing.length) return null;
-  return <div className="my-2 space-y-2 text-xs text-ink-400" data-transcript-needed>
-    <p>{text}</p>{missing.map((m) => <div key={m.id} className="flex min-w-0 items-center gap-2"><span className="min-w-0 flex-1 truncate" dir="auto">{m.name}</span><TranscribeButton mediaId={m.id} /></div>)}
+  return <div className={compact ? 'assistant-offer' : 'my-2 space-y-2 text-xs text-ink-400'} data-transcript-needed>
+    {compact && <div className="assistant-offer-heading"><span title={text}>تفريغ الكلام</span><button type="button" aria-label="اعرض خيارات تفريغ الكلام" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? 'إخفاء' : 'اعرض'}</button></div>}
+    {(!compact || expanded) && <><p>{text}</p>{missing.map((m) => <div key={m.id} className="flex min-w-0 items-center gap-2"><span className="min-w-0 flex-1 truncate" dir="auto">{m.name}</span><TranscribeButton mediaId={m.id} /></div>)}</>}
   </div>;
 }

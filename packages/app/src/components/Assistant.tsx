@@ -86,10 +86,10 @@ export function Assistant() {
 
   return (
     <div className="h-full space-y-4 overflow-y-auto p-4">
+      <AgentTasks compact={!project.ideas.length} />
       {suggestions}
-      <TranscriptNeeded text="اقتراحات الإعادات والقص بالكلمات تحتاج تفريغًا؛ فحص الصمت لا يفرّغ الكلام." />
+      <TranscriptNeeded compact={!project.ideas.length} text="اقتراحات الإعادات والقص بالكلمات تحتاج تفريغًا؛ فحص الصمت لا يفرّغ الكلام." />
       <Ideas />
-      <AgentTasks />
       {(!sources.length || missing.length > 0 || active.length > 0) ? (
         <div className="rounded-xl border border-ink-700 bg-ink-850 p-3">
           <div className="mb-2 flex justify-between text-xs"><span>تحليل الملفات</span><span>{sources.length - missing.length} / {sources.length}</span></div>

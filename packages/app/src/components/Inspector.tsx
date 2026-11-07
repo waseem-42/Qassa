@@ -197,10 +197,10 @@ function ZoomSection({ clip }: { clip: Clip }) {
     return c ? commit(trOps({ [k]: v })) : preview(trOps({ [k]: v }));
   };
   return (
-    <Section title={clip.trackId === MAIN_TRACK ? 'زوم وتركيز' : 'زوم داخل اللقطة'} actions={
+    <Section title={clip.trackId === MAIN_TRACK ? 'تكبير وتركيز' : 'تكبير داخل اللقطة'} actions={
       <>
-        <button className="btn btn-ghost h-6 text-xs" aria-pressed={showFocus} title="أظهر نقطة التركيز على المعاينة (ونقطة ارتكاز الطبقة) — واسحبها لتغيير التركيز" onClick={() => useLayout.getState().setShowFocus(!showFocus)}>◎ النقطة</button>
-        <button className="btn btn-ghost h-6 text-xs" title="مفتاح حركة عند المؤشر: مفتاحين بقيم مختلفة والزوم يتحرك بينهم" onClick={() => ops(trOps({ keyframes: withZoomKey(tr?.keyframes, { t: local, ...now }) }))}>◆ مفتاح</button>
+        <button className="btn btn-ghost h-6 text-xs" aria-pressed={showFocus} title="أظهر نقطة التركيز على المعاينة (ونقطة ارتكاز الطبقة) — واسحبها لتغيير التركيز" onClick={() => useLayout.getState().setShowFocus(!showFocus)}>◎ نقطة التركيز</button>
+        <button className="btn btn-ghost h-6 text-xs" title="أضف نقطة حركة عند المؤشر" onClick={() => ops(trOps({ keyframes: withZoomKey(tr?.keyframes, { t: local, ...now }) }))}>◆ حركة</button>
         {tr && <button className="btn btn-ghost h-6 text-xs" onClick={() => ops([{ op: 'update_clip', clipId: clip.id, patch: { transform: null } }])}>إعادة</button>}
       </>
     }>
@@ -233,15 +233,16 @@ function PlaceSection({ clip }: { clip: Clip }) {
   // corners for picture-in-picture: a third of the frame, a small margin from the edges
   const corner = (sx: number, sy: number) => { const s = 0.35, m = 0.5 - s / 2 - 0.03; return { scale: s, dx: sx * m, dy: sy * m }; };
   return (
-    <Section title="الحجم والمكان" actions={(clip.place || clip.anim?.dx || clip.anim?.dy || clip.anim?.scale) && <button className="btn btn-ghost h-6 text-xs" onClick={() => ops(plOps(null))}>ملء الشاشة</button>}>
+    <Section title="الحجم والمكان">
       <Row label="بسرعة">
-        <div className="pip-grid">
-          <button className="btn" title="أعلى يسار" onClick={() => ops(plOps(corner(-1, -1)))}>↖</button>
-          <button className="btn" title="ملء الشاشة" onClick={() => ops(plOps(null))}>كامل</button>
-          <button className="btn" title="أعلى يمين" onClick={() => ops(plOps(corner(1, -1)))}>↗</button>
-          <button className="btn" title="أسفل يسار" onClick={() => ops(plOps(corner(-1, 1)))}>↙</button>
-          <button className="btn" title="في الوسط" onClick={() => ops(plOps({ dx: 0, dy: 0 }))}>وسط</button>
-          <button className="btn" title="أسفل يمين" onClick={() => ops(plOps(corner(1, 1)))}>↘</button>
+        <div className="flex items-center gap-2">
+          <div className="position-grid" role="group" aria-label="موضع اللقطة">
+            {[-1, 0, 1].flatMap((y) => [1, 0, -1].map((x) => {
+              const label = positionName(x, y);
+              return <button type="button" key={`${x}-${y}`} title={label} aria-label={label} onClick={() => ops(plOps(x === 0 && y === 0 ? { dx: 0, dy: 0 } : corner(x, y)))}><span style={{ left: `${50 + x * 30}%`, top: `${50 + y * 30}%` }} /></button>;
+            }))}
+          </div>
+          <button className="btn btn-ghost" title="ملء الشاشة وإزالة حركة المكان والحجم" onClick={() => ops(plOps(null))}>ملء الشاشة</button>
         </div>
       </Row>
       <Row label="الحجم"><KeySlider clip={clip} prop="scale" min={0.1} max={4} step={0.01} def={1} fmt={pct} hardMin={PLACE_LIMITS.scaleMin} hardMax={PLACE_LIMITS.scaleMax} /></Row>
@@ -252,6 +253,8 @@ function PlaceSection({ clip }: { clip: Clip }) {
     </Section>
   );
 }
+
+const positionName = (x: number, y: number) => x === 0 && y === 0 ? 'الوسط' : `${y < 0 ? 'أعلى' : y > 0 ? 'أسفل' : 'وسط'} ${x > 0 ? 'اليمين' : x < 0 ? 'اليسار' : 'الوسط'}`;
 
 /** Where the size grows from: 9 quick points, exact values, and ◎ to see / drag it on the preview. The picture never jumps. */
 function AnchorRow({ clip }: { clip: Clip }) {
@@ -265,8 +268,8 @@ function AnchorRow({ clip }: { clip: Clip }) {
     <Row label="الارتكاز" hint="النقطة اللي الحجم يكبر ويصغر حولها. تغييرها ما يحرّك الصورة.">
       <div className="flex items-center gap-2">
         <div className="anchor-grid" role="group" aria-label="نقطة الارتكاز">
-          {[0, 0.5, 1].flatMap((y) => [0, 0.5, 1].map((x) => (
-            <button key={`${x}-${y}`} type="button" aria-pressed={Math.abs(pl.ax - x) < 0.01 && Math.abs(pl.ay - y) < 0.01} title={`${pct(x)} · ${pct(y)}`} onClick={() => set(x, y)} />
+          {[0, 0.5, 1].flatMap((y) => [1, 0.5, 0].map((x) => (
+            <button key={`${x}-${y}`} type="button" aria-pressed={Math.abs(pl.ax - x) < 0.01 && Math.abs(pl.ay - y) < 0.01} aria-label={positionName(x * 2 - 1, y * 2 - 1)} title={positionName(x * 2 - 1, y * 2 - 1)} onClick={() => set(x, y)} />
           )))}
         </div>
         <button type="button" className="btn btn-ghost h-6 px-2 text-[11px]" aria-pressed={showFocus} title="أظهر نقطة الارتكاز على المعاينة واسحبها لأي مكان" onClick={() => useLayout.getState().setShowFocus(!showFocus)}>◎ على المعاينة</button>

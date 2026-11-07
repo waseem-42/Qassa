@@ -31,12 +31,12 @@ export function EditingStyles() {
   return <div className="space-y-6">
     <section className="rounded-xl border border-accent/30 bg-ink-900 p-4">
       <h2 className="font-display text-lg">وصفات مونتاج قابلة للتطبيق الآن</h2>
-      <p className="mt-1 text-xs leading-6 text-ink-400">وصفات محلية للحركة والكابشن والعناوين وB-roll. اختر الوصفة، ثم راجع التغييرات قبل تطبيقها. تقدر تتراجع عن الخطة كاملة بخطوة واحدة.</p>
+      <p className="mt-1 text-xs leading-6 text-ink-400">وصفات محلية للحركة والكابشن والعناوين واللقطات الفوقية. اختر الوصفة، ثم راجع التغييرات قبل تطبيقها. تقدر تتراجع عن الخطة كاملة بخطوة واحدة.</p>
       <div className="my-4 grid gap-3 sm:grid-cols-3">{EDITING_RECIPES.map((r) => <button key={r.id} onClick={() => setRecipe(r.id)} aria-pressed={recipe === r.id} className={`rounded-lg border p-3 text-right ${recipe === r.id ? 'border-accent bg-accent/5' : 'border-ink-700'}`}><b>{r.name}</b><p className="mt-1 text-xs leading-6 text-ink-400">{r.description}</p></button>)}</div>
       <div className="flex flex-wrap gap-4 text-xs">
         <label><input type="checkbox" checked={motion} onChange={(e) => setMotion(e.target.checked)} /> حركة الكاميرا</label>
         <label><input type="checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} /> إعادة إنشاء الكابشن</label>
-        <label><input type="checkbox" checked={broll} onChange={(e) => setBroll(e.target.checked)} /> توزيع B-roll المستورد</label>
+        <label><input type="checkbox" checked={broll} onChange={(e) => setBroll(e.target.checked)} /> توزيع اللقطات الفوقية المستوردة</label>
       </div>
       <input className="field my-3 w-full" aria-label="العنوان الافتتاحي" placeholder="عنوان افتتاحي اختياري…" maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} />
       <div className="rounded-lg bg-ink-950 p-3 text-xs leading-6" aria-live="polite">

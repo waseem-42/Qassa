@@ -31,7 +31,7 @@ const usd = (v: number) => (v < 0.01 ? `${v.toFixed(3)}` : `${v.toFixed(2)}`);
 const Usd = ({ children }: { children: string }) => <bdi className="num" dir="ltr">{children}</bdi>;
 const IDEAS = ['قص السكتات الطويلة', 'غيّر لون العناوين للون الهوية', 'حط رسمة خطوات للي يشرحه'];
 
-export function AgentTasks() {
+export function AgentTasks({ compact = false }: { compact?: boolean }) {
   const name = useStore((s) => s.name)!;
   const jobs = useStore((s) => s.jobs);
   const openNotes = useStore((s) => s.project!.notes.some((n) => n.status === 'open'));
@@ -89,7 +89,7 @@ export function AgentTasks() {
           <button className="btn btn-ghost h-6 px-2 text-[11px] text-accent" title="من الكلام المفرّغ، بدون ذكاء وبدون تكلفة" onClick={autoCaptions}>كابشن من الكلام · مجاني</button>
         </div>
       )}
-      {!transcribed && <TranscriptNeeded text="الكابشن والقص بالكلمات يحتاجان تفريغًا" />}
+      {!transcribed && !compact && <TranscriptNeeded text="الكابشن والقص بالكلمات يحتاجان تفريغًا" />}
       {text.trim() && (
         <div className="mt-2 rounded-lg border border-ink-700 p-2">
           <div className="seg-buttons mb-2 w-full">

@@ -13,7 +13,7 @@ import { TranscribeButton } from './Transcribe.tsx';
 const ROLES: { id: Media['role']; label: string; hint: string }[] = [
   { id: 'source', label: 'مقطع', hint: 'المقطع اللي تبي تمنتجه — ينحط على التايملاين ويتحلل' },
   { id: 'ref', label: 'رفرنس', hint: 'مقطع أو صورة بالستايل اللي تبيه' },
-  { id: 'broll', label: 'بي-رول', hint: 'لقطات إضافية فوق المقطع' },
+  { id: 'broll', label: 'لقطات فوقية', hint: 'لقطات إضافية فوق المقطع' },
   { id: 'music', label: 'موسيقى', hint: 'موسيقى خلفية (تنخفض تلقائياً تحت الكلام)' },
 ];
 
@@ -23,7 +23,7 @@ export function MediaPanel() {
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 border-b border-ink-800">
         {([['media', 'الوسائط'], ['shots', 'اللقطات'], ['style', 'الستايل']] as const).map(([id, l]) => (
-          <button key={id} className="tab" data-on={tab === id} onClick={() => setTab(id)}>{l}</button>
+          <button key={id} className="tab" data-guide-tab={id} data-on={tab === id} onClick={() => setTab(id)}>{l}</button>
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -77,7 +77,7 @@ function MediaList() {
   return (
     <div className="p-3" data-media-list onClick={(e) => { if (e.target === e.currentTarget) selectMedia(); }}>
       <div className="mb-1 flex gap-1">
-        <button type="button" onClick={() => picker.current?.click()} className="media-dropzone btn flex-1 justify-center gap-2 text-xs" title="فيديو أو صوت أو صور — تنضاف لمكتبة المشروع، ثم اسحبها للتايملاين"><Icon name="upload" />استيراد ملفات</button>
+        <button type="button" data-guide="import" onClick={() => picker.current?.click()} className="media-dropzone btn flex-1 justify-center gap-2 text-xs" title="فيديو أو صوت أو صور — تنضاف لمكتبة المشروع، ثم اسحبها للتايملاين"><Icon name="upload" />استيراد ملفات</button>
         <button type="button" onClick={() => folder.current?.click()} className="btn justify-center gap-2 text-xs" title="كل الفيديو والصوت والصور داخل مجلد">استيراد مجلد</button>
       </div>
       <p className="mb-2 text-center text-[10px] text-ink-500">أو اسحب الملفات هنا · تنضاف للمكتبة، وتحطها بسحبها للتايملاين</p>

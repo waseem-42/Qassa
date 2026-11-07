@@ -81,11 +81,11 @@ export function KeySlider({ clip, prop, min, max, step, fmt, def, hardMin, hardM
         onReset={def === undefined ? undefined : () => commit([{ op: 'update_clip', clipId: clip.id, patch: { ...valuesPatch({ ...clip, anim: undefined }, { [prop]: def }, t), ...(keys.length ? { anim: { [prop]: null } } : {}) } }])}
         onPreview={(v) => preview(ops(v))} onCommit={(v) => commit(ops(v))} /></div>
       <div className="key-nav" dir="ltr">
-        <button className="key-step" disabled={!prev} title="المفتاح اللي قبل" aria-label="المفتاح اللي قبل" onClick={() => prev && seek(clip.start + prev.t)}>‹</button>
-        <button className="key-btn" aria-pressed={!!here} data-keyed={keys.length > 0} aria-label={here ? 'احذف المفتاح عند المؤشر' : 'مفتاح حركة عند المؤشر'}
-          title={here ? 'احذف المفتاح عند المؤشر' : keys.length ? 'مفتاح عند المؤشر' : 'مفتاح حركة: ضيف مفتاحين بقيم مختلفة وتتحرك بينهم'}
+        <button className="key-step" disabled={!prev} title="نقطة الحركة السابقة" aria-label="نقطة الحركة السابقة" onClick={() => prev && seek(clip.start + prev.t)}>‹</button>
+        <button className="key-btn" aria-pressed={!!here} data-keyed={keys.length > 0} aria-label={here ? 'احذف نقطة الحركة عند المؤشر' : 'أضف نقطة حركة عند المؤشر'}
+          title={here ? 'احذف نقطة الحركة عند المؤشر' : 'أضف نقطة حركة عند المؤشر'}
           onClick={() => commit([{ op: 'update_clip', clipId: clip.id, patch: toggleKeyPatch(clip, prop, t) }])}>◆</button>
-        <button className="key-step" disabled={!next} title="المفتاح اللي بعد" aria-label="المفتاح اللي بعد" onClick={() => next && seek(clip.start + next.t)}>›</button>
+        <button className="key-step" disabled={!next} title="نقطة الحركة التالية" aria-label="نقطة الحركة التالية" onClick={() => next && seek(clip.start + next.t)}>›</button>
       </div>
     </div>
       {here && next && <EaseRow value={here.ease} onPick={(v) => commit([{ op: 'update_clip', clipId: clip.id, patch: easePatch(clip, prop, t, v) }])} />}

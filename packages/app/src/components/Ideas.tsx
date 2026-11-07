@@ -39,6 +39,7 @@ export function Ideas() {
   const jobs = useStore((s) => s.jobs);
   const { ops, seek, setPlaying, notify } = useStore.getState();
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const what = useWhat();
   const transcribed = project.media.some((m) => m.analyzed.includes('transcribe'));
   const running = Object.values(jobs).find((j) => j.kind === 'agent' && j.project === name && j.ideas && ['queued', 'running'].includes(j.status));
@@ -59,11 +60,14 @@ export function Ideas() {
   };
   const est = TIERS.standard.estimate;
 
+  if (!ideas.length && !running && !expanded) return <div className="assistant-offer" data-ideas-offer><div className="assistant-offer-heading"><span>أفكار بصرية</span><button type="button" aria-label="اعرض الأفكار البصرية" aria-expanded={false} onClick={() => setExpanded(true)}>اعرض</button></div></div>;
+
   return (
     <div className="rounded-xl border border-clip-overlay/40 bg-clip-overlay/5 p-3">
       <div className="mb-2 flex items-center gap-2 text-xs">
         <Icon name="sparkles" size={15} />
         <span className="flex-1 text-ink-200">أفكار بصرية {ideas.length > 0 && <span className="num">({ideas.length})</span>}</span>
+        {!ideas.length && !running && <button className="btn btn-ghost" aria-label="إخفاء الأفكار البصرية" aria-expanded={true} onClick={() => setExpanded(false)}>إخفاء</button>}
         {ideas.length > 1 && (
           <>
             <button className="btn btn-ghost h-6 px-2 text-[11px]" disabled={busy} onClick={() => resolve('all', true)}>أضف الكل</button>
@@ -71,7 +75,7 @@ export function Ideas() {
           </>
         )}
       </div>
-      {!ideas.length && <p className="mb-2 text-[11px] leading-5 text-ink-400">الذكاء يقرأ الكلام ويقترح وش يطلع على الشاشة: رسمة من القوالب، كلمة على الشاشة، لقطة من ملفات البي-رول، أو لقطة تحتاج تصوّرها. ما ينضاف شيء إلا لما توافق.</p>}
+      {!ideas.length && <p className="mb-2 text-[11px] leading-5 text-ink-400">الذكاء يقرأ الكلام ويقترح وش يطلع على الشاشة: رسمة من القوالب، كلمة على الشاشة، لقطة من ملفات اللقطات الفوقية، أو لقطة تحتاج تصوّرها. ما ينضاف شيء إلا لما توافق.</p>}
       {!transcribed && <TranscriptNeeded text="اقتراح أفكار على الكلام يحتاج تفريغًا" />}
       {ideas.map((idea) => {
         const span = ideaSpan(project, idea);
@@ -95,7 +99,7 @@ export function Ideas() {
         <div className="flex items-center gap-2 text-[11px] text-ink-400"><Spinner size={13} /><span className="min-w-0 flex-1 truncate">{running.message ?? 'يقرأ الكلام…'}</span></div>
       ) : transcribed && (
         <button className="btn w-full justify-center text-xs" disabled={busy} title={`النموذج المتوسط — تقريبًا ${est[0]}–${est[1]}$`} onClick={ask}>
-          {ideas.length ? 'اقترح أفكار ثانية' : 'اقترح بي-رول وشروحات'} <span className="num text-ink-500" dir="ltr">~${est[0]}–{est[1]}</span>
+          {ideas.length ? 'اقترح أفكار ثانية' : 'اقترح لقطات فوقية وشروحات'} <span className="num text-ink-500" dir="ltr">~${est[0]}–{est[1]}</span>
         </button>
       )}
     </div>

@@ -93,11 +93,11 @@ function ClipKey({ clip: c, k, zoom }: { clip: Clip; k: number; zoom: number }) 
     addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
   };
   return <>
-    <button className="clip-key" data-picked={picked || undefined} style={{ left: k * zoom - 4 }} title={`مفتاح حركة ${fmtTime(c.start + k, 2)} — اسحبه لتحريكه (المؤشر يبقى مكانه)، نقرة تودّي المؤشر له، Delete يحذفه`} aria-label="مفتاح حركة"
+    <button className="clip-key" data-picked={picked || undefined} style={{ left: k * zoom - 4 }} title={`نقطة حركة ${fmtTime(c.start + k, 2)} — اسحبه لتحريكه (المؤشر يبقى مكانه)، نقرة تودّي المؤشر له، Delete يحذفه`} aria-label="نقطة حركة"
       onPointerDown={down} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); useKeySel.setState({ key: { clipId: c.id, t: k } }); setMenu({ x: e.clientX, y: e.clientY }); }} />
-    {menu && <PopupMenu label="مفتاح الحركة" x={menu.x} y={menu.y} onClose={() => setMenu(undefined)} groups={[
+    {menu && <PopupMenu label="نقطة الحركة" x={menu.x} y={menu.y} onClose={() => setMenu(undefined)} groups={[
       [{ label: 'انتقل إليه', run: () => useStore.getState().seek(c.start + k) }],
-      [{ label: 'حذف المفتاح', key: 'delete', danger: true, run: () => { useKeySel.setState({ key: { clipId: c.id, t: k } }); deleteSelectedKey(); } }],
+      [{ label: 'حذف نقطة الحركة', key: 'delete', danger: true, run: () => { useKeySel.setState({ key: { clipId: c.id, t: k } }); deleteSelectedKey(); } }],
     ]} />}
   </>;
 }
@@ -514,7 +514,7 @@ export function Timeline() {
         <div className="timeline-tools">
           <button className="btn btn-ghost timeline-tool" title={shortcutTitle("تقسيم عند المؤشر", "split", custom)} aria-label="تقسيم عند المؤشر" disabled={!project.clips.length} onClick={() => { const s = useStore.getState(); const target = project.clips.find((c) => selected.includes(c.id) && s.time > c.start && s.time < clipEnd(c)) ?? timelineToSource(project, s.time)?.clip; if (target && s.time > target.start && s.time < clipEnd(target)) ops([{ op: 'split', clipId: target.id, at: s.time }]); else s.notify('حرّك المؤشر داخل اللقطة لتقسيمها', 'info'); }}><Icon name="cut" size={16} /><span>تقسيم</span></button>
           <button className="btn btn-ghost timeline-tool" title={shortcutTitle("حذف المحدد", "delete", custom)} aria-label="حذف المحدد" disabled={!selected.length && !range} onClick={async () => { if (!selected.length) return useStore.getState().deleteMarkedRange(); if (await ops(deleteOps(selected))) select([]); }}><Icon name="trash" size={16} /></button>
-          <button className="btn btn-ghost timeline-tool" title={shortcutTitle("إضافة نص", "addText", custom)} aria-label="إضافة نص" onClick={() => useStore.getState().addTitle()}><Icon name="text" size={16} /><span>نص</span></button>
+          <button className="btn btn-ghost timeline-tool" title={shortcutTitle("إضافة نص", "addText", custom)} aria-label="إضافة نص" data-guide="edit" onClick={() => useStore.getState().addTitle()}><Icon name="text" size={16} /><span>نص</span></button>
           <GraphicPicker />
           <button className="btn btn-ghost timeline-tool magnet-toggle" aria-label="موجة صوت كبيرة" aria-pressed={largeWave} title={shortcutTitle("موجة صوت كبيرة", "largeWave", custom)} onClick={() => useStore.getState().setLargeWave(!largeWave)}><Icon name="speaker" size={16} /><span>الموجة</span></button>
           <button className="btn btn-ghost timeline-tool" title={shortcutTitle("إضافة تعليق", "comment", custom)} aria-label="إضافة تعليق" onClick={() => useStore.getState().startNote()}><Icon name="comment" size={16} /></button>
@@ -522,10 +522,10 @@ export function Timeline() {
             onClick={() => useLayout.getState().setMainMagnet(!mainMagnet)}><Icon name="magnet" size={16} /><span>الأساسي</span></button>
           <button className="btn btn-ghost timeline-tool magnet-toggle" aria-pressed={magnet} title={shortcutTitle(magnet ? 'التصاق شغّال — يلتقط الحواف؛ Alt يوقفه مؤقتًا' : 'التصاق طافي', 'magnet', custom)} aria-label="التصاق" onClick={() => useStore.getState().setMagnet(!magnet)}><Icon name="magnet" size={16} /><span>التصاق</span></button>
         </div>
-        {(marks.in !== undefined || marks.out !== undefined) && <div className="flex shrink-0 items-center gap-1 text-xs text-accent" data-marks-length><span className="num" dir="ltr">{range ? fmtTime(range[1] - range[0], 1) : `${marks.in !== undefined ? 'In' : 'Out'} ${fmtTime(marks.in ?? marks.out!, 1)}`}</span><button className="icon-button" aria-label="مسح علامات I/O" title={shortcutTitle("مسح علامات I/O", "clearMarks", custom)} onClick={() => ops([{ op: 'set_marks', in: null, out: null }])}><Icon name="close" size={12} /></button></div>}
+        {(marks.in !== undefined || marks.out !== undefined) && <div className="flex shrink-0 items-center gap-1 text-xs text-accent" data-marks-length><span className="num" dir="ltr">{range ? fmtTime(range[1] - range[0], 1) : `${marks.in !== undefined ? 'In' : 'Out'} ${fmtTime(marks.in ?? marks.out!, 1)}`}</span><button className="icon-button" aria-label="مسح جزء التصدير" title={shortcutTitle("مسح جزء التصدير", "clearMarks", custom)} onClick={() => ops([{ op: 'set_marks', in: null, out: null }])}><Icon name="close" size={12} /></button></div>}
         <div className="flex-1" />
         <div className="timeline-zoom"><input aria-label="تكبير التايملاين" title={`${shortcutTitle('تكبير', 'zoomIn', custom)} · ${shortcutTitle('تصغير', 'zoomOut', custom)}`} type="range" min={0} max={1} step={0.001} style={{ width: 100 }} value={Math.log(zoom) / Math.log(400)} onChange={(e) => setZoom(Math.pow(400, Number(e.target.value)))} />
-        <button className="btn btn-ghost text-xs" title={shortcutTitle("عرض التايملاين كاملًا", "zoomFit", custom)} onClick={() => { setZoom((view.width - 40) / Math.max(5, projectDuration(project))); requestAnimationFrame(() => requestAnimationFrame(() => { if (scroller.current) scroller.current.scrollLeft = 0; })); }}>ملاءمة</button></div>
+        <button className="btn btn-ghost text-xs" title={shortcutTitle("عرض التايملاين كاملًا", "zoomFit", custom)} onClick={() => { setZoom((view.width - 40) / Math.max(5, projectDuration(project))); requestAnimationFrame(() => requestAnimationFrame(() => { if (scroller.current) scroller.current.scrollLeft = 0; })); }}>ملاءمة الكل</button></div>
       </div>
       {/* the ruler sits inside the sideways scroller, so CSS sticky cannot follow the vertical scroll: move it by hand */}
       <div ref={rows} data-timeline-rows className="flex min-h-0 flex-1 overflow-y-auto overflow-x-hidden" onScroll={(e) => {
@@ -533,7 +533,7 @@ export function Timeline() {
         for (const el of e.currentTarget.querySelectorAll<HTMLElement>('[data-ruler]')) el.style.transform = y;
       }}>
         <div className="h-max shrink-0 border-r border-ink-800" style={{ width: HEAD }}>
-          <div data-ruler style={{ height: RULER }} className="relative z-20 border-b border-ink-800 bg-ink-900"><div className="px-2 text-[10px] leading-[22px] text-ink-500" dir="rtl">حدود التصدير</div><AddTrack /></div>
+          <div data-ruler style={{ height: RULER }} className="relative z-20 border-b border-ink-800 bg-ink-900"><div className="px-2 text-[10px] leading-[22px] text-ink-500" dir="rtl">جزء التصدير</div><AddTrack /></div>
           {tracks.map((t, i) => (
             <TrackHead key={t.id} track={t} index={i} count={tracks.length} ghost={!project.tracks.some((x) => x.id === t.id)} />
           ))}
@@ -553,7 +553,7 @@ export function Timeline() {
             >
               <div data-mark-lane className="absolute inset-x-0 top-0 border-b border-ink-800" style={{ height: MARKS }}>
                 {range && <div data-marked-span className="pointer-events-none absolute inset-y-0 bg-accent/20" style={{ left: range[0] * zoom, width: (range[1] - range[0]) * zoom }} />}
-                {marks.in === undefined && marks.out === undefined && <span className="pointer-events-none sticky left-7 px-2 text-[10px] leading-[22px] text-ink-500" dir="rtl">اسحب I / O لتحديد التصدير</span>}
+                {marks.in === undefined && marks.out === undefined && <span className="pointer-events-none sticky left-7 px-2 text-[10px] leading-[22px] text-ink-500" dir="rtl">اسحب المقبضين لتصدير جزء فقط</span>}
                 {(['in', 'out'] as const).map((edge) => !project.clips.length && marks[edge] === undefined ? null : <button key={edge} type="button" data-mark-edge={edge} data-default-mark={marks[edge] === undefined || undefined} className={`absolute top-px z-40 flex h-5 w-6 cursor-ew-resize items-center justify-center rounded border border-accent font-mono text-[11px] font-bold ${marks[edge] === undefined ? 'bg-ink-900 text-accent' : 'bg-accent text-ink-950'}`} style={{ left: shownMarks[edge] * zoom - 12 }} aria-label={edge === 'in' ? 'سحب بداية التصدير In' : 'سحب نهاية التصدير Out'} title={`${edge === 'in' ? 'In' : 'Out'} · ${fmtTime(shownMarks[edge], 3)} — اسحب بالمغناطيس؛ Alt يفكّه مؤقتًا`} onPointerDown={(e) => {
                   if (e.button !== 0) return;
                   capture(e);

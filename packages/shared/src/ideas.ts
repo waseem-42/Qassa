@@ -50,7 +50,7 @@ function freeTrack(p: Project, kind: 'overlay' | 'text', a: number, b: number): 
   while (p.tracks.some((t) => t.id === `${prefix}${n}`)) n++;
   const id = `${prefix}${n}`;
   const last = p.tracks.map((t) => t.kind).lastIndexOf(kind);
-  p.tracks.splice(last < 0 ? p.tracks.length : last + 1, 0, Track.parse({ id, kind, name: `${kind === 'overlay' ? 'بي-رول' : 'نصوص'} ${n}` }));
+  p.tracks.splice(last < 0 ? p.tracks.length : last + 1, 0, Track.parse({ id, kind, name: `${kind === 'overlay' ? 'لقطات فوقية' : 'نصوص'} ${n}` }));
   return id;
 }
 

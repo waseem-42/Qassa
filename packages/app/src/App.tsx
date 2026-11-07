@@ -19,6 +19,7 @@ import { importFiles, isFileDrag, placeMediaRun, removeMedia, useMediaSelection 
 import { Uploads } from './components/Uploads.tsx';
 import { RangeDeleteHint } from './components/RangeDeleteHint.tsx';
 import { deleteOps, useLayout } from './lib/layout.ts';
+import { StartGuide } from './components/StartGuide.tsx';
 
 export function App() {
   const name = useStore((s) => s.name);
@@ -52,6 +53,7 @@ export function App() {
         <div className="studio-body">
           {!hidden.rail && <ToolRail />}
           <div className="studio-main">
+            <StartGuide key={name} />
             <Workspace />
             {!hidden.timeline && <TimelineDock />}
           </div>

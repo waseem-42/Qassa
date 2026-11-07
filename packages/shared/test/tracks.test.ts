@@ -8,6 +8,8 @@ it('new project shapes differ only by starting tracks, and old audio defaults to
   expect(defaultTracks('video')).toHaveLength(4);
   expect(defaultTracks('podcast').filter((t) => t.kind === 'overlay')).toHaveLength(2);
   expect(Track.parse({ id: 'old', kind: 'audio', name: '' }).audio).toBe('music');
+  expect(defaultTracks('video').find((t) => t.id === 'V2')?.name).toBe('لقطات فوقية');
+  expect(Track.parse({ id: 'V2', kind: 'overlay', name: 'بي-رول' }).name).toBe('بي-رول');
 });
 
 it('adds, renames and reorders tracks without moving clips or losing audio mode', () => {
