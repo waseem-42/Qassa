@@ -337,3 +337,8 @@ Walked through as a new user on a fresh project (new project → drop a talking 
 - MCP `review {project, aspect?, max?}`: one line per finding. The skill now has a «مراجعة» gate between the cut check and the contact sheet.
 - Export dialog: «مراجعة المونتاج (N للإصلاح، M للنظر)». Clicking a finding seeks the timeline and selects its clips. Preflight adds one summary warning when there is something to fix.
 - Verified: 9 new tests (a positive and a negative case per check, Arabic reading speed included); 312 tests, typecheck and app build pass. On a copy of night-qa (isolated server and UI), 16:9 shows only the deliberate b-roll overlap. 9:16 groups the 22 captions at y 0.86 into one finding. Clicking selects the overlapping clips, and the RTL layout is checked.
+
+## Rename a media file (2026-11-07, Claude)
+
+- Some imported files show broken names (e.g. «��302 تيك توك�» in «تشويقة», from before the upload encoding fix), and there was no way to change them. `update_media` now takes `patch:{role?, name?}`. A name is trimmed, must not be empty, and changes only the name shown: the file on disk keeps its own. It is undoable.
+- Media options dialog (⋯ on a card): «اسم الملف» field with «حفظ». Tests in `media-rename.test.ts`. Checked in the browser on an isolated copy of «تشويقة».

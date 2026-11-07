@@ -668,6 +668,15 @@ You (sol) build; Claude is the project manager and reviews your work. The user w
 
 ---
 
+## Task 19 — Smooth preview on heavy projects — closed by measurement (no work)
+
+Claude measured it on 2026-11-07 in headed Chrome with the GPU, on an isolated copy of «تشويقة» (two full-screen 64 s graphics over voice):
+- Playback over graphic 1 and graphic 2, 8 s each: about 199 rAF frames/s, 0 frames over 25 ms, p95 5.1 ms, max 15 ms, no long tasks, playhead drift ≤ 0.03 s. The graphic iframe was visible and animating.
+- Script: `artifacts/qa/claude-t19/measure.mjs`.
+- No change needed on this machine. Reopen only if the user reports stutter, and measure on their machine first.
+
+---
+
 ## Report
 
 (sol: one block per task — status, files changed, tests, open questions for Claude)

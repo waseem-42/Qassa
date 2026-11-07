@@ -60,6 +60,9 @@ function MediaList() {
       </div>
       {options && <Modal title={`خيارات «${options.name}»`} onClose={() => setOptions(undefined)}>
         <div className="modal-body flex flex-col gap-3">
+          <form key={options.id} className="flex items-center gap-2 text-xs" onSubmit={(e) => { e.preventDefault(); const name = new FormData(e.currentTarget).get('name')?.toString().trim(); if (name && name !== options.name) ops([{ op: 'update_media', mediaId: options.id, patch: { name } }]).then((ok) => ok && setOptions({ ...options, name })); }}>
+            اسم الملف<input name="name" className="field flex-1" dir="auto" aria-label="اسم الملف" defaultValue={options.name} maxLength={200} required /><button className="btn" type="submit">حفظ</button>
+          </form>
           <label className="flex items-center gap-2 text-xs">دور الملف<select aria-label={`دور ${options.name}`} className="field flex-1" value={options.role} onChange={(e) => { const role = e.target.value as Media['role']; ops([{ op: 'update_media', mediaId: options.id, patch: { role } }]); setOptions({ ...options, role }); }}>{[...ROLES, { id: 'graphic', label: 'رسوم' }, { id: 'sfx', label: 'مؤثر صوتي' }].map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></label>
           {options.hasAudio && <TranscribeButton mediaId={options.id} label={options.analyzed.includes('transcribe') ? 'أعد تفريغ الكلام' : 'فرّغ الكلام'} />}
           {options.kind === 'video' && <button className="btn" onClick={() => { setRangeMedia(options); setOptions(undefined); }}>معاينة واختيار جزء</button>}

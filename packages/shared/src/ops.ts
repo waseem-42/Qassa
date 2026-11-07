@@ -20,7 +20,7 @@ export const ProjectDisplayName = z.string().trim().min(1).max(120).refine((valu
 export const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('restore_project'), project: Project }),
   z.object({ op: z.literal('rename_project'), name: ProjectDisplayName }),
-  z.object({ op: z.literal('update_media'), mediaId: id, patch: Media.pick({ role: true }) }),
+  z.object({ op: z.literal('update_media'), mediaId: id, patch: z.object({ role: Media.shape.role.optional(), name: z.string().trim().min(1).max(200).optional() }).refine((x) => x.role !== undefined || x.name !== undefined, 'update_media: give a role or a name') }),
   z.object({ op: z.literal('set_marks'), in: z.number().finite().min(0).nullable().optional(), out: z.number().finite().min(0).nullable().optional() }),
   z.object({ op: z.literal('delete_range'), start: z.number().finite().min(0), end: z.number().finite().min(0) }),
   z.object({ op: z.literal('cut_range'), mediaId: id, t0: z.number(), t1: z.number() }),
@@ -799,7 +799,9 @@ function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
 
     case 'update_media': {
       const m = need(p.media.find((m) => m.id === op.mediaId), `media ${op.mediaId} not found`);
-      Object.assign(m, op.patch);
+      if (op.patch.role !== undefined) m.role = op.patch.role;
+      // only the shown name changes; the file on disk keeps its own
+      if (op.patch.name !== undefined) m.name = need(op.patch.name.trim() || undefined, 'update_media: the name is empty');
       break;
     }
 
