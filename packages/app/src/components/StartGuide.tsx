@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../lib/store.ts';
 import { useLayout } from '../lib/layout.ts';
 import { guideExported, guideProgress, guideProjectKey, useStartGuide } from '../lib/start-guide.ts';
@@ -6,10 +6,11 @@ import { Icon } from './Brand.tsx';
 
 const STEPS = ['أضف ملفاتك', 'ضعها على التايملاين', 'قص أو أضف نص', 'صدّر'];
 
-export function StartGuide() {
+export function StartGuide({ compact = false }: { compact?: boolean }) {
   const project = useStore((s) => s.project)!;
   const exported = useStore((s) => guideExported(s.project!, Object.values(s.jobs)));
   const { dismissed, edited, close } = useStartGuide();
+  const [open, setOpen] = useState(false);
   const highlight = useRef<{ element: HTMLElement; timer: ReturnType<typeof setTimeout> }>();
   const frames = useRef<number[]>([]);
   const clear = () => {
@@ -17,8 +18,18 @@ export function StartGuide() {
     if (highlight.current) { clearTimeout(highlight.current.timer); highlight.current.element.removeAttribute('data-guide-highlight'); highlight.current = undefined; }
   };
   useEffect(() => clear, []);
+  useEffect(() => {
+    if (!compact || !open) return;
+    const escape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.querySelector('dialog[open], [role="menu"]')) return;
+      e.preventDefault(); e.stopPropagation(); setOpen(false);
+    };
+    addEventListener('keydown', escape, true);
+    return () => removeEventListener('keydown', escape, true);
+  }, [compact, open]);
   const show = (step: number) => {
     clear();
+    setOpen(false);
     const store = useStore.getState(), layout = useLayout.getState();
     if (step < 2) store.showPanel('media', true);
     if (step === 2) layout.setHidden('timeline', false);
@@ -37,8 +48,13 @@ export function StartGuide() {
   };
   if (dismissed) return null;
   const done = guideProgress(project, edited.includes(guideProjectKey(project)), exported);
-  return <section className="start-guide" aria-label="دليل البداية" dir="rtl">
+  const checklist = <section className="start-guide" aria-label="دليل البداية" dir="rtl">
     <div className="start-guide-heading"><strong>دليل البداية</strong><button className="icon-button" aria-label="إغلاق دليل البداية" title="إغلاق — يمكنك إعادته من الإعدادات" onClick={() => { clear(); close(); }}><Icon name="close" size={14} /></button></div>
     <ol>{STEPS.map((label, i) => <li key={label} data-complete={done[i]}><span className="guide-step-number" aria-label={done[i] ? 'اكتملت' : 'لم تكتمل'}>{done[i] ? '✓' : i + 1}</span><span>{label}</span><button type="button" aria-label={`وريني: ${label}`} onClick={() => show(i)}>وريني</button></li>)}</ol>
   </section>;
+  if (!compact) return <div className="guide-full">{checklist}</div>;
+  return <div className="guide-compact">
+    <button className="btn btn-ghost guide-trigger" aria-expanded={open} onClick={() => setOpen(!open)}><span>دليل البداية</span><bdi className="num">{done.filter(Boolean).length}/4</bdi></button>
+    {open && <><button className="guide-backdrop" aria-label="طي دليل البداية" onClick={() => setOpen(false)} /><div className="guide-popover">{checklist}</div></>}
+  </div>;
 }

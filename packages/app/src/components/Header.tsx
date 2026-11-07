@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useStore } from '../lib/store.ts';
+import { BOTH_PANELS, useStore } from '../lib/store.ts';
 import { Icon, Wordmark } from './Brand.tsx';
 import { Checkpoints } from './Checkpoints.tsx';
 import { ExportDialog } from './ExportDialog.tsx';
@@ -8,6 +8,8 @@ import { RuntimeSettings, useRuntime } from './RuntimeSettings.tsx';
 import { PopupMenu, type MenuItem } from './PopupMenu.tsx';
 import { useKeys } from '../lib/keys.ts';
 import { useLayout } from '../lib/layout.ts';
+import { useMediaQuery } from '../lib/workspace-layout.ts';
+import { StartGuide } from './StartGuide.tsx';
 
 const PAGES = [['assistant', 'مساعد AI'], ['text', 'المونتاج بالنص'], ['inspect', 'الخصائص'], ['notes', 'التعليقات']] as const;
 
@@ -15,11 +17,13 @@ const PAGES = [['assistant', 'مساعد AI'], ['text', 'المونتاج بال
 function WindowsMenu({ onDialog }: { onDialog(d: 'jobs' | 'checkpoints'): void }) {
   const [at, setAt] = useState<{ x: number; y: number }>();
   const panels = useStore((s) => s.panels), panel = useStore((s) => s.panel);
+  const mediaOverlay = useStore((s) => s.mediaOverlay);
+  const wide = useMediaQuery(BOTH_PANELS), mediaOn = wide ? panels.media : mediaOverlay;
   const hidden = useLayout((s) => s.hidden);
   const s = useStore.getState(), layout = useLayout.getState();
   const groups: MenuItem[][] = [
     [
-      { label: 'مكتبة المشروع', checked: panels.media, run: () => s.showPanel('media', !panels.media) },
+      { label: 'مكتبة المشروع', checked: mediaOn, run: () => s.showPanel('media', !mediaOn) },
       ...PAGES.map(([id, label]) => { const on = panels.tools && panel === id; return { label, checked: on, run: () => (on ? s.showPanel('tools', false) : s.setPanel(id)) }; }),
     ],
     [
@@ -56,6 +60,7 @@ export function Header() {
       <div className="header-spacer" />
       <button className="btn btn-ghost" onClick={() => useRuntime.getState().setOpen(true)}>الإعدادات</button>
       {project && <WindowsMenu onDialog={(d) => { useStore.getState().setPlaying(false); setDialog(d); }} />}
+      {project && <StartGuide key={name} compact />}
       {/* only a problem is worth the space: connected is the normal state */}
       <span className="connection-pill" data-connected={connection === 'connected'} role="status">{connection !== 'connected' && <><i />{connection === 'connecting' ? 'جارٍ الاتصال…' : 'انقطع الاتصال — أحاول مرة ثانية'}</>}</span>
       {project && <button className="btn checkpoint-trigger" aria-label="نقاط حفظ المشروع" title="نقاط حفظ المشروع" onClick={() => { useStore.getState().setPlaying(false); setDialog('checkpoints'); }}><Icon name="bookmark" size={17} /><span>نقاط الحفظ</span></button>}

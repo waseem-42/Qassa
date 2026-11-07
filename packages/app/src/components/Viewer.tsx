@@ -5,7 +5,8 @@ import {
   type Clip, type GraphicEdit, type Media, type Op, type Project, type Theme,
 } from '@edit/shared';
 import { withEdit } from '../lib/graphic-edit.ts';
-import { useStore } from '../lib/store.ts';
+import { BOTH_PANELS, useStore } from '../lib/store.ts';
+import { useMediaQuery } from '../lib/workspace-layout.ts';
 import { api, fileUrl, projectPath } from '../lib/api.ts';
 import { fadeGain, GradeRenderer, pictureView } from '../lib/glgrade.ts';
 import { EditHandles } from './EditHandles.tsx';
@@ -595,8 +596,10 @@ function Transport({ total, safe, setSafe }: { total: number; safe: boolean; set
   const playing = useStore((s) => s.playing);
   const { aspect, resolution, fps } = useStore((s) => s.project!.settings);
   const panels = useStore((s) => s.panels);
+  const mediaOverlay = useStore((s) => s.mediaOverlay);
+  const bothFit = useMediaQuery(BOTH_PANELS);
   const { seek, setPlaying } = useStore.getState();
-  const wide = !panels.tools && !panels.media;
+  const wide = !panels.tools && !(bothFit ? panels.media : mediaOverlay);
   return (
     <div className="transport" dir="ltr">
       <span className="transport-meta num" title="المقاس · الدقة · الفريمات (من إعدادات المشروع)">{aspect} · {resolution}p · {fps} fps</span>
@@ -620,8 +623,8 @@ function Transport({ total, safe, setSafe }: { total: number; safe: boolean; set
 /** the panels that were open before the wide preview, to bring back */
 let beforeWide: { tools: boolean; media: boolean } = { tools: true, media: true };
 function toggleWide() {
-  const { panels, showPanel } = useStore.getState();
-  if (panels.tools || panels.media) {
+  const { panels, mediaOverlay, showPanel } = useStore.getState();
+  if (panels.tools || (matchMedia(BOTH_PANELS).matches ? panels.media : mediaOverlay)) {
     beforeWide = panels;
     showPanel('tools', false);
     showPanel('media', false);

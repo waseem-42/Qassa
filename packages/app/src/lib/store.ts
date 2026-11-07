@@ -71,7 +71,8 @@ interface State {
   panel: 'text' | 'inspect' | 'notes' | 'assistant';
   /** side panels: tools (assistant · text · properties · comments) beside the rail, media across the video */
   panels: { tools: boolean; media: boolean };
-  /** open or close a side panel; where both don't fit, opening one closes the other */
+  mediaOverlay: boolean;
+  /** open a side panel; on narrow screens the library overlays the workspace */
   showPanel(which: 'tools' | 'media', on: boolean): void;
   stylesOpen: boolean;
   styleTarget?: { id: string; source: 'preset' | 'saved' | 'library' };
@@ -129,11 +130,6 @@ function savedPanels(): State['panels'] {
   } catch { /* private mode */ }
   return { tools: true, media: true };
 }
-/** both panels open where they don't fit: keep `keep`, close the other */
-export function fitPanels(p: State['panels'], keep: 'tools' | 'media'): State['panels'] {
-  return bothFit() || !(p.tools && p.media) ? p : keep === 'tools' ? { tools: true, media: false } : { tools: false, media: true };
-}
-
 export const useStore = create<State>((set, get) => ({
   projects: [],
   trash: [],
@@ -223,10 +219,11 @@ export const useStore = create<State>((set, get) => ({
     } catch (e) { get().notify((e as Error).message); }
   },
   panel: 'assistant',
-  panels: fitPanels(savedPanels(), 'media'),
+  panels: savedPanels(),
+  mediaOverlay: false,
   showPanel(which, on) {
-    const panels = fitPanels({ ...get().panels, [which]: on }, which);
-    set({ panels });
+    const panels = { ...get().panels, [which]: on };
+    set({ panels, mediaOverlay: which === 'media' ? on && !bothFit() : on ? false : get().mediaOverlay });
     try { localStorage.setItem('panels', JSON.stringify(panels)); } catch { /* private mode */ }
   },
   connection: 'connecting',
@@ -328,7 +325,7 @@ export const useStore = create<State>((set, get) => ({
     const url = new URL(location.href);
     url.searchParams.set('p', name);
     history.replaceState(null, '', url);
-    set({ name, project: r.project, rev: r.rev, history: r.history, transcripts: {}, analysis: {}, checkpoints: [], time: 0, playing: false, selected: [], jobs: {}, lastRender: undefined, draftBase: undefined, noteDraft: undefined, focusNote: undefined, graphicPick: undefined, stylesOpen: false, playRange: undefined, rangeDeletePrompt: false });
+    set({ name, mediaOverlay: false, project: r.project, rev: r.rev, history: r.history, transcripts: {}, analysis: {}, checkpoints: [], time: 0, playing: false, selected: [], jobs: {}, lastRender: undefined, draftBase: undefined, noteDraft: undefined, focusNote: undefined, graphicPick: undefined, stylesOpen: false, playRange: undefined, rangeDeletePrompt: false });
     const jobs = await api.get<Job[]>(`/api/jobs?project=${encodeURIComponent(name)}`).catch(() => []);
     if (sequence !== openSequence) return;
     set((s) => ({ jobs: { ...Object.fromEntries(jobs.map((j) => [j.id, j])), ...s.jobs } }));
@@ -343,7 +340,7 @@ export const useStore = create<State>((set, get) => ({
     const url = new URL(location.href);
     url.searchParams.delete('p');
     history.replaceState(null, '', url);
-    set({ name: undefined, project: undefined, playing: false, selected: [], jobs: {}, lastRender: undefined, draftBase: undefined, noteDraft: undefined, focusNote: undefined, graphicPick: undefined, transcripts: {}, analysis: {}, checkpoints: [], stylesOpen: false, playRange: undefined, rangeDeletePrompt: false });
+    set({ name: undefined, mediaOverlay: false, project: undefined, playing: false, selected: [], jobs: {}, lastRender: undefined, draftBase: undefined, noteDraft: undefined, focusNote: undefined, graphicPick: undefined, transcripts: {}, analysis: {}, checkpoints: [], stylesOpen: false, playRange: undefined, rangeDeletePrompt: false });
   },
 
   async create(name, displayName, start = 'video') {

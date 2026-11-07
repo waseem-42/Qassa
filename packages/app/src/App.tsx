@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { clipEnd, freeMoveOps, mainClips, mainDuration, projectDuration, timelineToSource } from '@edit/shared';
-import { rowHeight, useTimelineView } from './lib/timeline-view.ts';
+import { useTimelineView } from './lib/timeline-view.ts';
 import { actionFor, comboOf, useKeys } from './lib/keys.ts';
 import { Shortcuts } from './components/Shortcuts.tsx';
 import { Styles } from './components/Styles.tsx';
@@ -20,6 +20,7 @@ import { Uploads } from './components/Uploads.tsx';
 import { RangeDeleteHint } from './components/RangeDeleteHint.tsx';
 import { deleteOps, useLayout } from './lib/layout.ts';
 import { StartGuide } from './components/StartGuide.tsx';
+import { readSplit, saveSplit, timelineSize, useMediaQuery } from './lib/workspace-layout.ts';
 
 export function App() {
   const name = useStore((s) => s.name);
@@ -33,9 +34,8 @@ export function App() {
     return connectLive();
   }, []);
   useEffect(() => {
-    // the window got too narrow for both side panels: keep the tools
     const mq = matchMedia(BOTH_PANELS);
-    const fit = () => { const s = useStore.getState(); if (s.panels.tools && s.panels.media && !mq.matches) s.showPanel('tools', true); };
+    const fit = () => { if (mq.matches) useStore.setState({ mediaOverlay: false }); };
     mq.addEventListener('change', fit);
     return () => mq.removeEventListener('change', fit);
   }, []);
@@ -54,8 +54,10 @@ export function App() {
           {!hidden.rail && <ToolRail />}
           <div className="studio-main">
             <StartGuide key={name} />
-            <Workspace />
-            {!hidden.timeline && <TimelineDock />}
+            <div className="editor-split">
+              <Workspace />
+              {!hidden.timeline && <TimelineDock />}
+            </div>
           </div>
         </div>
       ) : (
@@ -77,13 +79,16 @@ const TOOLS = [['assistant', 'sparkles', 'مساعد AI'], ['text', 'text', 'ا�
 function ToolRail() {
   const panel = useStore((s) => s.panel);
   const panels = useStore((s) => s.panels);
+  const mediaOverlay = useStore((s) => s.mediaOverlay);
+  const wide = useMediaQuery(BOTH_PANELS);
+  const mediaOn = wide ? panels.media : mediaOverlay;
   const waiting = useStore((s) => (s.project?.suggestions.length ?? 0) + (s.project?.ideas.length ?? 0));
   const openNotes = useStore((s) => s.project?.notes.filter((n) => n.status === 'open').length ?? 0);
   const { showPanel, setPanel } = useStore.getState();
   const count = (id: (typeof TOOLS)[number][0]) => (id === 'assistant' ? waiting : id === 'notes' ? openNotes : 0);
   return (
     <nav className="tool-rail" aria-label="أدوات المونتاج">
-      <button className="rail-button" aria-pressed={panels.media} data-on={panels.media} title="مكتبة الوسائط" onClick={() => showPanel('media', !panels.media)}><Icon name="film" size={20} /><span>الوسائط</span></button>
+      <button className="rail-button" aria-pressed={mediaOn} data-on={mediaOn} title="مكتبة الوسائط" onClick={() => showPanel('media', !mediaOn)}><Icon name="film" size={20} /><span>الوسائط</span></button>
       <span className="rail-divider" />
       {TOOLS.map(([id, icon, label]) => {
         const on = panels.tools && panel === id;
@@ -103,18 +108,37 @@ function ToolRail() {
 /** Tools panel · the video · media panel, in reading order (RTL: tools beside the rail). */
 function Workspace() {
   const panels = useStore((s) => s.panels);
+  const mediaOverlay = useStore((s) => s.mediaOverlay);
+  const wide = useMediaQuery(BOTH_PANELS);
   const selected = useStore((s) => s.selected);
   const { showPanel } = useStore.getState();
+  useEffect(() => {
+    if (!mediaOverlay || wide) return;
+    const focus = document.activeElement;
+    const escape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.querySelector('dialog[open], [role="menu"]')) return;
+      e.preventDefault(); e.stopPropagation(); showPanel('media', false);
+    };
+    addEventListener('keydown', escape, true);
+    return () => {
+      removeEventListener('keydown', escape, true);
+      requestAnimationFrame(() => { if (focus instanceof HTMLElement && focus.isConnected && focus.checkVisibility()) focus.focus({ preventScroll: true }); });
+    };
+  }, [mediaOverlay, wide]);
   // selecting a clip opens its properties (even when the tools panel is closed)
   useEffect(() => {
     if (selected.length) useStore.getState().setPanel('inspect');
   }, [selected]);
   return (
-    <div className="editor-workspace" data-tools={panels.tools} data-media={panels.media}>
+    <div className="editor-workspace" data-tools={panels.tools} data-media={panels.media} data-media-overlay={mediaOverlay && !wide}>
       {panels.tools && <div className="workspace-tools"><ToolsPanel onClose={() => showPanel('tools', false)} /></div>}
-      <div className="workspace-viewer"><Viewer /></div>
+      <div className="workspace-viewer">
+        <div className="workspace-access"><button className="btn" aria-label="مكتبة المشروع" aria-expanded={mediaOverlay && !wide} onClick={() => showPanel('media', !mediaOverlay)}><Icon name="film" size={16} />مكتبة المشروع</button></div>
+        <Viewer />
+      </div>
+      {mediaOverlay && !wide && <button className="workspace-backdrop" aria-label="إغلاق مكتبة المشروع" onClick={() => showPanel('media', false)} />}
       {panels.media && (
-        <aside className="workspace-media">
+        <aside className="workspace-media" aria-label="مكتبة المشروع">
           <div className="panel-heading"><h2>مكتبة المشروع</h2><button className="icon-button" aria-label="إخفاء مكتبة الوسائط" title="إخفاء" onClick={() => showPanel('media', false)}><Icon name="close" /></button></div>
           <MediaPanel />
         </aside>
@@ -135,36 +159,45 @@ function ToolsPanel({ onClose }: { onClose(): void }) {
   );
 }
 
-/** The timeline with a handle on its top edge to make it taller / shorter (remembered). */
+/** A remembered split, measured against the actual workspace rather than the viewport. */
 function TimelineDock() {
-  const project = useStore((s) => s.project)!;
-  const size = useTimelineView((s) => s.size), maximised = useTimelineView((s) => s.maximised);
-  const [windowHeight, setWindowHeight] = useState(window.innerHeight);
-  useEffect(() => { const resize = () => setWindowHeight(window.innerHeight); window.addEventListener('resize', resize); return () => window.removeEventListener('resize', resize); }, []);
-  const [h, setH] = useState(() => {
-    const fallback = Math.max(300, window.innerHeight * .38, project.tracks.reduce((sum, t) => sum + rowHeight(t, size, false), 176));
-    try { return Math.max(160, Math.min(window.innerHeight - 220, Number(localStorage.getItem('timeline-height')) || fallback)); } catch { return fallback; }
-  });
-  useEffect(() => { try { localStorage.setItem('timeline-height', String(h)); } catch {} }, [h]);
-  const drag = (e: React.PointerEvent) => {
-    const y0 = e.clientY, h0 = h;
-    const el = e.currentTarget as HTMLElement;
-    el.setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => setH(Math.max(160, Math.min(window.innerHeight - 220, h0 + y0 - ev.clientY)));
-    const up = () => {
-      el.removeEventListener('pointermove', move);
-      el.removeEventListener('pointerup', up);
-      setH((v) => { try { localStorage.setItem('timeline-height', String(v)); } catch { /* private mode */ } return v; });
-    };
-    el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', up);
+  const maximised = useTimelineView((s) => s.maximised);
+  const ref = useRef<HTMLDivElement>(null);
+  const [available, setAvailable] = useState(Math.max(380, innerHeight - 48));
+  const [ratio, setRatio] = useState(() => readSplit(available));
+  const height = timelineSize(available, ratio, maximised);
+  useEffect(() => {
+    const parent = ref.current!.parentElement!;
+    const ro = new ResizeObserver(() => setAvailable(parent.clientHeight));
+    ro.observe(parent); return () => ro.disconnect();
+  }, []);
+  const change = (next: number, save = true) => {
+    const value = timelineSize(available, next / available) / available;
+    setRatio(value); if (save) saveSplit(value);
   };
-  return (
-    <div className="timeline-dock relative shrink-0" data-maximised={maximised || undefined} style={{ height: Math.max(160, Math.min(windowHeight - 220, maximised ? windowHeight - 220 : h)) }}>
-      <div className="timeline-resizer" role="separator" tabIndex={0} aria-label="ارتفاع التايملاين" aria-orientation="horizontal" aria-valuenow={Math.round(h)} aria-valuemin={160} aria-valuemax={Math.max(160, window.innerHeight - 220)} onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); setH((v) => Math.max(160, Math.min(window.innerHeight - 220, v + (e.key === 'ArrowUp' ? 30 : -30)))); } }} onPointerDown={drag} title="اسحب لتغيير الارتفاع أو استخدم الأسهم" />
-      <Timeline />
+  const drag = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    if (maximised) useTimelineView.getState().toggleMax();
+    const el = e.currentTarget as HTMLElement, y0 = e.clientY, h0 = height, original = ratio;
+    el.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => change(h0 + y0 - ev.clientY, false);
+    const end = (ev: PointerEvent) => {
+      el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', end); el.removeEventListener('pointercancel', end);
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+      if (ev.type === 'pointercancel') { setRatio(original); if (maximised) useTimelineView.getState().toggleMax(); }
+      else change(h0 + y0 - ev.clientY);
+    };
+    el.addEventListener('pointermove', move); el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  };
+  return <div ref={ref} className="timeline-dock" data-maximised={maximised || undefined} style={{ height }}>
+    <div className="timeline-resizer" role="separator" tabIndex={0} aria-label="ارتفاع التايملاين" aria-orientation="horizontal" aria-valuenow={height} aria-valuemin={160} aria-valuemax={Math.max(160, available - 220)}
+      onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); if (maximised) useTimelineView.getState().toggleMax(); change(height + (e.key === 'ArrowUp' ? 30 : -30)); } }}
+      onPointerDown={drag} onDoubleClick={() => { if (maximised) useTimelineView.getState().toggleMax(); setRatio(.4); saveSplit(.4); }} title="اسحب لتغيير مساحة المعاينة والتايملاين · دبل كلك يرجّع التقسيم">
+      <span aria-hidden="true">⠿</span><span>اسحب لتغيير مساحة التايملاين</span>
     </div>
-  );
+    <Timeline />
+  </div>;
 }
 
 function Toast() {

@@ -485,7 +485,7 @@ export function Timeline() {
   for (let t = Math.floor(view.left / zoom / step) * step; t <= (view.left + view.width) / zoom; t += step) ticks.push(t);
 
   return (
-    <div ref={outer} className="flex h-full flex-col border-t border-ink-800 bg-ink-900" dir="ltr" onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { setDrag(undefined); setSnapAt(undefined); pointer.current = undefined; }}
+    <div ref={outer} className="flex min-h-0 flex-1 flex-col border-t border-ink-800 bg-ink-900" dir="ltr" onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { setDrag(undefined); setSnapAt(undefined); pointer.current = undefined; }}
       onDragEnter={(e) => { if (isFileDrag(e.dataTransfer) || e.dataTransfer.types.includes(MEDIA_DRAG)) { e.preventDefault(); e.stopPropagation(); setMediaDragging(true); } }}
       onDragLeave={(e) => { const r = e.currentTarget.getBoundingClientRect(); if (e.clientX < r.left || e.clientX >= r.right || e.clientY < r.top || e.clientY >= r.bottom) { setMediaDragging(false); setLanding(); setSnapAt(undefined); pointer.current = undefined; } }}
       onDragOver={(e) => {
