@@ -52,6 +52,9 @@ interface State {
   magnet: boolean;
   largeWave: boolean;
   setLargeWave(value: boolean): void;
+  /** preview playback speed (1 / 1.5 / 2): reviewing only, never the export */
+  rate: number;
+  cycleRate(): void;
   setMagnet(on: boolean): void;
   /** a clip's look, copied to paste onto others */
   look?: Look;
@@ -130,6 +133,8 @@ function savedPanels(): State['panels'] {
   } catch { /* private mode */ }
   return { tools: true, media: true };
 }
+export const PREVIEW_RATES = [1, 1.5, 2];
+
 export const useStore = create<State>((set, get) => ({
   projects: [],
   trash: [],
@@ -163,6 +168,12 @@ export const useStore = create<State>((set, get) => ({
   zoom: 40,
   magnet: (() => { try { return localStorage.getItem('qassa.magnet') !== '0'; } catch { return true; } })(),
   largeWave: (() => { try { return localStorage.getItem('qassa.largeWave') === '1'; } catch { return false; } })(),
+  rate: 1,
+  cycleRate() {
+    const rate = PREVIEW_RATES[(PREVIEW_RATES.indexOf(get().rate) + 1) % PREVIEW_RATES.length];
+    set({ rate });
+    get().notify(rate === 1 ? 'المعاينة بالسرعة العادية' : `المعاينة أسرع ×${rate} — التصدير ما يتغير`, 'info');
+  },
   setLargeWave(largeWave) {
     try { localStorage.setItem('qassa.largeWave', largeWave ? '1' : '0'); } catch { /* this session only */ }
     set({ largeWave });

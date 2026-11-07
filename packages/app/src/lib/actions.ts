@@ -84,5 +84,6 @@ export function runAction(action: ActionId, target?: EventTarget | null): unknow
       return s.ops(plan.ops).then((ok) => { if (ok && plan.seek !== undefined) s.seek(plan.seek); });
     }
     case 'palette': return usePalette.getState().setOpen(true);
+    case 'rate': return s.cycleRate();
   }
 }

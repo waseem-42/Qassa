@@ -6,7 +6,7 @@ import { create } from 'zustand';
 export type ActionId =
   | 'markIn' | 'markOut' | 'clearIn' | 'clearOut' | 'clearMarks' | 'playMarked' | 'timelineMax' | 'nudgeBack' | 'nudgeFwd' | 'nudgeBack10' | 'nudgeFwd10' | 'addMedia'
   | 'play' | 'frameBack' | 'frameFwd' | 'secBack' | 'secFwd' | 'jumpBack' | 'jumpFwd' | 'start' | 'end' | 'prevCut' | 'nextCut'
-  | 'split' | 'delete' | 'deselect' | 'undo' | 'redo' | 'comment' | 'addText' | 'zoomIn' | 'zoomOut' | 'zoomFit' | 'shortcuts' | 'styles' | 'largeWave' | 'magnet' | 'copyLook' | 'pasteLook' | 'copy' | 'paste' | 'duplicate' | 'trimStart' | 'trimEnd' | 'palette';
+  | 'split' | 'delete' | 'deselect' | 'undo' | 'redo' | 'comment' | 'addText' | 'zoomIn' | 'zoomOut' | 'zoomFit' | 'shortcuts' | 'styles' | 'largeWave' | 'magnet' | 'copyLook' | 'pasteLook' | 'copy' | 'paste' | 'duplicate' | 'trimStart' | 'trimEnd' | 'palette' | 'rate';
 
 export interface Action { id: ActionId; label: string; group: string; keys: string[] }
 
@@ -30,6 +30,7 @@ export const ACTIONS: Action[] = [
   { id: 'secFwd', label: 'ثانية للأمام', group: 'التشغيل', keys: ['Shift+ArrowRight'] },
   { id: 'jumpBack', label: '5 ثواني للخلف', group: 'التشغيل', keys: ['J'] },
   { id: 'jumpFwd', label: '5 ثواني للأمام', group: 'التشغيل', keys: ['L'] },
+  { id: 'rate', label: 'سرعة المعاينة ×1 / ×1.5 / ×2', group: 'التشغيل', keys: ['Shift+R'] },
   { id: 'start', label: 'البداية', group: 'التشغيل', keys: ['Home'] },
   { id: 'end', label: 'النهاية', group: 'التشغيل', keys: ['End'] },
   { id: 'prevCut', label: 'القصة اللي قبل', group: 'التشغيل', keys: ['ArrowUp'] },

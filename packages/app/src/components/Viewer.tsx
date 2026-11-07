@@ -58,7 +58,7 @@ function load(el: HTMLVideoElement, seg: Seg, src: number) {
     el.dataset.url = seg.url;
   }
   if (Math.abs(el.currentTime - src) > 0.02) el.currentTime = src;
-  el.playbackRate = seg.clip.speed;
+  el.playbackRate = seg.clip.speed * useStore.getState().rate;
 }
 
 export function Viewer() {
@@ -172,6 +172,14 @@ export function Viewer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing]);
 
+  // a new preview speed applies at once to the playing element (overlay media follow on the next frame)
+  const rate = useStore((s) => s.rate);
+  useEffect(() => {
+    const seg = segs[eng.current.seg], el = vids[eng.current.active].current;
+    if (seg && el && !seg.image) el.playbackRate = seg.clip.speed * rate;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rate]);
+
   // the frame loop: advance playback across cuts, draw graded frames, sync overlay media
   useEffect(() => {
     let raf = 0;
@@ -195,7 +203,7 @@ export function Viewer() {
       const now = performance.now();
       if (st.playing) {
         const total = Math.min(projectDuration(p), st.playRange?.[1] ?? Infinity);
-        if (!seg || seg.image) t += Math.max(0, (now - e.wall) / 1000);
+        if (!seg || seg.image) t += Math.max(0, (now - e.wall) / 1000) * st.rate;
         else if (el.dataset.url === seg.url && e.seg === segAt(segs, st.time)) {
           t = seg.clip.start + (el.currentTime - seg.clip.in) / seg.clip.speed;
           if (el.ended || el.currentTime >= seg.clip.out - .5 / p.settings.fps) t = clipEnd(seg.clip);
@@ -341,7 +349,7 @@ export function Viewer() {
       if (el instanceof HTMLMediaElement) {
         const want = c.in + (t - c.start) * c.speed;
         if (Math.abs(el.currentTime - want) > (isPlaying ? .1 : .03)) el.currentTime = want;
-        el.playbackRate = c.speed;
+        el.playbackRate = c.speed * useStore.getState().rate;
         const music = track.kind === 'audio' && track.audio !== 'voice' && m.role !== 'sfx';
         setGain(el, m.role === 'sfx' ? track.muted ? 0 : volumeAt(c, t - c.start) * fadeGain(c, t) : track.hidden && track.kind === 'overlay' && !c.picture?.off ? 0 : trackGain(c, track, t, music ? mix.current.gain : 1));
         setDenoise(el, c.denoise);
@@ -598,6 +606,7 @@ function Transport({ total, safe, setSafe }: { total: number; safe: boolean; set
   const panels = useStore((s) => s.panels);
   const mediaOverlay = useStore((s) => s.mediaOverlay);
   const bothFit = useMediaQuery(BOTH_PANELS);
+  const rate = useStore((s) => s.rate);
   const { seek, setPlaying } = useStore.getState();
   const wide = !panels.tools && !(bothFit ? panels.media : mediaOverlay);
   return (
@@ -609,6 +618,7 @@ function Transport({ total, safe, setSafe }: { total: number; safe: boolean; set
         <button className="play-button" aria-label={playing ? 'إيقاف التشغيل مؤقتًا' : 'تشغيل المعاينة'} title={shortcutTitle(playing ? 'إيقاف مؤقت' : 'تشغيل', 'play', custom)} disabled={!total} onClick={() => setPlaying(!playing)}>{playing ? '❚❚' : '▶'}</button>
         <button className="btn btn-ghost" title={shortcutTitle('فريم للأمام', 'frameFwd', custom)} aria-label="فريم للأمام" onClick={() => seek(time + 1 / fps)}>▸</button>
         <span className="transport-time num">{fmtTime(time, 2)} <span>/ {fmtTime(total, 2)}</span></span>
+        <button className="btn btn-ghost transport-rate num" data-on={rate !== 1} aria-label={`سرعة المعاينة ×${rate}`} title={shortcutTitle('سرعة المعاينة للمراجعة — التصدير ما يتغير', 'rate', custom)} onClick={() => useStore.getState().cycleRate()}>{rate}×</button>
       </div>
       <div className="transport-tools">
         <button className={`btn btn-ghost text-xs ${safe ? 'text-accent' : ''}`} aria-label="إظهار حدود الأمان" aria-pressed={safe} onClick={() => setSafe(!safe)} title="حدود الأمان">⬚</button>

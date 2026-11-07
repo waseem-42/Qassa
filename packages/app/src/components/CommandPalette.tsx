@@ -18,7 +18,7 @@ const WORDS: Partial<Record<ActionId, string>> = {
   undo: 'undo رجوع تراجع', redo: 'redo', addText: 'text title عنوان كتابه', comment: 'comment note ملاحظه', play: 'play pause تشغيل ايقاف',
   markIn: 'in mark علامه بدايه جزء التصدير', markOut: 'out mark علامه نهايه جزء التصدير', copy: 'copy', paste: 'paste', duplicate: 'duplicate نسخه',
   zoomIn: 'zoom تكبير', zoomOut: 'zoom تصغير', zoomFit: 'fit ملاءمه الكل', magnet: 'snap magnet التصاق', styles: 'styles look lut الوان ستايل',
-  shortcuts: 'keys shortcuts keyboard اختصار', timelineMax: 'timeline expand', largeWave: 'waveform audio موجه', addMedia: 'insert add place ضع',
+  shortcuts: 'keys shortcuts keyboard اختصار', timelineMax: 'timeline expand', largeWave: 'waveform audio موجه', addMedia: 'insert add place ضع', rate: 'speed playback fast سرعه اسرع مراجعه',
 };
 const RECENT_KEY = 'qassa.palette-recent';
 const loadRecent = (): string[] => { try { const v = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); return Array.isArray(v) ? v.slice(0, 5) : []; } catch { return []; } };
