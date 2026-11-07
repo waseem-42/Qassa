@@ -816,3 +816,13 @@ You (sol) build; Claude is the project manager and reviews your work. The user w
 - Not done from the spec: «abrupt audio» was dropped, because the render already auto-fades music and voice gets the 12 ms cut fade. The optional badge on the export button is not done.
 - Validation: 312 tests in 52 files, typecheck clean, app build passes. Isolated server and UI on a night-qa copy: correct findings in 16:9 and 9:16, click seeks and selects, RTL checked. No user project touched.
 
+### Task 18 — done by Claude (2026-11-07)
+- Version 0.1.4 (root, desktop, lockfile). `npm run dist:win` passed: `artifacts/desktop/Qassa-Setup.exe`, 202,527,075 bytes, SHA-256 134bdb846e4b0bf2b97272bf3853d92f83db424de3b60de1a16e11634ea7e6a1 (sibling .sha256 refreshed). The packaged Qassa.exe reports 0.1.4.0.
+- Packaged smoke (`artifacts/qa/desktop-0.1.4/smoke.mjs`, isolated EDIT_DATA_DIR, PATH limited to Windows system folders):
+  - Server health OK, NVENC detected, analysis setup not done, as expected.
+  - Project created, footage imported, a `lib/chapter` graphic and a lower third added.
+  - `review` clean, preflight ready with no warnings.
+  - Final export: 10 s in 26.8 s (graphics 22.3 s). Frames are correct: Arabic text, a transparent graphic, the lower third bottom right. Cache endpoint OK.
+- Not repeated from Task 12: single-instance, the first-run setup download, and the bundled MCP launcher against the packaged app. The app was killed with taskkill /F at the end, so `.port` stayed; that is expected for a forced kill, and a normal close removes it, as checked in Task 12.
+- The user's installed copy and Documents\Qassa were not touched.
+
