@@ -1,11 +1,14 @@
 import { app, BrowserWindow, dialog, Menu, shell } from 'electron';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 
-const data = resolve(process.env.EDIT_DATA_DIR || join(app.getPath('documents'), 'Qassa'));
-mkdirSync(join(data, 'logs'), { recursive: true });
+// A portable.txt beside Qassa.exe (the portable zip) keeps all data in ./data instead of Documents.
+const portable = app.isPackaged && existsSync(join(dirname(process.execPath), 'portable.txt'));
+const data = resolve(process.env.EDIT_DATA_DIR || (portable ? join(dirname(process.execPath), 'data') : join(app.getPath('documents'), 'Qassa')));
+try { mkdirSync(join(data, 'logs'), { recursive: true }); }
+catch (e) { dialog.showErrorBox('تعذّر فتح قَصّة', `لا يمكن الكتابة في مجلد البيانات؛ انقل البرنامج إلى مجلد تملك صلاحية الكتابة فيه.\n${data}\n${String(e)}`); process.exit(1); }
 app.setPath('userData', join(data, 'desktop'));
 app.setPath('sessionData', join(data, 'desktop'));
 app.setPath('crashDumps', join(data, 'logs/crashes'));

@@ -17,7 +17,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "desktop:build": "npm run build -w @edit/app && node scripts/build-desktop.mjs",
     "desktop": "npm run desktop:build && electron packages/desktop",
-    "dist:win": "npm run desktop:build && electron-builder --config packages/desktop/electron-builder.yml --win nsis --x64"
+    "dist:win": "npm run desktop:build && electron-builder --config packages/desktop/electron-builder.yml --win nsis --x64",
+    "dist:portable": "npm run desktop:build && electron-builder --config packages/desktop/electron-builder.yml --win dir --x64 && node scripts/build-portable.mjs"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
