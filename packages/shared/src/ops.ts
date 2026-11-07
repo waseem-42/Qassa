@@ -6,6 +6,7 @@ import { pageToRetimed, retimedToPage } from './graphics.ts';
 import { ideaProblem, placeIdea } from './ideas.ts';
 import { sourceTiming, syncCaptionWords, type ClipId } from './caption-links.ts';
 import { freeTrackFor } from './placement.ts';
+import { presetPlace, textDirection } from './text.ts';
 
 /** cut_words shortens leftover air across its cut only up to this long; longer gaps may be on-screen work. */
 export const PAUSE_MAX = 3;
@@ -773,7 +774,7 @@ function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
       if (!trackId) { trackId = newId('T'); p.tracks.push(Track.parse({ id: trackId, kind: 'text', name: 'نصوص' })); }
       need(p.tracks.find((t) => t.id === trackId && t.kind === 'text'), 'no text track');
       p.clips.push(
-        Clip.parse({ id: newId('t'), trackId, start: r3(op.start), in: 0, out: r3(op.duration), text: op.text, words: op.words, textStyle: TextStyle.parse(op.style ?? {}) }),
+        Clip.parse({ id: newId('t'), trackId, start: r3(op.start), in: 0, out: r3(op.duration), text: op.text, words: op.words, textStyle: TextStyle.parse({ ...presetPlace(op.style?.preset ?? 'title', textDirection(op.text, p.settings.theme)), ...op.style }) }),
       );
       break;
     }

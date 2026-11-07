@@ -589,6 +589,45 @@ You (sol) build; Claude is the project manager and reviews your work. The user w
 
 ---
 
+## Task 16 — Export and performance: graphics cache, render speed (after Task 15)
+
+**User priority (2026-11-07):** export and performance, large projects.
+
+**Found by Claude:**
+- The user's «تشويقة» is 7.3 GB, but its footage is 27 MB. **6.9 GB is `cache/graphics`**: two `.mov` files of 3.6 GB each, for two full-screen HTML graphics of 64 s at 1080×1920.
+- `packages/server/src/graphics.ts` `renderOne` stores every frame as lossless PNG in MOV (`-c:v png` / `copy`).
+- The cache key changes on any data or edit change. Old entries are never removed, so each tweak of a long graphic leaves another few GB behind.
+- Every frame is a fresh headless screenshot, even while the graphic is holding still. With motion blur (`motionBlur` default 4 on final renders) that is 4× the screenshots.
+- For reference: night-qa (62 s, no graphics) renders preview in 21 s and final in 16 s, so plain footage is fine. Graphics are the problem.
+
+**Do:**
+1. **Smaller graphic layers.**
+   - Measure on a real long graphic: copy a graphic folder and its data into a temporary project. Never touch the user's projects; reading their `graphics/` to copy is fine.
+   - Compare the current PNG-MOV with alpha codecs the bundled ffmpeg has, e.g. FFV1 `rgba`, ProRes 4444 (`prores_ks` `yuva444p10le`), and VP9 `yuva420p` for preview only.
+   - Compare size, capture plus encode time, decode speed in the final pass, and quality against PNG (PSNR/SSIM on colour and alpha).
+   - Pick the default that is visually lossless and at least 5× smaller. Preview renders may use a lighter one.
+   - Bump the cache `VERSION`, so old entries are simply not reused.
+2. **Don't capture what doesn't move.** When consecutive captured frames are byte-identical (hash the PNG), stop paying for the encode of each copy where the codec allows it. More important: find a cheap signal that the page is idle between two times (no running CSS/WAAPI/GSAP animation; `GRAPHIC_RUNTIME` already controls them), and reuse the last frame without a new screenshot. Must stay frame-exact against the current output: prove it with a pixel comparison on a library template and on one of the user-style long graphics.
+3. **Cache cleanup.**
+   - After a successful render and on server start, remove `cache/graphics` and `cache/segments` entries that the current project does not use and that were not used in the last 24 h. Use the file's last-use time; touch entries when used.
+   - Also cap each project's cache, for example 3 GB, oldest first. Keep the cap in one constant.
+   - Never touch `source/`, `renders/`, `analysis/` or anything outside `cache/`, and never follow links. Jobs running for that project defer the cleanup.
+   - The editor shows the project's cache size somewhere sensible (project settings or export dialog), with «تنظيف الملفات المؤقتة».
+   - Report how big «تشويقة» would be after cleanup, as a dry run on its file list only. Delete nothing in user projects during QA.
+4. **Faster graphic capture.**
+   - Measure where a final render's time goes: graphics capture, segments, final pass.
+   - If capture dominates, capture a long graphic with 2–4 pages in parallel (split by time range, then join), bounded by CPU count. Seeking is time-driven, so ranges are independent.
+   - Report before/after times on the same temporary project.
+5. **Tests:** cache key/version, cleanup selection (used / recent / cap / never outside cache), idle-frame reuse stays pixel-identical.
+
+**Done when:**
+- A temporary project with a 64 s full-screen 9:16 graphic plus footage exports correctly, with frame-exact or visually identical output (numbers in the Report), and its graphics cache is at least 5× smaller than now.
+- The capture time is reported before and after.
+- Cleanup removes stale entries and never anything else.
+- Tests, typecheck and build pass.
+
+---
+
 ## Report
 
 (sol: one block per task — status, files changed, tests, open questions for Claude)

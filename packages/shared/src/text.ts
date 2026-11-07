@@ -29,7 +29,16 @@ export const THEME_FONTS: { family: string; pkg: string; about: string }[] = [
   { family: 'Lalezar', pkg: 'lalezar', about: 'عريض جداً — للعناوين بس' },
 ];
 
-const fontStack = (font: string) => (font === 'IBM Plex Sans Arabic' ? FONT_STACK : `'${font}', ${FONT_STACK}`);
+/** Where a preset sits when the caller gives no place: a lower third low on the start side, a label up top, a caption at the bottom. */
+export function presetPlace(preset: TextStyle['preset'], dir: 'rtl' | 'ltr'): Pick<TextStyle, 'x' | 'y' | 'align'> {
+  const side = dir === 'rtl' ? 0.92 : 0.08;
+  if (preset === 'lower-third') return { x: side, y: 0.82, align: 'start' };
+  if (preset === 'label') return { x: 0.5, y: 0.14, align: 'center' };
+  if (preset === 'caption') return { x: 0.5, y: 0.86, align: 'center' };
+  return { x: 0.5, y: 0.5, align: 'center' };
+}
+
+const fontStack =(font: string) => (font === 'IBM Plex Sans Arabic' ? FONT_STACK : `'${font}', ${FONT_STACK}`);
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
