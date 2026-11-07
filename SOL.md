@@ -714,6 +714,32 @@ Claude measured it on 2026-11-07 in headed Chrome with the GPU, on an isolated c
 
 ---
 
+## Task 21 — Full audit as a new user (sol, after Task 20)
+
+The user's last priority for the night: use Qassa the way a first-time creator would, find what breaks or confuses, and fix what is clearly a bug.
+
+**Setup:** isolated `EDIT_DATA_DIR` under `artifacts/qa/task21/`, your own server/Vite ports (43xx/51xx), headed or headless Chrome. Footage: generate it with ffmpeg, or copy files read-only out of user projects. Never write to user projects, 4317 or 5173.
+
+**Walk through, as a new user, and screenshot each step:**
+1. Home: create a project (each start: video, podcast, empty), rename it, open it.
+2. Import: drag several files at once (video, audio, image), watch the analysis progress, play the result.
+3. Build a short edit with only the UI: trim, split, ripple delete, move between tracks, add a title, add a library graphic and edit its text, add music, set volume and fades, undo/redo across all of it.
+4. Notes and marks: add a comment, set In/Out, export only the marked range.
+5. Styles and brand: apply a style, open the brand kit window.
+6. Export: preflight, the «مراجعة المونتاج» list, a final export, opening the result.
+7. Keyboard: the main shortcuts on an Arabic layout (physical keys), and the shortcut editor.
+8. 9:16 project: the same basics, and check the unsafe area finding.
+Also check RTL in each panel, empty states, error messages (bad file, missing media), and whether each step is discoverable without docs.
+
+**Do:**
+- Fix clear bugs and small UX gaps directly, each with a test where it fits. Keep fixes small and separate.
+- Anything that is a product decision (layout change, new feature, removing something) goes in the report as a proposal for the user. Do not build it.
+- Report: a findings table (step, what happened, severity, fixed / proposed), screenshots in `artifacts/qa/task21/`.
+
+**Done when:** every step above is walked through, clear bugs are fixed with tests, and `npm test`, `npm run typecheck` and the app build pass.
+
+---
+
 ## Report
 
 (sol: one block per task — status, files changed, tests, open questions for Claude)
@@ -871,6 +897,7 @@ Claude measured it on 2026-11-07 in headed Chrome with the GPU, on an isolated c
   - Final export: 10 s in 26.8 s (graphics 22.3 s). Frames are correct: Arabic text, a transparent graphic, the lower third bottom right. Cache endpoint OK.
 - Not repeated from Task 12: single-instance, the first-run setup download, and the bundled MCP launcher against the packaged app. The app was killed with taskkill /F at the end, so `.port` stayed; that is expected for a forced kill, and a normal close removes it, as checked in Task 12.
 - The user's installed copy and Documents\Qassa were not touched.
+- Rebuilt at 08:02 as **0.1.5** with everything up to `822ea27` (rename, agent rule, export crash fix, capture speedup, Task 20). `Qassa-Setup.exe` 202,688,114 bytes, SHA-256 154fc3602a412d3d21ee8add94518a94c1d996e40cc0a1f39dce9c4877eda8c8; Qassa.exe reports 0.1.5. Same packaged smoke (`artifacts/qa/desktop-0.1.5/`): health, review clean, preflight ready, final 10 s export in 25.3 s (graphics 20.7 s), frames correct.
 
 ### Task 20 — done (sol, 2026-11-07)
 
