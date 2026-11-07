@@ -744,7 +744,7 @@ Also check RTL in each panel, empty states, error messages (bad file, missing me
 
 The user asked: make the platform easier to use; sol builds it. Claude walked through the web editor as a new user on an isolated server (4391/5191, `artifacts/qa/claude-1107/ux1-walk.mjs`, `ux3-flows.mjs`, `ux4-text.mjs`; screenshots `artifacts/qa/claude-1107/ux-*.png`). The editor works with no page errors. These tasks fix what made it hard to follow. Do them in order, one per run, as in **How to work**. Each one needs before/after screenshots at 1600×1000 **and** 1366×768 in `artifacts/qa/task<N>/`.
 
-Uncommitted work from Claude is in the tree when you start (styles library rebuild, the Space fix, version 0.1.8). Leave it as it is.
+Starting point: commit `664f3fd`. `styles/favorites.json` and `styles/recent.json` are the user's own data and stay uncommitted. Leave them as they are.
 
 ---
 
