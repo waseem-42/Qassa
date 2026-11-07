@@ -668,7 +668,8 @@ export function compile(p: Project, opts: RenderOptions): RenderPlan {
       ...(audioOnly
         ? ['-map', '[aout]', '-vn', ...(opts.audio === 'wav' ? ['-c:a', 'pcm_s16le'] : ['-c:a', 'libmp3lame', '-b:a', '320k'])]
         : [
-          '-map', copyVideo ? '0:v' : `[${vLabel}]`,
+          // with no video filters the picture is the input stream itself, not a filter label ("[0:v]" would not exist)
+          '-map', vSteps.length ? `[${vLabel}]` : '0:v',
           '-map', '[aout]',
           ...(copyVideo ? ['-c:v', 'copy'] : [...videoCodec(opts.quality, opts.nvenc, 'final', opts.codec, opts.level), '-pix_fmt', 'yuv420p', '-r', String(fps)]),
           '-c:a', 'aac', '-b:a', preview || opts.level === 'small' ? '160k' : '320k',

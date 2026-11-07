@@ -262,6 +262,7 @@ describe('layer order', () => {
     const part = ranged.final;
     expect(part.duration).toBe(15);
     expect(part.args).not.toContain('copy'); // a stream copy can't cut on any frame
+    expect(part.args[part.args.indexOf('-map') + 1]).toBe('0:v'); // no video filters: map the stream, not a missing label
     const at = part.args.indexOf('-ss');
     expect(part.args.slice(at, at + 4)).toEqual(['-ss', '10', '-t', '15']);
     expect(at).toBeGreaterThan(part.args.indexOf('-filter_complex'));

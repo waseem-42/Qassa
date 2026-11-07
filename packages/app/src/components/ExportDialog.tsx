@@ -11,6 +11,10 @@ import { RenderCache } from './RenderCache.tsx';
 
 const NAME_SUFFIX: Record<string, string> = { youtube: 'يوتيوب', shorts: 'شورتس', instagram: 'إنستقرام', '4k': '4K', review: 'مراجعة', audio: 'صوت' };
 interface Saved { preset: string; quality: ExportQuality; settings: Partial<ExportSettings> }
+const advancedKey = 'qassa.export.advanced';
+function loadAdvanced(preset: string): boolean {
+  try { const saved = localStorage.getItem(advancedKey); return saved === null ? preset === 'custom' : saved === 'true'; } catch { return preset === 'custom'; }
+}
 const savedKey = (name: string) => `qassa.export.${name}`;
 function loadSaved(name: string): Saved | undefined {
   try { const raw = localStorage.getItem(savedKey(name)); return raw ? JSON.parse(raw) as Saved : undefined; } catch { return undefined; }
@@ -20,6 +24,7 @@ export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs';
   const { name, project, rev, jobs, connection, lastRender, draftBase, time } = useStore(useShallow(({ name, project, rev, jobs, connection, lastRender, draftBase, time }) => ({ name, project, rev, jobs, connection, lastRender, draftBase, time })));
   const saved = useRef(name ? loadSaved(name) : undefined).current;
   const [preset, setPreset] = useState(saved?.preset ?? 'project');
+  const [advanced, setAdvanced] = useState(() => loadAdvanced(saved?.preset ?? 'project'));
   const [quality, setQuality] = useState<ExportQuality>(saved?.quality ?? 'final');
   const [settings, setSettings] = useState<Partial<ExportSettings>>(() => { const { fileName: _, range: __, ...rest } = saved?.settings ?? {}; return rest; });
   const [fileName, setFileName] = useState(project?.name ?? ''), [nameTouched, setNameTouched] = useState(false);
@@ -60,6 +65,9 @@ export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs';
   const recent = Object.values(jobs).filter((j) => initial === 'jobs' || j.kind === 'render').sort((a, b) => b.createdAt - a.createdAt).slice(0, 12);
   const stale = !!check && check.rev !== rev;
   const ext = s.format;
+  const outputName = EXPORT_PRESETS.find((p) => p.id === preset)?.name ?? 'مخصص';
+  const outputSpec = audio ? (s.format === 'wav' ? 'WAV 48kHz' : 'MP3 320k') : `${size.width}×${size.height} · ${s.fps ?? project.settings.fps}fps`;
+  const outputLength = `~${Number(Math.max(0, length).toFixed(1))} ث`;
 
   const set = (patch: Partial<ExportSettings>) => { setSettings((x) => ({ ...x, ...patch })); setPreset('custom'); setError(''); };
   const pick = (id: string) => {
@@ -73,7 +81,7 @@ export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs';
     const body: ExportSettings = { ...s, fileName: fileName.trim() || project.name, ...(part === 'range' ? { range: [r0!, r1!] as [number, number] } : {}) };
     try {
       setQueued(await useStore.getState().startRender(quality, check!.rev, body));
-      try { localStorage.setItem(savedKey(name), JSON.stringify({ preset, quality, settings } satisfies Saved)); } catch { /* remembering is a convenience */ }
+      try { localStorage.setItem(savedKey(name), JSON.stringify({ preset, quality, settings } satisfies Saved)); localStorage.setItem(advancedKey, String(preset === 'custom')); } catch { /* remembering is a convenience */ }
     } catch (e) {
       if (e instanceof ApiError && e.body?.code === 'stale_revision') { setError('تغيّر المشروع بعد الفحص. حدّث بيانات المشروع ثم راجع الجاهزية مجددًا.'); void loadPreflight(); }
       else if (e instanceof ApiError && e.body?.code === 'export_not_ready' && e.body.preflight) { setCheck(e.body.preflight as ExportPreflight); setError('تغيّرت جاهزية المشروع. راجع العناصر المطلوبة أدناه.'); }
@@ -91,50 +99,13 @@ export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs';
     <div className="modal-body">
       {initial === 'export' && <>
         <div className="export-presets" role="radiogroup" aria-label="وجهة التصدير">
-          {EXPORT_PRESETS.map((p) => <button key={p.id} type="button" role="radio" aria-checked={preset === p.id} className="choice-card" data-selected={preset === p.id} disabled={busy} onClick={() => pick(p.id)}><div><strong>{p.name}</strong><small>{p.id === 'project' ? `${project.settings.aspect} · ${project.settings.resolution}p` : p.hint}</small></div></button>)}
+          {EXPORT_PRESETS.map((p) => <button key={p.id} type="button" role="radio" aria-checked={preset === p.id} className="choice-card" data-audio={p.id === 'audio' || undefined} data-selected={preset === p.id} disabled={busy} onClick={() => pick(p.id)}><div><strong>{p.name}</strong><small>{p.id === 'project' ? `${project.settings.aspect} · ${project.settings.resolution}p` : p.hint}</small></div></button>)}
         </div>
 
         <div className="export-fields">
           <label className="export-field export-field-wide"><span>اسم الملف</span>
             <div className="export-name"><input className="field" value={fileName} maxLength={100} disabled={busy} onChange={(e) => { setFileName(e.target.value); setNameTouched(true); }} /><span className="num" dir="ltr">.{ext}</span></div>
           </label>
-          <label className="export-field"><span>الصيغة</span>
-            <select className="field" value={s.format} disabled={busy} onChange={(e) => set({ format: e.target.value as ExportSettings['format'] })}>
-              <option value="mp4">MP4 فيديو</option><option value="mov">MOV فيديو</option><option value="mp3">MP3 صوت فقط</option><option value="wav">WAV صوت فقط</option>
-            </select>
-          </label>
-          {!audio && <>
-            <label className="export-field"><span>المقاس</span>
-              <select className="field" value={aspect} disabled={busy} onChange={(e) => set({ aspect: e.target.value as Aspect })}>
-                {(['16:9', '9:16', '1:1', '4:5'] as const).map((a) => <option key={a} value={a}>{a}{a === project.settings.aspect ? ' (المشروع)' : ''}</option>)}
-              </select>
-            </label>
-            <label className="export-field"><span>الدقة</span>
-              <select className="field" value={resolution} disabled={busy} onChange={(e) => set({ resolution: Number(e.target.value) })}>
-                {[...new Set([720, 1080, 1440, 2160, project.settings.resolution])].sort((a, b) => a - b).map((r) => <option key={r} value={r}>{r === 2160 ? '4K · 2160p' : r === 1440 ? '2K · 1440p' : `${r}p`}</option>)}
-              </select>
-            </label>
-            <label className="export-field"><span>الفريمات</span>
-              <select className="field" value={s.fps ?? project.settings.fps} disabled={busy} onChange={(e) => set({ fps: Number(e.target.value) })}>
-                {[...new Set([24, 25, 30, 50, 60, project.settings.fps])].sort((a, b) => a - b).map((f) => <option key={f} value={f}>{f} fps</option>)}
-              </select>
-            </label>
-            <label className="export-field"><span>الجودة</span>
-              <select className="field" value={s.level} disabled={busy} onChange={(e) => set({ level: e.target.value as ExportSettings['level'] })}>
-                <option value="small">حجم أصغر</option><option value="balanced">متوازنة (مقترح)</option><option value="high">أعلى جودة</option>
-              </select>
-            </label>
-            <label className="export-field"><span>الترميز</span>
-              <select className="field" value={s.codec} disabled={busy} onChange={(e) => set({ codec: e.target.value as ExportSettings['codec'] })}>
-                <option value="h264">H.264 — يشتغل في كل مكان</option><option value="h265">H.265 — حجم أصغر</option>
-              </select>
-            </label>
-            {hasCaptions && <label className="export-field"><span>الكابشن</span>
-              <select className="field" value={s.captions} disabled={busy} onChange={(e) => set({ captions: e.target.value as ExportSettings['captions'] })}>
-                <option value="burn">داخل الفيديو</option><option value="srt">ملف SRT منفصل</option><option value="both">الاثنين</option><option value="none">بدون</option>
-              </select>
-            </label>}
-          </>}
           <fieldset className="export-field export-field-wide"><legend>الجزء المُصدَّر</legend>
             {marks && part === 'range' && r0 === marks[0] && r1 === marks[1] && <p className="mb-2 text-xs text-accent">من العلامات I/O</p>}
             <div className="export-part">
@@ -148,29 +119,78 @@ export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs';
             </div>}
           </fieldset>
         </div>
-        {!audio && aspect !== project.settings.aspect && <p className="notice">المقاس غير مقاس المشروع: اللقطات تُقص من المنتصف لتملأ الإطار، والرسوم المصممة لمقاس واحد قد لا تناسبه. صدّر «مراجعة سريعة» أولًا وشيّك عليها.</p>}
+        <details className="export-advanced" open={advanced} onToggle={(e) => setAdvanced(e.currentTarget.open)}>
+          <summary>إعدادات متقدمة</summary>
+          <div className="export-fields">
+            <label className="export-field"><span>الصيغة</span>
+              <select className="field" value={s.format} disabled={busy} onChange={(e) => set({ format: e.target.value as ExportSettings['format'] })}>
+                <option value="mp4">MP4 فيديو</option><option value="mov">MOV فيديو</option><option value="mp3">MP3 صوت فقط</option><option value="wav">WAV صوت فقط</option>
+              </select>
+            </label>
+            {!audio && <>
+              <label className="export-field"><span>المقاس</span>
+                <select className="field" value={aspect} disabled={busy} onChange={(e) => set({ aspect: e.target.value as Aspect })}>
+                  {(['16:9', '9:16', '1:1', '4:5'] as const).map((a) => <option key={a} value={a}>{a}{a === project.settings.aspect ? ' (المشروع)' : ''}</option>)}
+                </select>
+              </label>
+              <label className="export-field"><span>الدقة</span>
+                <select className="field" value={resolution} disabled={busy} onChange={(e) => set({ resolution: Number(e.target.value) })}>
+                  {[...new Set([720, 1080, 1440, 2160, project.settings.resolution])].sort((a, b) => a - b).map((r) => <option key={r} value={r}>{r === 2160 ? '4K · 2160p' : r === 1440 ? '2K · 1440p' : `${r}p`}</option>)}
+                </select>
+              </label>
+              <label className="export-field"><span>الفريمات</span>
+                <select className="field" value={s.fps ?? project.settings.fps} disabled={busy} onChange={(e) => set({ fps: Number(e.target.value) })}>
+                  {[...new Set([24, 25, 30, 50, 60, project.settings.fps])].sort((a, b) => a - b).map((f) => <option key={f} value={f}>{f} fps</option>)}
+                </select>
+              </label>
+              <label className="export-field"><span>الجودة</span>
+                <select className="field" value={s.level} disabled={busy} onChange={(e) => set({ level: e.target.value as ExportSettings['level'] })}>
+                  <option value="small">حجم أصغر</option><option value="balanced">متوازنة (مقترح)</option><option value="high">أعلى جودة</option>
+                </select>
+              </label>
+              <label className="export-field"><span>الترميز</span>
+                <select className="field" value={s.codec} disabled={busy} onChange={(e) => set({ codec: e.target.value as ExportSettings['codec'] })}>
+                  <option value="h264">H.264 — يشتغل في كل مكان</option><option value="h265">H.265 — حجم أصغر</option>
+                </select>
+              </label>
+              {hasCaptions && <label className="export-field"><span>الكابشن</span>
+                <select className="field" value={s.captions} disabled={busy} onChange={(e) => set({ captions: e.target.value as ExportSettings['captions'] })}>
+                  <option value="burn">داخل الفيديو</option><option value="srt">ملف SRT منفصل</option><option value="both">الاثنين</option><option value="none">بدون</option>
+                </select>
+              </label>}
+            </>}
+          </div>
+          {!audio && aspect !== project.settings.aspect && <p className="notice">المقاس غير مقاس المشروع: اللقطات تُقص من المنتصف لتملأ الإطار، والرسوم المصممة لمقاس واحد قد لا تناسبه. صدّر «مراجعة سريعة» أولًا وشيّك عليها.</p>}
+        </details>
 
-        <dl className="export-specs">
-          <div><dt>{audio ? 'الصوت' : 'الأبعاد'}</dt><dd className="num">{audio ? (s.format === 'wav' ? 'WAV 48kHz' : 'MP3 320k') : `${size.width} × ${size.height}`}</dd></div>
-          <div><dt>{audio ? 'الوضع' : 'الإطارات'}</dt><dd className="num">{audio ? 'صوت فقط' : `${s.fps ?? project.settings.fps} fps`}</dd></div>
-          <div><dt>المدة</dt><dd className="num">{fmtTime(Math.max(0, length), 1)}</dd></div>
-        </dl>
-
-        <section className="export-preflight" aria-labelledby="export-preflight-title" aria-busy={checking}><div className="export-readiness-heading"><h3 id="export-preflight-title">جاهزية التصدير</h3><button className="btn btn-ghost" disabled={checking || busy || connection !== 'connected'} onClick={loadPreflight}><Icon name="restore" />إعادة الفحص</button></div>
-          {checking ? <p className="export-check-status" role="status"><Spinner size={18} />جارٍ فحص الملفات والمونتاج…</p> : checkError ? <p className="text-cut-text" role="alert">تعذّر فحص الجاهزية: {checkError}</p> : check ? <>
-            <p className={`export-check-status ${check.ready && !stale ? 'text-note' : 'text-cut-text'}`} role="status"><Icon name={check.ready && !stale ? 'film' : 'comment'} size={18} />{stale ? 'تغيّر المشروع منذ الفحص' : check.ready ? 'جاهز لبدء التصدير' : 'أكمل العناصر التالية قبل التصدير'}</p>
-            <p className="export-checked-version">النسخة التي فُحصت <Version version={check} /></p>
+        {connection !== 'connected' && <p className="notice" role="status">أعد الاتصال بالخادم لفحص المشروع وتصديره.</p>}
+        {draftBase && <p className="notice" role="status">أكمل التعديل الجاري قبل التصدير.</p>}
+        {error && <p className="notice text-cut-text" role="alert">{error}</p>}
+        <section className="export-submit" aria-label="بدء التصدير">
+          <div className="export-output">
+            <p className="export-summary" title={`${outputName} · ${outputSpec} · ${outputLength}`}>
+              <span>{outputName}</span> · <bdi>{outputSpec}</bdi> · <bdi>{outputLength}</bdi>
+            </p>
+            {checking ? <p className="export-check-status" role="status"><Spinner size={18} />جارٍ فحص الملفات والمونتاج…</p> : checkError ? <p className="text-cut-text" role="alert">تعذّر فحص الجاهزية: {checkError}</p> : check ?
+              <p className={`export-check-status ${check.ready && !stale ? 'text-note' : 'text-cut-text'}`} role="status"><Icon name={check.ready && !stale ? 'film' : 'comment'} size={18} />{stale ? 'تغيّر المشروع منذ الفحص' : check.ready ? 'جاهز لبدء التصدير' : 'أكمل العناصر التالية قبل التصدير'}</p> : <p className="text-ink-400">سيُفحص المشروع قبل بدء التصدير.</p>}
+          </div>
+          <button className="btn btn-primary export-start" disabled={busy || checking || !!rangeError || !!draftBase || !canSubmitExport(check, rev, quality) || connection !== 'connected'} onClick={start}>{busy ? <Spinner size={16} /> : <Icon name="download" />}{busy ? 'جارٍ بدء التصدير…' : render ? 'أضف إلى طابور التصدير' : 'ابدأ التصدير'}</button>
+        </section>
+        <section className="export-preflight" aria-labelledby="export-preflight-title" aria-busy={checking}>
+          {check && <>
             {stale && <div className="notice"><p>حمّل آخر تعديل للمشروع، ثم راجع الفحص قبل التصدير.</p><button className="btn mt-2" disabled={busy || connection !== 'connected'} onClick={refreshProject}>تحديث بيانات المشروع</button></div>}
             {!!check.blockers.length && <div className="export-issues export-blockers"><h4>مطلوب قبل التصدير</h4><ul>{check.blockers.map((issue, i) => <li key={`${issue.code}-${i}`}><p>{issue.message}</p>{issue.path && <code dir="ltr">{issue.path}</code>}</li>)}</ul></div>}
             {!!check.warnings.length && <details className="export-issues export-warnings"><summary>ملاحظات للمراجعة ({check.warnings.length}) — يمكنك التصدير</summary><ul>{check.warnings.map((issue, i) => <li key={`${issue.code}-${i}`}><p>{issue.message}</p>{issue.path && <code dir="ltr">{issue.path}</code>}</li>)}</ul></details>}
             {!!check.review?.length && <ReviewList findings={check.review} />}
-          </> : <p className="text-ink-400">سيُفحص المشروع قبل بدء التصدير.</p>}
+          </>}
+          <details className="export-details">
+            <summary>تفاصيل الفحص والملفات المؤقتة</summary>
+            <div className="export-readiness-heading"><h3 id="export-preflight-title">جاهزية التصدير</h3><button className="btn btn-ghost" disabled={checking || busy || connection !== 'connected'} onClick={loadPreflight}><Icon name="restore" />إعادة الفحص</button></div>
+            {check && <p className="export-checked-version">النسخة التي فُحصت <Version version={check} /></p>}
+            <RenderCache name={name} active={Object.values(jobs).some((j) => ['running', 'queued'].includes(j.status))} />
+          </details>
         </section>
-        <RenderCache name={name} active={Object.values(jobs).some((j) => ['running', 'queued'].includes(j.status))} />
-        {connection !== 'connected' && <p className="notice" role="status">أعد الاتصال بالخادم لفحص المشروع وتصديره.</p>}
-        {draftBase && <p className="notice" role="status">أكمل التعديل الجاري قبل التصدير.</p>}
-        {error && <p className="notice text-cut-text" role="alert">{error}</p>}
-        <button className="btn btn-primary export-start" disabled={busy || checking || !!rangeError || !!draftBase || !canSubmitExport(check, rev, quality) || connection !== 'connected'} onClick={start}>{busy ? <Spinner size={16} /> : <Icon name="download" />}{busy ? 'جارٍ بدء التصدير…' : render ? 'أضف إلى طابور التصدير' : 'ابدأ التصدير'}</button>
+
         {queued && <div className="export-captured" role="status"><span>أُضيف: <b>{fileOf(queued.output)}</b></span><Version version={queued} /><p>يُحفظ في مجلد المشروع <code dir="ltr">renders/</code>. التعديلات التالية لا تغيّر هذه النسخة، ويمكنك إضافة تصدير آخر الآن.</p></div>}
         {lastRender && !recent.some((j) => j.result?.output === lastRender.output) && <ExportedActions url={lastRender.url} output={lastRender.output} reveal={reveal} />}
       </>}
