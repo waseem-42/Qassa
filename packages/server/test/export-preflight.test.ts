@@ -62,6 +62,19 @@ async function api(renderer: Parameters<typeof registerExportRoutes>[3] = async 
 const renderUrl = '/api/projects/stable-id/render';
 
 describe('static export readiness', () => {
+  it('reviews the selected export aspect without changing the project or checked revision', async () => {
+    fixture();
+    store.apply('stable-id', [{ op: 'add_text', text: 'عنوان', start: 0, duration: 2, style: { x: .5, y: .86 } }]);
+    const server = await api(), before = structuredClone(store.get('stable-id'));
+    const url = '/api/projects/stable-id/render/preflight?quality=final';
+    const normal = (await server.inject({ url })).json();
+    const vertical = (await server.inject({ url: url + '&aspect=9:16' })).json();
+    expect(normal.review.some((f: { code: string }) => f.code === 'unsafe_area')).toBe(false);
+    expect(vertical.review.some((f: { code: string }) => f.code === 'unsafe_area')).toBe(true);
+    expect(vertical.rev).toBe(normal.rev); expect(vertical.snapshotId).toBe(normal.snapshotId);
+    expect(store.get('stable-id')).toEqual(before);
+    expect((await server.inject({ url: url + '&aspect=invalid' })).statusCode).toBe(400);
+  });
   it('allows an audio spine and ignores visual LUTs on sound-only clips', () => {
     const p = fixture();
     p.media[0].kind = 'audio'; p.media[0].hasAudio = true;

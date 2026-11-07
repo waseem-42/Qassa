@@ -256,7 +256,10 @@ describe('layer order', () => {
     const p = base();
     const full = compile(p, opts).final;
     expect(full.args).toContain('copy');
-    const part = compile(p, { ...opts, range: [10, 25] }).final;
+    const ranged = compile(p, { ...opts, range: [10, 25] });
+    expect(ranged.duration).toBe(15);
+    expect(ranged.segments.reduce((sum, s) => sum + s.duration, 0)).toBe(60);
+    const part = ranged.final;
     expect(part.duration).toBe(15);
     expect(part.args).not.toContain('copy'); // a stream copy can't cut on any frame
     const at = part.args.indexOf('-ss');

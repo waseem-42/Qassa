@@ -195,13 +195,13 @@ export function registerExportRoutes(app: FastifyInstance, store: Store, jobs: J
   };
   jobs.on('job', release);
   app.addHook('onClose', async () => { jobs.off('job', release); });
-  const check = (project: Project, rev: number, dir: string, quality: RenderQuality, name: string) => {
+  const check = (project: Project, rev: number, dir: string, quality: RenderQuality, name: string, aspect?: Project['settings']['aspect']) => {
     const report = exportPreflight(project, rev, dir, quality, checkOptions);
     try {
       const problems = cutReport(project, (id) => store.transcript(name, id)?.words).filter((c) => c.problems.length);
       if (problems.length) report.warnings.push({ code: 'cut_problems', message: `توجد ${problems.length} نقاط قص تحتاج مراجعة؛ الفحص اقتراح وليس حكمًا على جودة المونتاج.` });
     } catch { report.warnings.push({ code: 'cut_check_unavailable', message: 'تعذر قراءة التفريغ لفحص حدود القص؛ يمكن متابعة التصدير.' }); }
-    report.review = editReview(project);
+    report.review = editReview(project, { aspect });
     const flagged = report.review.filter((f) => f.severity === 'warn').length;
     if (flagged) report.warnings.push({ code: 'edit_review', message: `مراجعة المونتاج: ${flagged} ملاحظة قد يلاحظها المشاهد (التفاصيل في «مراجعة المونتاج»).` });
     return report;
@@ -210,10 +210,11 @@ export function registerExportRoutes(app: FastifyInstance, store: Store, jobs: J
     const aspect = z.enum(['16:9', '9:16', '1:1', '4:5']).optional().parse(req.query.aspect);
     return editReview(store.get(req.params.name).project, { aspect });
   });
-  app.get<{ Params: { name: string }; Querystring: { quality?: string } }>('/api/projects/:name/render/preflight', async (req) => {
+  app.get<{ Params: { name: string }; Querystring: { quality?: string; aspect?: string } }>('/api/projects/:name/render/preflight', async (req) => {
     const quality = Quality.parse(req.query.quality ?? 'final');
+    const aspect = ExportSettings.shape.aspect.parse(req.query.aspect);
     const entry = store.get(req.params.name);
-    return check(entry.project, entry.rev, store.dir(req.params.name), quality, req.params.name);
+    return check(entry.project, entry.rev, store.dir(req.params.name), quality, req.params.name, aspect);
   });
   app.post<{ Params: { name: string }; Body: unknown }>('/api/projects/:name/render', async (req, reply) => {
     const body = RenderBody.parse(req.body ?? {}), name = req.params.name;
@@ -221,7 +222,7 @@ export function registerExportRoutes(app: FastifyInstance, store: Store, jobs: J
     const entry = store.get(name), rev = entry.rev;
     if (body.expectedRev !== undefined && body.expectedRev !== rev) return reply.code(409).send({ error: 'project changed; refresh export readiness', code: 'stale_revision', rev });
     const project = structuredClone(entry.project), dir = store.dir(name);
-    const preflight = check(project, rev, dir, body.quality, name);
+    const preflight = check(project, rev, dir, body.quality, name, body.export?.aspect);
     if (!preflight.ready) return reply.code(409).send({ error: 'project is not ready to export', code: 'export_not_ready', preflight });
     const marks = body.marked ? markedRange(project) : undefined;
     if (body.marked && !marks) throw new OpError('حدّد علامتي In وOut قبل تصدير المحدد.');

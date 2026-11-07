@@ -29,12 +29,13 @@ export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs';
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [check, setCheck] = useState<ExportPreflight>(), [checking, setChecking] = useState(false), [checkError, setCheckError] = useState('');
   const [queued, setQueued] = useState<RenderVersion>();
+  const reviewAspect = settings.aspect ?? project?.settings.aspect;
   const requests = useRef(0);
   const loadPreflight = async () => {
     if (!name || connection !== 'connected') return;
     const request = ++requests.current; setChecking(true); setCheckError(''); setCheck(undefined);
     try {
-      const result = await api.get<ExportPreflight>(`${projectPath(name)}/render/preflight?quality=${quality}`);
+      const result = await api.get<ExportPreflight>(`${projectPath(name)}/render/preflight?quality=${quality}${reviewAspect ? `&aspect=${reviewAspect}` : ''}`);
       if (request === requests.current) setCheck(result);
     } catch (e) { if (request === requests.current) setCheckError((e as Error).message); }
     finally { if (request === requests.current) setChecking(false); }
@@ -43,7 +44,7 @@ export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs';
     if (initial === 'export' && rev >= 0 && connection === 'connected') void loadPreflight();
     else { setCheck(undefined); setChecking(false); }
     return () => { ++requests.current; };
-  }, [name, initial, rev, quality, connection]);
+  }, [name, initial, rev, quality, connection, reviewAspect]);
   if (!name || !project) return null;
 
   const s = ExportSettings.parse(settings);

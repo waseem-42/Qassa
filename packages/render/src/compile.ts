@@ -657,5 +657,5 @@ export function compile(p: Project, opts: RenderOptions): RenderPlan {
     ],
   };
 
-  return { width: W, height: H, fps, duration, segments, concatList, files, measure, final };
+  return { width: W, height: H, fps, duration: final.duration, segments, concatList, files, measure, final };
 }

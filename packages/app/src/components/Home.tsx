@@ -3,6 +3,7 @@ import { fmtTime, TRASH_RETENTION_DAYS, type ProjectStart } from '@edit/shared';
 import { StartChoice } from './StartChoice.tsx';
 import { useStore, type Job, type ProjectSummary, type TrashedProject } from '../lib/store.ts';
 import { api, projectPath } from '../lib/api.ts';
+import { projectName } from '../lib/project-name.ts';
 
 /** frames in the hover strip (the server's STRIP_FRAMES) */
 const STRIP_FRAMES = 10;
@@ -23,16 +24,6 @@ const ago = (ms: number) => {
 };
 // some containers (mkv) come with an empty MIME type
 const isMedia = (f: File) => /^(video|audio)\//.test(f.type) || /\.(mp4|mov|mkv|webm|avi|m4v|mp3|wav|m4a|aac|flac|ogg)$/i.test(f.name);
-/** a dropped file's name as a project folder name (the server's SAFE_NAME), not taken yet */
-/** a free folder name the server accepts (letters, digits, `_ . -`) for any typed title or file name */
-function folderName(text: string, taken: string[]) {
-  const base = text.replace(/[^\p{L}\p{N}_.-]+/gu, '-').replace(/-{2,}/g, '-').replace(/^[^\p{L}\p{N}]+/u, '').slice(0, 56).replace(/[._-]+$/, '') || 'مشروع';
-  const used = new Set(taken.map((t) => t.toLocaleLowerCase()));
-  let name = base;
-  for (let i = 2; used.has(name.toLocaleLowerCase()); i++) name = `${base}-${i}`;
-  return name;
-}
-
 export function Home() {
   const projects = useStore((s) => s.projects), trash = useStore((s) => s.trash), connection = useStore((s) => s.connection);
   const loaded = useStore((s) => s.projectsLoaded), loadError = useStore((s) => s.projectsError);
@@ -63,9 +54,9 @@ export function Home() {
     if (!title || busy || !connected) return;
     if (projects.some((p) => titleOf(p).toLocaleLowerCase() === title.toLocaleLowerCase())) { setCreateError('يوجد مشروع بهذا الاسم. اختر اسمًا آخر أو افتح المشروع الموجود.'); return; }
     // the folder keeps only safe characters; the title stays exactly as typed
-    const name = folderName(title, projects.map((p) => p.name));
+    const { name, displayName } = projectName(title, projects.map((p) => p.name));
     setCreating(true); setCreateError('');
-    try { await useStore.getState().create(name, name === title.replace(/ /g, '-') ? undefined : title, start); }
+    try { await useStore.getState().create(name, displayName, start); }
     catch (e) { setCreateError((e as Error).message); }
     finally { setCreating(false); }
   };
@@ -100,10 +91,11 @@ export function Home() {
     const files = list.filter(isMedia);
     if (!files.length) { useStore.getState().notify('أفلت ملف فيديو أو صوت لبدء مشروع منه.'); return; }
     if (busy || !connected) return;
-    const name = folderName(files[0].name.replace(/\.[^.]+$/, ''), projects.map((p) => p.name));
+    const { name, displayName } = projectName(files[0].name.replace(/\.[^.]+$/, ''), projects.map((p) => p.name));
     setImporting({ name, files: files.length });
     try {
       await api.post('/api/projects', { name });
+      if (displayName) await api.patch(projectPath(name), { name: displayName });
       await api.upload(`${projectPath(name)}/upload?role=source`, files);
       await useStore.getState().loadProjects();
       await useStore.getState().open(name);
