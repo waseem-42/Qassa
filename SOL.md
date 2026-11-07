@@ -694,6 +694,19 @@ Claude measured it on 2026-11-07 in headed Chrome with the GPU, on an isolated c
 3. Motion blur: for samples where the page is idle between the first and last sub-frame, reuse the frame for all samples. Partly done already; check the coverage.
 4. Report a table: before/after seconds per screenshot and total for both fixtures, plus quality numbers. Keep the old path behind a fallback if the new one fails on a page.
 
+**Already done by Claude (05:00–05:54, commit `4018b84`). Read this first:**
+- Measured on 16 s of the «تشويقة» graphic (isolated copy): about 160 ms per screenshot, almost all of it painting the frame. Seeking costs 0.6 ms.
+- Pages of one Chrome process do not paint in parallel: 1, 2 or 4 pages all gave 77 s of capture. Now every worker after the first launches its own browser (`launchBrowser()` in textimg.ts): capture 76 s → 33 s with 4 workers, whole graphic 141 s → 73 s.
+- Fast PNG for pages with alpha too: decoded RGBA identical on 3 templates and both user graphics; about 1.5× per shot on templates, little on heavy pages.
+- Each worker paints 3 throwaway frames before its range. This user graphic draws from previously painted frames: a fresh page differed for 2 frames, and seeking alone did not fix that.
+- Determinism: library templates give the same frame digest with 1, 2 and 4 workers. On the user graphic, alpha is identical, but the PNG digest still differs between 1 and N workers. Colour MSE ≤ 0.5/255, invisible; same as with Task 16's page split. Not solved.
+- An earlier comparison claiming 4× from fast PNG was biased (the paint was counted in the first screenshot); ignore it.
+
+**Left for sol:**
+1. Find the remaining split difference on the user graphic, using per-frame PNG hashes, and make 1 vs N workers byte-identical if feasible.
+2. Encode is now a big share: 64 s for 480 frames on one part. Look at x264 preset/threads for the 4:4:4 colour stream, keeping the quality bar.
+3. Per-screenshot paint cost on heavy pages: try `HeadlessExperimental.beginFrame` or raw RGBA readback.
+
 **Done when:**
 - The 64 s graphic captures at least 2× faster with an identical or visually lossless composite.
 - The library template stays frame-exact.
