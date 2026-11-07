@@ -49,6 +49,36 @@ export function captionOps(p: Project, transcripts: (mediaId: string) => Transcr
   }
   if (cur.length) chunks.push(cur);
 
+  // Balance orphan words only within one continuous source occurrence: links stay exact.
+  const joins = (a: W[], b: W[]) => a.at(-1)!.clipId === b[0].clipId && a.at(-1)!.mediaId === b[0].mediaId && a.at(-1)!.i + 1 === b[0].i;
+  const fits = (line: W[], limit: number) => line.length <= limit && line.map((w) => w.w).join(' ').length <= maxChars;
+  for (let i = 0; i < chunks.length; i++) {
+    if (chunks[i].length !== 1) continue;
+    const candidates = [i - 1, i].filter((j) => j >= 0 && j + 1 < chunks.length && joins(chunks[j], chunks[j + 1]));
+    // A nearby punctuation/pause boundary is the least desirable one to erase.
+    candidates.sort((a, b) => {
+      const boundary = (j: number) => (/[.!?؟،,]$/.test(chunks[j].at(-1)!.w) ? 1 : 0) + Math.max(0, chunks[j + 1][0].t0 - chunks[j].at(-1)!.t1);
+      return boundary(a) - boundary(b);
+    });
+    for (const j of candidates) {
+      const both = [...chunks[j], ...chunks[j + 1]];
+      if (fits(both, maxWords + 2)) {
+        chunks.splice(j, 2, both);
+        i = Math.max(-1, j - 1);
+        break;
+      }
+      const splits = Array.from({ length: Math.max(0, both.length - 3) }, (_, k) => k + 2).filter((k) => fits(both.slice(0, k), maxWords) && fits(both.slice(k), maxWords));
+      splits.sort((a, b) => {
+        const score = (k: number) => (/[.!?؟،,]$/.test(both[k - 1].w) ? 4 : 0) + Math.min(2, both[k].t0 - both[k - 1].t1) - Math.abs(both.length - 2 * k) * .1;
+        return score(b) - score(a);
+      });
+      if (splits.length) {
+        chunks.splice(j, 2, both.slice(0, splits[0]), both.slice(splits[0]));
+        break;
+      }
+    }
+  }
+
   const ops: Op[] = [
     { op: 'add_track', track: { id: CAPTION_TRACK, kind: 'text', name: 'كابشن' } },
     { op: 'clear_track', trackId: CAPTION_TRACK },

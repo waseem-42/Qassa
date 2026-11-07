@@ -11,7 +11,7 @@ export function clipFitsTrack(p: Project, item: Clip | Media, track: Track): boo
   return !!media && (track.kind === 'audio' ? media.kind === 'audio' || media.hasAudio : track.kind === 'overlay' && media.kind !== 'audio');
 }
 
-/** A UI placement plan. Legacy/MCP ops may still intentionally overlap. */
+/** An opt-in placement plan. Explicit track ops may still intentionally overlap. */
 export function freeTrackFor(p: Project, item: Clip | Media, start: number, end: number, preferTrackId?: string, except: string[] = [], kind?: Track['kind'], insertIndex?: number): { track: Track; ops: Op[]; index?: number } {
   const preferred = p.tracks.find((t) => t.id === preferTrackId);
   const family = kind ?? preferred?.kind ?? ('path' in item ? item.kind === 'audio' ? 'audio' : 'overlay' : item.text !== undefined ? 'text' : 'overlay');
@@ -54,4 +54,28 @@ export function trackOverlaps(p: Project, trackId: string): { start: number; end
     end = Math.max(end, clipEnd(c));
   }
   return spans;
+}
+
+/** Warn only about intersections introduced or enlarged by this batch. */
+export function newOverlapWarnings(before: Project, after: Project): string[] {
+  const intersections = (p: Project) => {
+    const spans = new Map<string, { a: Clip; b: Clip; start: number; end: number }>();
+    for (const track of p.tracks) {
+      if (track.id === MAIN_TRACK) continue;
+      const clips = p.clips.filter((c) => c.trackId === track.id).sort((a, b) => a.start - b.start);
+      for (let i = 0; i < clips.length; i++) for (let j = i + 1; j < clips.length && clips[j].start < clipEnd(clips[i]) - .001; j++) {
+        const a = clips[i], b = clips[j], start = Math.max(a.start, b.start), end = Math.min(clipEnd(a), clipEnd(b));
+        if (end > start + .001) spans.set(JSON.stringify([track.id, ...[a.id, b.id].sort()]), { a, b, start, end });
+      }
+    }
+    return spans;
+  };
+  const old = intersections(before), warnings: string[] = [];
+  const name = (c: Clip) => `${c.label ?? c.text ?? after.media.find((m) => m.id === c.mediaId)?.name ?? c.graphic ?? c.id} (${c.id})`.replace(/\s+/g, ' ');
+  for (const [key, span] of intersections(after)) {
+    const prev = old.get(key);
+    if (prev && span.end - span.start <= prev.end - prev.start + .001) continue;
+    warnings.push(`Overlap on ${span.a.trackId}: ${name(span.a)} / ${name(span.b)}, ${span.start.toFixed(2)}–${span.end.toFixed(2)}s; use free:true to place on a free track.`);
+  }
+  return warnings;
 }

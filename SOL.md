@@ -548,6 +548,47 @@ You (sol) build; Claude is the project manager and reviews your work. The user w
 
 ---
 
+## Task 15 — Claude edits better and cheaper through MCP (after Task 14)
+
+**User priority (2026-11-07):** editing with Claude (MCP).
+
+**Found by Claude.** Claude ran a full edit as Claude itself on a temporary project: import, transcribe, accept silences, `cut_words`, b-roll, title, captions, check_cuts, contact sheet, preflight, preview render.
+1. **The `edit` tool schema is huge.** It includes `restore_project` with the whole Project schema inline, about 40 KB of JSON schema that every session loads before doing anything. `checkpoint_restore` already covers restoring.
+2. **`render_preflight` dumps every font file.** About 80 «font … ready» entries (~7 KB) bury the 2 warnings that matter.
+3. **`media_import` says "use job_status" but gives no job id.** Claude has to guess or poll `project_summary`.
+4. **MCP placement can still hide clips.** Two b-roll clips added to V2 at 8–12 s and 10–14 s were accepted silently. Only preflight mentions it, much later. Task 14 gave the UI `freeTrackFor`, but MCP has no way to ask for it.
+5. **`cut_words` keeps a sliver of a cut word.** Words 34–36 were cut and the next word starts right after word 36. The breathing pad put the new in-point at 20.00 s, inside «أطفالنا» (36), so `check_cuts` warns «cuts inside «أطفالنا»». The pad must never go back into a word that was cut.
+6. **`cut_words` leaves the pause in front of the cut words.** Cutting a phrase that came after a 1.7 s pause leaves «1.7s of silence across the cut».
+7. **Energy-based silence missed transcript pauses.** The transcript shows pauses of 1.7 s and 1.6 s (16.1–17.9 and 53.3–54.9), probably with music under them. Neither became a silence suggestion; only 3 shorter ones did.
+8. **A caption line of one orphan word** («فيه») at a cut: greedy chunking leaves the last word alone.
+
+**Do:**
+1. Shrink the MCP `edit` schema.
+   - Drop `restore_project` from the MCP-exposed op union (the server keeps it for checkpoints).
+   - Make sure shared sub-schemas are referenced once, not repeated.
+   - Measure the tools/list payload before and after, and put the numbers in the Report.
+2. `render_preflight` returns `ready`, `rev`, blockers and warnings, plus resource counts by kind. It lists only resources that are not `ready`, unless `verbose:true`.
+3. `media_import` returns the analysis job id. With `wait` (≤50 s) it waits like `analyze` does.
+4. MCP placement without hidden clips:
+   - `add_clip` accepts `clip.trackId` as a track **kind** (`'overlay' | 'audio' | 'text'`) or a track id with `free:true`. Either routes through `freeTrackFor`: preferred track if free, else the nearest compatible one, else a new track (added in the same batch).
+   - `move` gets the same `free:true`.
+   - The `edit` result lists, in one short line each, any overlap the batch created on a free track. It names the clips and suggests `free:true`.
+   - Document it in the tool description and both skill copies. Don't change the permissive default.
+5. `cut_words`:
+   - The pad is clamped so the kept audio never includes any part of a cut word.
+   - When the cut leaves a pause of more than 0.6 s across it, the cut also takes that pause down to the normal breath (0.12 s). Tell the caller in the result.
+   - Tests in `packages/shared/test`.
+6. When a transcript exists, word gaps over 0.6 s that energy detection missed also become `silence` suggestions, using the same breath padding and no duplicates. Python `analyze.py` or the server summary step, whichever owns suggestions now. Test it.
+7. Caption chunking balances lines: no line of a single word when the neighbour can take it within `maxWords + 2`. Prefer breaking at punctuation and pauses. Linked captions (Task 13) must keep their word links. Test it.
+
+**Done when:**
+- The MCP smoke (`scripts/check-project-mcp.mjs`) covers: import job id, free placement, the slim preflight, and `cut_words` with adjacent words.
+- On a temporary project with speech (make one with ffmpeg from any wav plus `testsrc2`; no user project), the same flow as above leaves `check_cuts` with no «inside a word» warning for adjacent-word cuts.
+- tools/list size is reported before and after.
+- Tests, typecheck and build pass.
+
+---
+
 ## Report
 
 (sol: one block per task — status, files changed, tests, open questions for Claude)
@@ -673,3 +714,13 @@ You (sol) build; Claude is the project manager and reviews your work. The user w
 - Final package: npm run dist:win passed; executable ProductVersion is 0.1.3.0 and packaged UI hash matches the final app build. artifacts/desktop/Qassa-Setup.exe is 202,328,253 bytes; refreshed SHA-256 sibling is cb8be7fd4b64e789a88730afce6d8e07eb0ab1dcd35ff33abf6f847c6b9ce0a4. A focused real Chrome regression additionally passed magnetic V1 reorder, mixed V1/free selection, captured trim out/back, trim cancellation and releasing a free group outside the timeline. Compact header controls fit their rows. Script: task14-drag-regression.mjs beside the other QA artifacts. Task 12's fresh-profile installer/signing limitations remain unchanged; this task did not install into the user's account.
 
 - Review artifacts copied into the current SOL-requested location: artifacts/qa/task14/{task14-before.png,task14-after.png,task14-drop-preview.png,task14-before.mjs,task14-qa.mjs,task14-drag-regression.mjs}. Copied scripts use that isolated directory for their own temporary data. The original scratch artifacts remain available too. No other agent's changes were reverted.
+
+### Task 15 — done (2026-11-07)
+- Files: MCP index/tool-schema and schema test; shared ops/placement/captions and mcp-editing.test.ts; server import/ops responses and Store notices; analysis/analyze.py/test_suggestions.py and server transcript-pauses.test.ts; scripts/check-project-mcp.mjs; package/lock dependencies; both edit-tool skill copies, CLAUDE.md/AGENTS.md and docs/IMPROVEMENTS.md.
+- Removed restore_project from the MCP edit union; checkpoint/server restoration remains. The advertised draft-7 schemas hoist repeated nested definitions into local references while SDK/Zod still validate tool calls. Actual compact UTF-8 tools/list: 78,148 → 52,846 bytes; edit inputSchema: 47,511 → 22,158 bytes. Before/after payloads and metrics are in artifacts/qa/task15/{before,after}-{tools,metrics}.json. Schema-reference validation rejects malformed nested inputs and restore_project.
+- render_preflight keeps ready/rev/snapshot/quality/blockers/warnings and resourceCounts by kind, listing only non-ready resources unless verbose:true. Real speech QA: 12,697 → 391 bytes, with 76 ready font files counted instead of listed. media_import returns {media,jobId,job}, null when no job exists, and wait:0..50 follows preparation without enabling transcription.
+- add_clip trackId overlay/audio/text, or free:true with an explicit ID, and move free:true use freeTrackFor. They reserve against earlier ops and create tracks in the same undo; voice/music routing survives. A safe move off V1 plans against the resulting anchored-layer positions. Explicit IDs without free:true retain permissive placement. edit reports each new/enlarged free-track intersection with clip names and a free:true hint.
+- cut_words clamps both boundaries outside all removed words. Long retained air across the edit shrinks to 0.12s with a caller notice; speechless islands left by earlier accepted silence cuts are removed in the same operation. Tests cover adjacent words, speed, prior cuts, endpoints, reversed ranges and linked captions. Transcript gaps >0.6s supplement energy suggestions with existing breath pads and no duplicate silence spans. Caption orphan balancing merges/repartitions within maxWords+2 and maxChars, preferring punctuation/pauses and keeping continuous occurrence links exact; genuinely separate one-word source occurrences remain independent.
+- Validation: 290 tests in 47 files pass; npm run typecheck clean; npm run build -w packages/app passed; expanded isolated MCP smoke passed import job/wait/no-transcription, free add/move/undo, immediate overlap reporting, adjacent-word cuts/pause notices/check_cuts, linked captions and slim/verbose preflight. Logs: artifacts/qa/task15/{tests,typecheck,build,mcp-smoke}.log. git diff --check passed.
+- Real end-to-end QA: extracted WAV from Claude's allowed night-qa fixture, combined it with ffmpeg testsrc2 in a new isolated EDIT_DATA_DIR, explicitly ran local Whisper (116 Arabic words), recovered both missed pauses near 16–18s and 53–55s, accepted silence cuts, cut words 34–36, placed two overlapping-in-time b-roll clips on separate layers plus a title, and generated 19 linked caption lines with no singleton. check_cuts has no inside-word or long-pause warning. One honest listening hint remains: the next word starts exactly at the cut because adjacent words have no available gap; padding never reintroduces the deleted word. Contact sheet, cut pairs, preflight, actual preview MP4/ffprobe duration and real Chrome/Vite editor passed with no page errors.
+- Review artifacts: artifacts/qa/task15/flow.mjs, flow-log.json, flow-result.json, speech-transcript.json, edited-project.json, preflight-metrics.json, editor.png, contact-sheet.jpg, cut-pairs.jpg and task15-preview.mp4. Isolated QA servers used other ports and were stopped; all temporary data roots were removed. night-qa was read only; no user projects/trash changed, no commits, no installer rebuild. Concurrent Claude changes in SOL.md and docs/night-2026-11-07.md were preserved. Nothing required remains blocked; no product decision for Claude.

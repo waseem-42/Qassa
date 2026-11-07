@@ -188,8 +188,28 @@ def suggest_cuts(out_dir, info, media_id, lead=0.12, tail=0.10, min_gap=0.6):
             continue
         if any(c0 < t1 and c1 > t0 and c1 > c0 for c0, c1 in cores):
             continue  # whisper hears speech here; leave it to a human
+        if any(s["t0"] <= round(t0, 3) and s["t1"] >= round(t1, 3) for s in out):
+            continue
         out.append({"mediaId": media_id, "t0": round(t0, 3), "t1": round(t1, 3), "reason": "silence",
                     "note": f"{b - a:.1f}s"})
+
+    # Music/noise can hide a speech pause from the energy detector.
+    end = 0.0
+    for w in sorted(words, key=lambda w: w["t0"]):
+        a, b = end, w["t0"]
+        end = max(end, w["t1"])
+        if a <= 0 or round(b - a, 3) <= min_gap:
+            continue
+        t0, t1 = round(a + lead, 3), round(b - tail, 3)
+        if t1 <= t0:
+            continue
+        # Replace intersecting energy suggestions with one padded word gap.
+        overlaps = [s for s in out if s["reason"] == "silence" and s["t0"] < t1 and s["t1"] > t0]
+        if any(s["t0"] <= t0 and s["t1"] >= t1 for s in overlaps):
+            continue
+        out = [s for s in out if s not in overlaps]
+        out.append({"mediaId": media_id, "t0": t0, "t1": t1, "reason": "silence",
+                    "note": f"{b - a:.1f}s (transcript pause)"})
 
     # retakes: the same 3+ words said again shortly after -> drop the first attempt
     n = [norm(w["w"]) for w in words]

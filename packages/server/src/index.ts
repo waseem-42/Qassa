@@ -6,7 +6,7 @@ import fastifyWebsocket from '@fastify/websocket';
 import fastifyMultipart from '@fastify/multipart';
 import { ZodError } from 'zod';
 import {
-  captionOps, clipDuration, clipsAt, cutPoints, fmtTime, GRAPHIC_RUNTIME, graphicEntry, AUTO_MARK, mainClips, mainDuration, Media, OpBatch, OpError, SFX, SFX_TRACK, sfxPlan, type Op, type SfxId, outputSize, projectDuration, routeNotes, STYLE_PRESETS, styleOps, timelineToSource, wordStates, type Note, type Project,
+  captionOps, clipDuration, clipsAt, cutPoints, fmtTime, GRAPHIC_RUNTIME, graphicEntry, AUTO_MARK, mainClips, mainDuration, Media, newOverlapWarnings, OpBatch, OpError, SFX, SFX_TRACK, sfxPlan, type Op, type SfxId, outputSize, projectDuration, routeNotes, STYLE_PRESETS, styleOps, timelineToSource, wordStates, type Note, type Project,
 } from '@edit/shared';
 import { compile, denoiseFilters, fileKey, hasNvenc, runPlan } from '@edit/render';
 import { createHash } from 'node:crypto';
@@ -102,10 +102,11 @@ app.get<P>('/api/projects/:name', async (req) => view(req.params.name));
 app.post<P & { Body: { ops: unknown; author?: string } }>('/api/projects/:name/ops', async (req) => {
   const ops = OpBatch.parse(req.body?.ops);
   const author = req.body?.author ?? 'user';
-  const before = new Set(store.get(req.params.name).project.notes.map((n) => n.id));
+  const previous = store.get(req.params.name).project;
+  const before = new Set(previous.notes.map((n) => n.id));
   const r = store.apply(req.params.name, ops, author);
   if (author === 'user' && r.project.settings.aiNotes) autoNotes(req.params.name, r.project.notes.filter((n) => !before.has(n.id) && n.author === 'user'));
-  return { rev: r.rev, history: store.history(req.params.name), project: r.project };
+  return { rev: r.rev, history: store.history(req.params.name), project: r.project, notices: r.notices, overlaps: newOverlapWarnings(previous, r.project) };
 });
 app.post<P & { Body: { maxWords?: number; style?: Record<string, unknown>; author?: string } }>('/api/projects/:name/captions', async (req) => {
   const name = req.params.name;
@@ -129,7 +130,9 @@ registerUploads(app, store, jobs);
 
 app.post<P & { Body: { path: string; role?: Media['role']; copy?: boolean; analyze?: boolean } }>('/api/projects/:name/import', async (req) => {
   const role = Media.shape.role.parse(req.body.role ?? 'source');
-  return { media: addMedia(store, jobs, req.params.name, req.body.path, role, { copy: req.body.copy, analyze: req.body.analyze }) };
+  const media = addMedia(store, jobs, req.params.name, req.body.path, role, { copy: req.body.copy, analyze: req.body.analyze });
+  const job = jobs.list(req.params.name).find((j) => j.kind === 'analyze' && j.mediaId === media.id && ['queued', 'running'].includes(j.status));
+  return { media, job: job ?? null };
 });
 
 app.post<P & { Body: { mediaId: string; steps?: string[]; prompt?: string; model?: string; reason?: 'assistant' } }>('/api/projects/:name/analyze', async (req) => {

@@ -5,6 +5,10 @@ import { SFX_TRACK } from './sfx.ts';
 import { pageToRetimed, retimedToPage } from './graphics.ts';
 import { ideaProblem, placeIdea } from './ideas.ts';
 import { sourceTiming, syncCaptionWords, type ClipId } from './caption-links.ts';
+import { freeTrackFor } from './placement.ts';
+
+/** cut_words shortens leftover air across its cut only up to this long; longer gaps may be on-screen work. */
+export const PAUSE_MAX = 3;
 
 // Every edit — from the UI or from Claude — is one of these ops. The server applies a batch
 // atomically, keeps a snapshot for undo and broadcasts the new project.
@@ -20,13 +24,13 @@ export const Op = z.discriminatedUnion('op', [
   z.object({ op: z.literal('delete_range'), start: z.number().finite().min(0), end: z.number().finite().min(0) }),
   z.object({ op: z.literal('cut_range'), mediaId: id, t0: z.number(), t1: z.number() }),
   z.object({ op: z.literal('restore_range'), mediaId: id, t0: z.number(), t1: z.number() }),
-  z.object({ op: z.literal('cut_words'), mediaId: id, from: z.number().int(), to: z.number().int(), pad: z.number().optional() }),
+  z.object({ op: z.literal('cut_words'), mediaId: id, from: z.number().int().min(0), to: z.number().int().min(0), pad: z.number().min(0).optional() }),
   z.object({ op: z.literal('speed_range'), mediaId: id, t0: z.number(), t1: z.number(), speed: z.number().min(0.25).max(16) }),
   z.object({ op: z.literal('keep_only'), mediaId: id, ranges: z.array(z.tuple([z.number(), z.number()])) }),
   z.object({ op: z.literal('split'), clipId: id, at: z.number() }),
   z.object({ op: z.literal('trim'), clipId: id, in: z.number().optional(), out: z.number().optional() }),
   /** start: a free clip's new time · trackId: another track (onto V1 a video/image joins the main track at `index`, off V1 it keeps its time) */
-  z.object({ op: z.literal('move'), clipId: id, start: z.number().optional(), trackId: id.optional(), index: z.number().int().optional() }),
+  z.object({ op: z.literal('move'), clipId: id, start: z.number().optional(), trackId: id.optional(), index: z.number().int().optional(), free: z.boolean().optional() }),
   z.object({ op: z.literal('reorder'), clipId: id, index: z.number().int() }),
   /** how a main-track clip comes in from the one before it; kind null removes it */
   z.object({ op: z.literal('set_transition'), clipIds: z.array(id), kind: Transition.shape.kind.nullable(), duration: z.number().min(0.1).max(3).optional() }),
@@ -48,6 +52,7 @@ export const Op = z.discriminatedUnion('op', [
     op: z.literal('add_clip'),
     clip: Clip.partial({ id: true, start: true, speed: true, volume: true }),
     index: z.number().int().optional(),
+    free: z.boolean().optional(),
   }),
   z.object({
     op: z.literal('update_clip'),
@@ -106,6 +111,7 @@ export interface OpContext {
   newId?: (prefix: string) => string;
   /** Internal checkpoint transaction only; ordinary edit batches cannot replace a project. */
   allowProjectRestore?: boolean;
+  report?: (message: string) => void;
 }
 
 let counter = 0;
@@ -313,6 +319,29 @@ export function applyOps(project: Project, ops: Op[], ctx: OpContext = {}): Proj
 }
 
 function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
+  if (op.op === 'add_clip' || op.op === 'move') {
+    const target = op.op === 'add_clip' ? op.clip.trackId : op.trackId;
+    const kind = target === 'overlay' || target === 'audio' || target === 'text' ? target : undefined;
+    if (op.free || kind) {
+      const item = op.op === 'add_clip' ? Clip.parse({ ...op.clip, id: op.clip.id ?? newId('c'), start: op.clip.start ?? 0 }) : getClip(p, op.clipId);
+      const preferred = kind ? undefined : target ?? item.trackId;
+      if (preferred === MAIN_TRACK) throw new OpError('free placement needs an overlay, audio or text track');
+      if (preferred && !p.tracks.some((t) => t.id === preferred)) throw new OpError(`track ${preferred} not found`);
+      const start = r3(Math.max(0, op.op === 'add_clip' ? item.start : op.start ?? item.start));
+      let placement = p;
+      if (op.op === 'move' && item.trackId === MAIN_TRACK) {
+        // Leaving V1 moves anchored layers: reserve against their resulting positions.
+        placement = structuredClone(p);
+        const anchors = anchorFreeClips(placement);
+        placement.clips = placement.clips.filter((c) => c.id !== item.id);
+        normalize(placement);
+        reanchor(placement, anchors);
+      }
+      const plan = freeTrackFor(placement, item, start, start + clipDuration(item), preferred, op.op === 'move' ? [item.id] : [], kind);
+      for (const trackOp of plan.ops) applyOne(p, trackOp, ctx, newId);
+      op = op.op === 'add_clip' ? { ...op, free: false, clip: { ...item, trackId: plan.track.id } } : { ...op, free: false, trackId: plan.track.id };
+    }
+  }
   const touchesMain = (() => {
     switch (op.op) {
       case 'cut_range': case 'restore_range': case 'cut_words': case 'keep_only': case 'speed_range': return true;
@@ -381,6 +410,7 @@ function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
       break;
 
     case 'cut_words': {
+      if (op.to < op.from) throw new OpError('cut_words: word range is reversed');
       const words = need(ctx.words?.(op.mediaId), `no transcript for ${op.mediaId}`);
       const a = need(words[op.from], `word ${op.from} not found`);
       const b = need(words[op.to], `word ${op.to} not found`);
@@ -388,9 +418,41 @@ function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
       // cut up to the neighbouring words so the remaining speech keeps its breath
       const prevEnd = words[op.from - 1]?.t1 ?? 0;
       const nextStart = words[op.to + 1]?.t0 ?? mediaDuration(p, op.mediaId);
-      const t0 = Math.max(prevEnd + pad, a.t0 - pad);
-      const t1 = Math.min(nextStart - pad, b.t1 + pad);
+      const t0 = Math.min(a.t0, Math.max(prevEnd + pad, a.t0 - pad));
+      const t1 = Math.max(b.t1, Math.min(nextStart - pad, b.t1 + pad));
       if (t1 > t0) cutRange(p, op.mediaId, t0, t1, newId);
+      const clips = mainClips(p);
+      const drop = new Set<string>();
+      for (let i = 1; i < clips.length; i++) {
+        if (clips[i - 1].mediaId !== op.mediaId || clips[i].mediaId !== op.mediaId || clips[i - 1].out > t0 + .001 || clips[i].in < t1 - .001) continue;
+        let l = i - 1, r = i;
+        const lastIn = (c: Clip) => words.filter((w) => w.t1 <= c.out + .001 && w.t0 >= c.in - .001).at(-1);
+        const firstIn = (c: Clip) => words.find((w) => w.t0 >= c.in - .001 && w.t1 <= c.out + .001);
+        const hasSpeech = (c: Clip) => words.some((w) => w.t1 > c.in + .001 && w.t0 < c.out - .001);
+        // Earlier silence cuts can leave a speechless island beside the removed phrase.
+        while (!hasSpeech(clips[l]) && l > 0 && clips[l - 1].mediaId === op.mediaId && clips[l - 1].out <= clips[l].in) l--;
+        while (!hasSpeech(clips[r]) && r + 1 < clips.length && clips[r + 1].mediaId === op.mediaId && clips[r].out <= clips[r + 1].in) r++;
+        const left = clips[l], right = clips[r], last = lastIn(left), next = firstIn(right);
+        if (!last || !next) continue;
+        const before = Math.max(0, (left.out - last.t1) / left.speed), after = Math.max(0, (next.t0 - right.in) / right.speed);
+        const islands = clips.slice(l + 1, r);
+        const air = before + after + islands.reduce((sum, c) => sum + clipDuration(c), 0);
+        if (air <= .6 && !islands.length) continue;
+        // a long speechless stretch may be the picture doing the work (a screen demo): leave it to the editor
+        if (air > PAUSE_MAX) {
+          ctx.report?.(`cut_words ${op.mediaId} ${op.from}–${op.to}: kept ${air.toFixed(2)}s without speech across the cut (longer than ${PAUSE_MAX}s, may be on-screen action) — look at it before cutting.`);
+          continue;
+        }
+        const keepBefore = Math.min(before, Math.max(.06, .12 - after));
+        const keepAfter = Math.min(after, .12 - keepBefore);
+        left.out = r3(last.t1 + keepBefore * left.speed);
+        const newIn = r3(next.t0 - keepAfter * right.speed);
+        shiftKeyframes(right, (newIn - right.in) / right.speed);
+        right.in = newIn;
+        for (const island of islands) drop.add(island.id);
+        ctx.report?.(`cut_words ${op.mediaId} ${op.from}–${op.to}: pause across cut shortened from ${air.toFixed(2)}s to ${(keepBefore + keepAfter).toFixed(2)}s.`);
+      }
+      p.clips = p.clips.filter((c) => !drop.has(c.id));
       break;
     }
 
