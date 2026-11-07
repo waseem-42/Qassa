@@ -1,5 +1,6 @@
 import { cancelUpload, useUploads } from '../lib/import.ts';
 import { useStore } from '../lib/store.ts';
+import { uploadError } from '../lib/upload-error.ts';
 
 export function Uploads() {
   const name = useStore((s) => s.name);
@@ -9,8 +10,17 @@ export function Uploads() {
     <div key={u.id} className="rounded-lg border border-ink-700 bg-ink-850 p-2 text-xs" data-upload={u.status}>
       <div className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate" dir="auto">{u.file.name}</span>
         {u.status !== 'processing' && <button className="btn btn-ghost h-6 text-xs" onClick={() => cancelUpload(u.id)}>{u.status === 'error' ? 'إغلاق' : 'إلغاء'}</button>}</div>
-      <div className="my-1 text-ink-400">{u.status === 'error' ? u.error : u.status === 'queued' ? 'بانتظار الرفع' : u.status === 'processing' ? 'اكتمل الرفع · يفحص الملف…' : `يرفع ${Math.round(u.progress * 100)}٪`}</div>
-      <progress className="h-1 w-full accent-accent" max={1} value={u.progress} aria-label={`رفع ${u.file.name}`} />
+      {u.status === 'error' ? <UploadError raw={u.error} /> : <>
+        <div className="my-1 text-ink-400">{u.status === 'queued' ? 'بانتظار الرفع' : u.status === 'processing' ? 'اكتمل الرفع · يفحص الملف…' : `يرفع ${Math.round(u.progress * 100)}٪`}</div>
+        <progress className="h-1 w-full accent-accent" max={1} value={u.progress} aria-label={`رفع ${u.file.name}`} />
+      </>}
     </div>
   ))}</div>;
+}
+
+function UploadError({ raw }: { raw?: string }) {
+  const e = uploadError(raw);
+  return <div className="my-1 text-cut-text" role="alert">{e.text}
+    {e.details && <details className="mt-1 text-ink-400"><summary className="cursor-pointer">تفاصيل تقنية</summary><p className="mt-1 break-all" dir="ltr">{e.details}</p></details>}
+  </div>;
 }

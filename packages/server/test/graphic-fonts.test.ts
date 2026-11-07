@@ -1,12 +1,16 @@
-import { afterAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, expect, it } from 'vitest';
 import { GRAPHIC_RUNTIME } from '@edit/shared';
-import { closeBrowser, fontFaceCss, getBrowser } from '../src/textimg.ts';
+import { closeBrowser, fontFaceCss, getBrowser, launchBrowser } from '../src/textimg.ts';
 import { readyGraphicFonts, settleGraphicPaint } from '../src/graphics.ts';
 
+// Launch the shared browser outside the tests' own time limits.
+beforeAll(async () => { await getBrowser(); }, 60_000);
 afterAll(closeBrowser);
 it('loads unused faces before a later worker measures its first title', async () => {
-  const browser = await getBrowser();
-  const a = await browser.newPage(), b = await browser.newPage();
+  // One page per browser process, as in the renderer: a background tab in a shared process can stall
+  // its screenshots when the machine is busy (seen on cold, fully parallel test runs).
+  const other = await launchBrowser();
+  const a = await (await getBrowser()).newPage(), b = await other.newPage();
   try {
     const html = `<style>${fontFaceCss(undefined, ['IBM Plex Sans Arabic'])}body{margin:0}</style><svg width="480" height="120"></svg><script>
       const canvas = document.createElement('canvas').getContext('2d'), widths = new Map();
@@ -31,8 +35,8 @@ it('loads unused faces before a later worker measures its first title', async ()
     const reference = await a.screenshot({ type: 'png', omitBackground: true });
     const laterWorker = await b.screenshot({ type: 'png', omitBackground: true });
     expect(Buffer.from(laterWorker).equals(Buffer.from(reference))).toBe(true);
-  } finally { await a.close(); await b.close(); }
-}, 15_000);
+  } finally { await a.close(); await other.close(); }
+}, 30_000);
 
 it('settles active paints and falls back when animation frames are throttled', async () => {
   const page = await (await getBrowser()).newPage();
@@ -43,4 +47,4 @@ it('settles active paints and falls back when animation frames are throttled', a
     await page.evaluate(() => { window.requestAnimationFrame = () => { throw new Error('unavailable'); }; });
     expect(await settleGraphicPaint(page)).toBe(false);
   } finally { await page.close(); }
-});
+}, 15_000);
