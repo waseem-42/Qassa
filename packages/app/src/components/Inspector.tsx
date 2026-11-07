@@ -85,6 +85,8 @@ function ClipTabs({ kind, clip, count, project }: { kind: ClipKind; clip: Clip; 
     : kind === 'audio' ? ['audio', 'time']
     : ['picture', ...(media?.hasAudio ? ['audio' as const] : []), 'time'];
   const [tab, setTab] = useTab(kind, tabs);
+  const editText = useStore((s) => s.editText);
+  useEffect(() => { if (editText === clip.id && kind === 'text') setTab('text'); }, [editText, clip.id, kind]);
   return (
     <>
       <ClipSummary clip={clip} count={count} project={project} kind={kind} />
@@ -412,6 +414,14 @@ function TextControls({ clip }: { clip: Clip }) {
   const st = TextStyle.parse(clip.textStyle ?? {});
   const themeText = useStore((x) => x.project!.settings.theme.text);
   const [text, setText] = useState(clip.text ?? '');
+  const input = useRef<HTMLTextAreaElement>(null);
+  const editText = useStore((s) => s.editText);
+  useEffect(() => {
+    if (editText !== clip.id) return;
+    input.current?.focus();
+    input.current?.select();
+    useStore.setState({ editText: undefined });
+  }, [editText, clip.id]);
   useEffect(() => setText(clip.text ?? ''), [clip.id, clip.text]);
   const style = (patch: Partial<Omit<TextStyle, 'background'>> & { background?: string | null }, c = true) => {
     const o: Op[] = [{ op: 'update_clip', clipId: clip.id, patch: { textStyle: patch } }];
@@ -419,7 +429,7 @@ function TextControls({ clip }: { clip: Clip }) {
   };
   return (
     <Section title="النص">
-      <textarea className="field mb-2 h-20 w-full resize-none py-1 leading-6" dir="rtl" value={text}
+      <textarea ref={input} aria-label="محتوى النص" className="field mb-2 h-20 w-full resize-none py-1 leading-6" dir="rtl" value={text}
         onChange={(e) => setText(e.target.value)} onBlur={() => text !== clip.text && ops([{ op: 'update_clip', clipId: clip.id, patch: { text } }])} />
       <Row label="الشكل">
         <select className="field" value={st.preset} onChange={(e) => style({ preset: e.target.value as TextStyle['preset'] })}>
@@ -645,7 +655,6 @@ function SfxSection({ project }: { project: Project }) {
 
 function ProjectInspector({ project }: { project: Project }) {
   const { ops } = useStore.getState();
-  const time = useStore((s) => s.time);
   const set = (patch: Partial<Project['settings']>) => ops([{ op: 'set_settings', patch }]);
   const [tab, setTab] = useTab('project', ['project', 'theme', 'sfx']);
   return (
@@ -684,7 +693,7 @@ function ProjectInspector({ project }: { project: Project }) {
         {project.stylesUsed.map((style) => <button key={style.id} className="used-style-row" onClick={() => useStore.getState().openStyle(style.id, style.source)}><strong>{style.name}</strong><small>{({ preset: 'جاهز', saved: 'محفوظ', library: 'مرجع مكتبة' })[style.source]} · {new Date(style.at).toLocaleDateString('ar-SA', { calendar: 'gregory' })}</small><span>{style.what}</span></button>)}
       </Section>
       <Section title="إضافة">
-        <button className="btn w-full justify-center" onClick={() => ops([{ op: 'add_text', text: 'نص جديد', start: time, duration: 4, style: { preset: 'lower-third', x: 0.92, y: 0.84, align: 'start', size: 54, animation: 'slide-up' } }])}>
+        <button className="btn w-full justify-center" onClick={() => useStore.getState().addTitle()}>
           + نص عند المؤشر
         </button>
         <button className="btn mt-2 w-full justify-center" title="كابشن من النص المفرّغ — للكلام اللي باقي بعد القص فقط" onClick={autoCaptions}>

@@ -10,9 +10,10 @@ import { api, fileUrl, projectPath } from '../lib/api.ts';
 import { fadeGain, GradeRenderer, pictureView } from '../lib/glgrade.ts';
 import { EditHandles } from './EditHandles.tsx';
 import { audioLevel, setDenoise, setGain } from '../lib/audio.ts';
-import { Icon, Mark, Spinner } from './Brand.tsx';
-import { importFiles } from '../lib/import.ts';
-import { StartChoice, startShapeOps } from './StartChoice.tsx';
+import { Icon, Spinner } from './Brand.tsx';
+import { importFiles, isFileDrag } from '../lib/import.ts';
+import { libraryPlacementOps } from '../lib/library-placement.ts';
+import { shortcutTitle, useKeys } from '../lib/keys.ts';
 import { duckGain, trackGain } from '../lib/mix.ts';
 
 /** A main-track piece: a video played by one of the two <video> elements, or a still drawn for its clip's length. */
@@ -63,6 +64,7 @@ export function Viewer() {
   const project = useStore((s) => s.project)!;
   const name = useStore((s) => s.name)!;
   const playing = useStore((s) => s.playing);
+  const selected = useStore((s) => s.selected);
   const time = useStore((s) => s.time);
   const graphicPick = useStore((s) => s.graphicPick);
   const size = outputSize(project.settings);
@@ -390,10 +392,11 @@ export function Viewer() {
           })}
           <div className="pointer-events-none absolute left-0 top-0 origin-top-left" style={{ width: size.width, height: size.height, transform: `scale(${k})` }}>
             {texts.map((c) => {
-              const local = time - c.start;
               const dur = clipDuration(c);
-              const anim = c.textStyle?.animation ?? 'fade';
               const d = Math.min(0.35, dur / 3);
+              // Editing an entrance on a paused frame must leave its words visible.
+              const local = !playing && selected.includes(c.id) ? Math.max(d, time - c.start) : time - c.start;
+              const anim = c.textStyle?.animation ?? 'fade';
               const a = anim === 'none' ? 1 : Math.min(1, local / d, (dur - local) / d);
               const dy = anim === 'slide-up' ? Math.max(0, 1 - local / d) * size.height * 0.04 : 0;
               const sc = anim === 'pop' ? 0.92 + 0.08 * Math.min(1, local / d) : 1;
@@ -419,30 +422,32 @@ export function Viewer() {
   );
 }
 
-/** No clip on the timeline yet: drop a video here (or pick one) to start; while the proxy is made, say so. */
+/** Import joins the library; placement is an explicit, undoable action. */
 function EmptyViewer() {
   const project = useStore((s) => s.project)!;
-  const [shape, setShape] = useState<'video' | 'podcast' | 'empty'>(() => project.tracks.length === 1 ? 'empty' : project.tracks.filter((t) => t.kind === 'overlay').length === 2 ? 'podcast' : 'video');
-  const jobs = useStore((s) => s.jobs);
   const [over, setOver] = useState(false);
-  const analyzing = Object.values(jobs).find((j) => j.kind === 'analyze' && ['running', 'queued'].includes(j.status) && (j.steps?.includes('proxy') || j.stage === 'proxy') && project.media.some((m) => m.role === 'source' && m.kind === 'video' && (j.mediaId ? j.mediaId === m.id : j.label.endsWith(m.name))));
+  const [placing, setPlacing] = useState(false);
+  const visuals = project.media.some((m) => m.kind === 'video' || m.kind === 'image');
   return (
     <div className={`absolute inset-3 z-20 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed text-center transition-colors ${over ? 'border-accent bg-accent/10' : 'border-ink-700 hover:border-ink-500'}`} dir="rtl"
-      onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+      onDragOver={(e) => { if (isFileDrag(e.dataTransfer)) { e.preventDefault(); setOver(true); } }} onDragLeave={() => setOver(false)}
       onDrop={(e) => { e.preventDefault(); setOver(false); e.stopPropagation(); importFiles([...e.dataTransfer.files]); }}>
-      {analyzing ? (
+      {!project.media.length ? (
         <>
-          <Spinner size={32} />
-          <span className="text-ink-300">{`يجهّز المقطع: ${analyzing.stage ?? ''} ${Math.round(analyzing.progress * 100)}%`}</span>
-          <span className="text-xs text-ink-500">الملف في مكتبة المشروع؛ اسحبه إلى التايملاين متى ما تبي. التحليل يكمل بالخلفية.</span>
+          <span className="text-lg text-ink-200">أضف ملفاتك</span>
+          <label className="btn btn-primary cursor-pointer">استيراد ملفات<input type="file" hidden accept="video/*,audio/*,image/*" multiple onChange={(e) => { importFiles([...(e.target.files ?? [])]); e.target.value = ''; }} /></label>
         </>
       ) : (
         <>
-          <Mark size={56} />
-          <span className="text-lg text-ink-200">أفلت مقطعك هنا</span>
-          <label className="btn btn-primary cursor-pointer">أو اختر ملف<input type="file" hidden accept="video/*,audio/*,image/*" multiple onChange={(e) => { importFiles([...(e.target.files ?? [])]); e.target.value = ''; }} /></label>
-          {!project.media.length && <div className="flex flex-col items-center gap-2"><span className="text-xs text-ink-500">ابدأ بمسارات تناسبك — كلها قابلة للتغيير</span><StartChoice value={shape} onChange={async (start) => { if (await useStore.getState().ops(startShapeOps(project, start))) setShape(start); }} /></div>}
-          <span className="max-w-md text-xs leading-6 text-ink-500">الملفات تنضاف لمكتبة المشروع، وتحطها على التايملاين بسحبها إلى مسار أو بزر ＋. تفريغ الكلام يبدأ فقط لما تطلبه.</span>
+          <span className="max-w-md px-3 text-sm leading-6 text-ink-200">اسحب من المكتبة للتايملاين، أو اضغط ＋ على الملف</span>
+          <button className="btn btn-primary" disabled={!visuals || placing || project.tracks.find((t) => t.id === MAIN_TRACK)?.locked} onClick={async () => {
+            const s = useStore.getState();
+            if (!s.project || placing) return;
+            setPlacing(true);
+            try { await s.ops(libraryPlacementOps(s.project)); }
+            catch (e) { s.notify((e as Error).message); }
+            finally { setPlacing(false); }
+          }}>ضع الكل على التايملاين</button>
         </>
       )}
     </div>
@@ -585,6 +590,7 @@ function GraphicLayer({ clip, project, base, theme, scale, time }: { clip: Clip;
 }
 
 function Transport({ total, safe, setSafe }: { total: number; safe: boolean; setSafe: (b: boolean) => void }) {
+  const custom = useKeys((s) => s.custom);
   const time = useStore((s) => s.time);
   const playing = useStore((s) => s.playing);
   const { aspect, resolution, fps } = useStore((s) => s.project!.settings);
@@ -595,10 +601,10 @@ function Transport({ total, safe, setSafe }: { total: number; safe: boolean; set
     <div className="transport" dir="ltr">
       <span className="transport-meta num" title="المقاس · الدقة · الفريمات (من إعدادات المشروع)">{aspect} · {resolution}p · {fps} fps</span>
       <div className="transport-controls">
-        <button className="btn btn-ghost" title="البداية (Home)" aria-label="البداية" onClick={() => seek(0)}>{'⏮︎'}</button>
-        <button className="btn btn-ghost" title="فريم للخلف (←)" aria-label="فريم للخلف" onClick={() => seek(time - 1 / fps)}>◂</button>
-        <button className="play-button" aria-label={playing ? 'إيقاف التشغيل مؤقتًا' : 'تشغيل المعاينة'} title={playing ? 'إيقاف مؤقت (مسافة)' : 'تشغيل (مسافة)'} disabled={!total} onClick={() => setPlaying(!playing)}>{playing ? '❚❚' : '▶'}</button>
-        <button className="btn btn-ghost" title="فريم للأمام (→)" aria-label="فريم للأمام" onClick={() => seek(time + 1 / fps)}>▸</button>
+        <button className="btn btn-ghost" title={shortcutTitle('البداية', 'start', custom)} aria-label="البداية" onClick={() => seek(0)}>{'⏮︎'}</button>
+        <button className="btn btn-ghost" title={shortcutTitle('فريم للخلف', 'frameBack', custom)} aria-label="فريم للخلف" onClick={() => seek(time - 1 / fps)}>◂</button>
+        <button className="play-button" aria-label={playing ? 'إيقاف التشغيل مؤقتًا' : 'تشغيل المعاينة'} title={shortcutTitle(playing ? 'إيقاف مؤقت' : 'تشغيل', 'play', custom)} disabled={!total} onClick={() => setPlaying(!playing)}>{playing ? '❚❚' : '▶'}</button>
+        <button className="btn btn-ghost" title={shortcutTitle('فريم للأمام', 'frameFwd', custom)} aria-label="فريم للأمام" onClick={() => seek(time + 1 / fps)}>▸</button>
         <span className="transport-time num">{fmtTime(time, 2)} <span>/ {fmtTime(total, 2)}</span></span>
       </div>
       <div className="transport-tools">

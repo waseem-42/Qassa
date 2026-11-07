@@ -377,3 +377,11 @@ Walked through as a new user on a fresh project (new project → drop a talking 
 ## The styles library, rebuilt (Claude, 2026-11-07)
 
 - Six overlapping tabs became three: «طبّق على مشروعك» (looks, filtered by video type, and the editing recipes), «اكتشف أفكار» (the 1,213 references sorted by use in a side list — `shared/src/style-uses.ts` classifies each entry and cleans Awesome's prompt titles; web toys, workflows and entries without a preview hidden unless «أظهر الكل»; clips first, then pictures, films → scenes → prompts) and «مكتبتي» (favourites, recent, saved). The source is a small credit under the title instead of the filter. Space plays from any focused control (buttons, sliders, lists) except text fields and menus; a held key toggles once.
+
+
+## New-user editing details (Task 22, 2026-11-07)
+
+- All three title actions share one placement helper: consistent styling, an available text layer, duration capped by remaining content (minimum 1 s; 4 s without remaining content), immediate selection and the text field focused with its contents selected. A selected title's entrance is settled only in the paused viewer; playback and export retain the original animation.
+- Between-track insert zones are invisible and ignore clicks outside a drag. Snapping is labelled «التصاق» separately from «الأساسي»; audio routing uses a readable «ينخفض تحت الكلام» / «كلام» chip. Timeline and transport tooltips follow the current rebindable shortcuts.
+- The empty viewer offers import without repeating the project-start choice. With a library it explains placement and offers «ضع الكل على التايملاين»: videos/images in library order on V1 through the existing placement path, in one undo batch; audio stays in the library.
+- Validation: 338 tests in 66 files pass, typecheck clean, app build passes. Real Chrome on isolated 4392/5192 verifies all title entry points, typing, paused versus playing animation, dynamic shortcuts, idle hover/click-through, between-track media drops, the audio chip and one-step batch undo/redo. Nine screenshots and logs are in artifacts/qa/task22/. QA projects/trash are empty and QA servers stopped; user data was untouched. No new ops, MCP changes, commit or installer rebuild.

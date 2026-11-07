@@ -6,6 +6,7 @@ import { useFavorites } from './favorites.ts';
 import type { ExportQuality } from './export.ts';
 import { lookOf, pasteLookOps, type Look } from './look.ts';
 import { duplicateOps, pasteOps } from './clipboard.ts';
+import { titlePlan } from './title.ts';
 
 export interface Job {
   mediaId?: string; steps?: string[];
@@ -43,6 +44,8 @@ interface State {
   playMarked(): void;
   deleteMarkedRange(confirmed?: boolean): Promise<void>;
   selected: string[];
+  editText?: string;
+  addTitle(): Promise<void>;
   zoom: number; // px per second on the timeline
   /** the magnet: drags catch on edges (timeline) and guides (preview) */
   magnet: boolean;
@@ -377,6 +380,17 @@ export const useStore = create<State>((set, get) => ({
       }
       get().notify((e as Error).message);
       return false;
+    }
+  },
+
+  async addTitle() {
+    const { project, time, name } = get();
+    if (!project) return;
+    const plan = titlePlan(project, time);
+    set({ playing: false });
+    if (await get().ops(plan.ops) && get().name === name && get().project?.clips.some((c) => c.id === plan.id)) {
+      set({ selected: [plan.id], editText: plan.id });
+      get().setPanel('inspect');
     }
   },
 

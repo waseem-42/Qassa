@@ -5,7 +5,7 @@ import {
 } from '@edit/shared';
 import { useStore, type Analysis } from '../lib/store.ts';
 import { fileUrl } from '../lib/api.ts';
-import { actionFor, comboOf } from '../lib/keys.ts';
+import { actionFor, comboOf, shortcutTitle, useKeys } from '../lib/keys.ts';
 import { useRowHeight, useTimelineView } from '../lib/timeline-view.ts';
 import { snapSpan, snapTime, timelineTargets } from '../lib/snap.ts';
 import { deleteKeysPatch, keyTimes, moveKeysPatch } from '../lib/anim.ts';
@@ -143,6 +143,14 @@ export function Timeline() {
   const name = useStore((s) => s.name)!;
   const zoom = useStore((s) => s.zoom);
   const largeWave = useStore((s) => s.largeWave);
+  const custom = useKeys((s) => s.custom);
+  const trackDragging = useTrackDrag((s) => s.id);
+  const [mediaDragging, setMediaDragging] = useState(false);
+  useEffect(() => {
+    const end = () => setMediaDragging(false);
+    addEventListener('dragend', end); addEventListener('drop', end);
+    return () => { removeEventListener('dragend', end); removeEventListener('drop', end); };
+  }, []);
   const selected = useStore((s) => s.selected);
   const analysis = useStore((s) => s.analysis);
   const { seek, select, ops, setZoom } = useStore.getState();
@@ -478,8 +486,8 @@ export function Timeline() {
 
   return (
     <div ref={outer} className="flex h-full flex-col border-t border-ink-800 bg-ink-900" dir="ltr" onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { setDrag(undefined); setSnapAt(undefined); pointer.current = undefined; }}
-      onDragEnter={(e) => { if (isFileDrag(e.dataTransfer) || e.dataTransfer.types.includes(MEDIA_DRAG)) { e.preventDefault(); e.stopPropagation(); } }}
-      onDragLeave={(e) => { const r = e.currentTarget.getBoundingClientRect(); if (e.clientX < r.left || e.clientX >= r.right || e.clientY < r.top || e.clientY >= r.bottom) { setLanding(); setSnapAt(undefined); pointer.current = undefined; } }}
+      onDragEnter={(e) => { if (isFileDrag(e.dataTransfer) || e.dataTransfer.types.includes(MEDIA_DRAG)) { e.preventDefault(); e.stopPropagation(); setMediaDragging(true); } }}
+      onDragLeave={(e) => { const r = e.currentTarget.getBoundingClientRect(); if (e.clientX < r.left || e.clientX >= r.right || e.clientY < r.top || e.clientY >= r.bottom) { setMediaDragging(false); setLanding(); setSnapAt(undefined); pointer.current = undefined; } }}
       onDragOver={(e) => {
         if (!isFileDrag(e.dataTransfer) && !e.dataTransfer.types.includes(MEDIA_DRAG)) return;
         e.preventDefault(); e.stopPropagation();
@@ -491,6 +499,7 @@ export function Timeline() {
       onDrop={(e) => {
         if (!isFileDrag(e.dataTransfer) && !e.dataTransfer.types.includes(MEDIA_DRAG)) return;
         e.preventDefault(); e.stopPropagation();
+        setMediaDragging(false);
         const next = landingRef.current;
         if (next && !next.error) {
           if (isFileDrag(e.dataTransfer)) importFiles([...e.dataTransfer.files], next.request);
@@ -500,23 +509,23 @@ export function Timeline() {
       }}>
       <div className="timeline-toolbar flex shrink-0 items-center gap-3 border-b border-ink-800 px-3" dir="rtl">
         <span className="panel-title">التايملاين</span>
-        <button className="btn btn-ghost text-xs" aria-label="تكبير مساحة التايملاين" aria-pressed={maximised} onClick={() => useTimelineView.getState().toggleMax()} title="تكبير / استعادة (Shift+F)">{maximised ? 'استعادة ↙' : 'توسيع ↗'}</button>
+        <button className="btn btn-ghost text-xs" aria-label="تكبير مساحة التايملاين" aria-pressed={maximised} onClick={() => useTimelineView.getState().toggleMax()} title={shortcutTitle("تكبير / استعادة", "timelineMax", custom)}>{maximised ? 'استعادة ↙' : 'توسيع ↗'}</button>
         <select className="rounded border border-ink-700 bg-ink-900 text-xs text-ink-300" aria-label="حجم المسارات" value={size} onChange={(e) => useTimelineView.getState().setSize(e.target.value as typeof size)}><option value="compact">مضغوط</option><option value="normal">عادي</option><option value="large">كبير</option></select>
         <div className="timeline-tools">
-          <button className="btn btn-ghost timeline-tool" title="تقسيم عند المؤشر (S)" aria-label="تقسيم عند المؤشر" disabled={!project.clips.length} onClick={() => { const s = useStore.getState(); const target = project.clips.find((c) => selected.includes(c.id) && s.time > c.start && s.time < clipEnd(c)) ?? timelineToSource(project, s.time)?.clip; if (target && s.time > target.start && s.time < clipEnd(target)) ops([{ op: 'split', clipId: target.id, at: s.time }]); else s.notify('حرّك المؤشر داخل اللقطة لتقسيمها', 'info'); }}><Icon name="cut" size={16} /><span>تقسيم</span></button>
-          <button className="btn btn-ghost timeline-tool" title="حذف المحدد (Delete)" aria-label="حذف المحدد" disabled={!selected.length && !range} onClick={async () => { if (!selected.length) return useStore.getState().deleteMarkedRange(); if (await ops(deleteOps(selected))) select([]); }}><Icon name="trash" size={16} /></button>
-          <button className="btn btn-ghost timeline-tool" title="إضافة نص" aria-label="إضافة نص" onClick={() => ops([{ op: 'add_text', text: 'نص جديد', start: useStore.getState().time, duration: 4, style: { preset: 'lower-third', animation: 'slide-up' } }])}><Icon name="text" size={16} /><span>نص</span></button>
+          <button className="btn btn-ghost timeline-tool" title={shortcutTitle("تقسيم عند المؤشر", "split", custom)} aria-label="تقسيم عند المؤشر" disabled={!project.clips.length} onClick={() => { const s = useStore.getState(); const target = project.clips.find((c) => selected.includes(c.id) && s.time > c.start && s.time < clipEnd(c)) ?? timelineToSource(project, s.time)?.clip; if (target && s.time > target.start && s.time < clipEnd(target)) ops([{ op: 'split', clipId: target.id, at: s.time }]); else s.notify('حرّك المؤشر داخل اللقطة لتقسيمها', 'info'); }}><Icon name="cut" size={16} /><span>تقسيم</span></button>
+          <button className="btn btn-ghost timeline-tool" title={shortcutTitle("حذف المحدد", "delete", custom)} aria-label="حذف المحدد" disabled={!selected.length && !range} onClick={async () => { if (!selected.length) return useStore.getState().deleteMarkedRange(); if (await ops(deleteOps(selected))) select([]); }}><Icon name="trash" size={16} /></button>
+          <button className="btn btn-ghost timeline-tool" title={shortcutTitle("إضافة نص", "addText", custom)} aria-label="إضافة نص" onClick={() => useStore.getState().addTitle()}><Icon name="text" size={16} /><span>نص</span></button>
           <GraphicPicker />
-          <button className="btn btn-ghost timeline-tool magnet-toggle" aria-label="موجة صوت كبيرة" aria-pressed={largeWave} title="موجة صوت كبيرة (Shift+W)" onClick={() => useStore.getState().setLargeWave(!largeWave)}><Icon name="speaker" size={16} /><span>الموجة</span></button>
-          <button className="btn btn-ghost timeline-tool" title="إضافة تعليق (C)" aria-label="إضافة تعليق" onClick={() => useStore.getState().startNote()}><Icon name="comment" size={16} /></button>
+          <button className="btn btn-ghost timeline-tool magnet-toggle" aria-label="موجة صوت كبيرة" aria-pressed={largeWave} title={shortcutTitle("موجة صوت كبيرة", "largeWave", custom)} onClick={() => useStore.getState().setLargeWave(!largeWave)}><Icon name="speaker" size={16} /><span>الموجة</span></button>
+          <button className="btn btn-ghost timeline-tool" title={shortcutTitle("إضافة تعليق", "comment", custom)} aria-label="إضافة تعليق" onClick={() => useStore.getState().startNote()}><Icon name="comment" size={16} /></button>
           <button className="btn btn-ghost timeline-tool magnet-toggle" aria-pressed={mainMagnet} aria-label="مغناطيس المسار الأساسي" title={mainMagnet ? 'مغناطيس الأساسي شغّال — لقطات المسار الأساسي ورا بعض بدون فراغ. اضغط عشان تتحرك بحرية وتترك فراغ' : 'مغناطيس الأساسي طافي — اسحب لقطات المسار الأساسي لأي وقت؛ الحذف يترك فراغ. اضغط عشان ترجع تتلاصق'}
             onClick={() => useLayout.getState().setMainMagnet(!mainMagnet)}><Icon name="magnet" size={16} /><span>الأساسي</span></button>
-          <button className="btn btn-ghost timeline-tool magnet-toggle" aria-pressed={magnet} title={magnet ? 'المغناطيس شغّال (N) — اللقطات تلقط الحواف والمؤشر. Alt أثناء السحب يوقفه مؤقتًا' : 'المغناطيس طافي (N)'} aria-label="المغناطيس" onClick={() => useStore.getState().setMagnet(!magnet)}><Icon name="magnet" size={16} /></button>
+          <button className="btn btn-ghost timeline-tool magnet-toggle" aria-pressed={magnet} title={shortcutTitle(magnet ? 'التصاق شغّال — يلتقط الحواف؛ Alt يوقفه مؤقتًا' : 'التصاق طافي', 'magnet', custom)} aria-label="التصاق" onClick={() => useStore.getState().setMagnet(!magnet)}><Icon name="magnet" size={16} /><span>التصاق</span></button>
         </div>
-        {(marks.in !== undefined || marks.out !== undefined) && <div className="flex shrink-0 items-center gap-1 text-xs text-accent" data-marks-length><span className="num" dir="ltr">{range ? fmtTime(range[1] - range[0], 1) : `${marks.in !== undefined ? 'In' : 'Out'} ${fmtTime(marks.in ?? marks.out!, 1)}`}</span><button className="icon-button" aria-label="مسح علامات I/O" onClick={() => ops([{ op: 'set_marks', in: null, out: null }])}><Icon name="close" size={12} /></button></div>}
+        {(marks.in !== undefined || marks.out !== undefined) && <div className="flex shrink-0 items-center gap-1 text-xs text-accent" data-marks-length><span className="num" dir="ltr">{range ? fmtTime(range[1] - range[0], 1) : `${marks.in !== undefined ? 'In' : 'Out'} ${fmtTime(marks.in ?? marks.out!, 1)}`}</span><button className="icon-button" aria-label="مسح علامات I/O" title={shortcutTitle("مسح علامات I/O", "clearMarks", custom)} onClick={() => ops([{ op: 'set_marks', in: null, out: null }])}><Icon name="close" size={12} /></button></div>}
         <div className="flex-1" />
-        <div className="timeline-zoom"><input aria-label="تكبير التايملاين" type="range" min={0} max={1} step={0.001} style={{ width: 100 }} value={Math.log(zoom) / Math.log(400)} onChange={(e) => setZoom(Math.pow(400, Number(e.target.value)))} />
-        <button className="btn btn-ghost text-xs" title="عرض التايملاين كاملًا" onClick={() => { setZoom((view.width - 40) / Math.max(5, projectDuration(project))); requestAnimationFrame(() => requestAnimationFrame(() => { if (scroller.current) scroller.current.scrollLeft = 0; })); }}>ملاءمة</button></div>
+        <div className="timeline-zoom"><input aria-label="تكبير التايملاين" title={`${shortcutTitle('تكبير', 'zoomIn', custom)} · ${shortcutTitle('تصغير', 'zoomOut', custom)}`} type="range" min={0} max={1} step={0.001} style={{ width: 100 }} value={Math.log(zoom) / Math.log(400)} onChange={(e) => setZoom(Math.pow(400, Number(e.target.value)))} />
+        <button className="btn btn-ghost text-xs" title={shortcutTitle("عرض التايملاين كاملًا", "zoomFit", custom)} onClick={() => { setZoom((view.width - 40) / Math.max(5, projectDuration(project))); requestAnimationFrame(() => requestAnimationFrame(() => { if (scroller.current) scroller.current.scrollLeft = 0; })); }}>ملاءمة</button></div>
       </div>
       {/* the ruler sits inside the sideways scroller, so CSS sticky cannot follow the vertical scroll: move it by hand */}
       <div ref={rows} data-timeline-rows className="flex min-h-0 flex-1 overflow-y-auto overflow-x-hidden" onScroll={(e) => {
@@ -532,7 +541,7 @@ export function Timeline() {
           <div className="flex items-center gap-1 border-b border-ink-800 px-2 text-xs" style={{ height: NOTES_LANE }} dir="rtl">
             <span className="h-3 w-1 rounded bg-note" />
             <span className="flex-1 truncate text-ink-300">التعليقات</span>
-            <button className="px-1 text-ink-400 hover:text-note" title="تعليق عند المؤشر (C)" onClick={() => useStore.getState().startNote()}>＋</button>
+            <button className="px-1 text-ink-400 hover:text-note" title={shortcutTitle("تعليق عند المؤشر", "comment", custom)} onClick={() => useStore.getState().startNote()}>＋</button>
           </div>
         </div>
         <div ref={scroller} data-timeline-scroll className="relative h-max min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
@@ -561,7 +570,7 @@ export function Timeline() {
             </div>
             {tracks.map((t, i) => (
               <div key={t.id} className="relative">
-              {i > 0 && <div data-insert-track={i} className="track-insert-zone" title="اسحب هنا لإضافة مسار بين المسارين" />}
+              {i > 0 && <div data-insert-track={i} data-dragging={mediaDragging || drag?.kind === 'move' || !!trackDragging || undefined} data-media-drag={mediaDragging || undefined} className="track-insert-zone" title="اسحب هنا لإضافة مسار بين المسارين" />}
               <TrackRow
                 key={t.id}
                 track={t}
@@ -706,7 +715,7 @@ function TrackHead({ track, index, count, ghost }: { track: Track; index: number
         {canMute && toggle(track.muted, 'كتم', 'مكتوم — اضغط عشان يرجع الصوت', 'كتم صوت المسار', ['speaker', 'speakerOff'], { muted: !track.muted })}
         {canHide && toggle(track.hidden, 'إخفاء', 'مخفي — اضغط عشان يظهر', 'إخفاء المسار', ['eye', 'eyeOff'], { hidden: !track.hidden })}
         {toggle(track.locked, 'قفل', 'مقفول — لقطاته ما تتعدّل. اضغط لفتحه', 'قفل المسار: لقطاته ما تتحرك ولا تتعدّل', ['unlock', 'lock'], { locked: !track.locked })}
-        {track.kind === 'audio' && <button className="truncate text-[10px] text-ink-400 hover:text-accent" aria-label={`نوع صوت ${track.name}`} title="كلام: بلا خفض أو تلاشي تلقائي؛ موسيقى: تنخفض تحت الكلام" onClick={() => ops([{ op: 'set_track', trackId: track.id, patch: { audio: track.audio === 'voice' ? 'music' : 'voice' } }])}>{track.audio === 'voice' ? 'كلام' : 'موسيقى'}</button>}
+        {track.kind === 'audio' && <button className="track-audio-chip rounded border border-ink-700 bg-ink-800 px-1 text-ink-300 hover:text-accent" aria-label={`نوع صوت ${track.name}`} title="كلام: بلا خفض أو تلاشي تلقائي؛ موسيقى: تنخفض تحت الكلام" onClick={() => ops([{ op: 'set_track', trackId: track.id, patch: { audio: track.audio === 'voice' ? 'music' : 'voice' } }])}>{track.audio === 'voice' ? 'كلام' : 'ينخفض تحت الكلام'}</button>}
       </div>}
       {manage && <ManageTrack track={track} onClose={() => setManage(false)} />}
       {!ghost && <TrackResizer track={track} />}

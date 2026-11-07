@@ -120,6 +120,11 @@ export function actionFor(combo: string, custom = useKeys.getState().custom): Ac
 export const prettyKey = (k: string) =>
   k.replace('ArrowLeft', '←').replace('ArrowRight', '→').replace('ArrowUp', '↑').replace('ArrowDown', '↓').replace('Space', 'مسافة').replace('Escape', 'Esc');
 
+export function shortcutTitle(label: string, id: ActionId, custom = useKeys.getState().custom): string {
+  const keys = keysFor(id, custom).map(prettyKey).join(' / ');
+  return keys ? `${label} (${keys})` : label;
+}
+
 /** Spatial navigation inside the library grid (Enter is the button's native activation). */
 export function galleryStep(key: string, columns: number, rtl: boolean): number | undefined {
   return ({ ArrowLeft: rtl ? 1 : -1, ArrowRight: rtl ? -1 : 1, ArrowUp: -columns, ArrowDown: columns } as Record<string, number>)[key];

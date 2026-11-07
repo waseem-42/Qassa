@@ -267,7 +267,7 @@ function useShortcuts() {
         case 'redo': return s.redo();
         case 'comment': return s.startNote();
         case 'addText':
-          return s.ops([{ op: 'add_text', text: 'نص جديد', start: s.time, duration: 4, style: { preset: 'lower-third', x: 0.92, y: 0.84, align: 'start', size: 54, animation: 'slide-up' } }]);
+          return s.addTitle();
         case 'zoomIn': return s.setZoom(s.zoom * 1.25);
         case 'zoomOut': return s.setZoom(s.zoom / 1.25);
         case 'zoomFit': return s.setZoom((window.innerWidth - 160) / Math.max(5, projectDuration(p)));
