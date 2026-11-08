@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { fmtTime, MAIN_TRACK, clipEnd, speechClips, sourceToTimeline, timelineToSource, wordStates, type Project, type Transcript as T, type WordState } from '@edit/shared';
 import { useStore } from '../lib/store.ts';
 import { TranscribeButton } from './Transcribe.tsx';
+import { Fillers } from './Fillers.tsx';
 
 // Edit by text: select words, Delete cuts them, Restore brings them back. Words that are
 // cut are struck through; analysis/Claude suggestions are highlighted red until resolved.
@@ -137,9 +138,12 @@ function Words({ tr, project, mediaId }: { tr: T; project: Project; mediaId: str
             )}
           </>
         ) : (
-          <span className="text-xs text-ink-500">
-            {tr.words.length} كلمة · محذوف {cutCount} · <span className="num">{tr.model.split('@')[0]}</span> — {onMain ? 'حدّد كلمات بالسحب ثم Delete' : 'للقص بالكلمات ضع الملف على الأساسي؛ يمكنك استعراضه وتوليد كابشن هنا'}
-          </span>
+          <>
+            <span className="min-w-0 flex-1 truncate text-xs text-ink-500">
+              {tr.words.length} كلمة · محذوف {cutCount} · <span className="num">{tr.model.split('@')[0]}</span> — {onMain ? 'حدّد كلمات بالسحب ثم Delete' : 'للقص بالكلمات ضع الملف على الأساسي؛ يمكنك استعراضه وتوليد كابشن هنا'}
+            </span>
+            {onMain && <Fillers tr={tr} states={states} mediaId={mediaId} />}
+          </>
         )}
       </div>
       <div ref={box} className="min-h-0 flex-1 overflow-y-auto px-4 py-3 text-[15px] leading-[2.1]" dir="rtl" onPointerLeave={() => (dragging.current = false)}>

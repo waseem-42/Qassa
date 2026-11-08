@@ -18,7 +18,8 @@ export function autoCaptions() {
   const name = useStore.getState().name!;
   api.post<{ project: never; rev: number; history: never; count: number }>(`${projectPath(name)}/captions`, {}).then((r) => {
     useStore.setState({ project: r.project, rev: r.rev, history: r.history });
-    useStore.getState().notify(`${r.count} سطر كابشن`, 'info');
+    const lit = !!useStore.getState().project?.settings.captionStyle?.highlight;
+    useStore.getState().notify(lit ? `${r.count} سطر كابشن` : `${r.count} سطر كابشن — حدد سطرًا وفعّل «الكلمة المنطوقة» لتلوين الكلام`, 'info');
   }).catch((e) => useStore.getState().notify(e.message));
 }
 

@@ -774,3 +774,10 @@ input[type='range']:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 .spoken-word label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-ink-200); cursor: pointer; }
 .spoken-word input[type="color"] { width: 34px; height: 24px; border-radius: 4px; background: transparent; cursor: pointer; }
 .spoken-word p { flex-basis: 100%; font-size: 11px; line-height: 1.7; color: var(--color-ink-500); }
+
+/* Filler words in the text-editing panel */
+.fillers { position: relative; flex-shrink: 0; }
+.fillers .count-badge { margin-inline-start: 4px; }
+.fillers-pop { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 30; width: 260px; display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid var(--color-ink-600); border-radius: 10px; background: var(--color-ink-900); box-shadow: 0 16px 48px #0009; }
+.fillers-pop > p { font-size: 11px; line-height: 1.8; color: var(--color-ink-400); margin-bottom: 4px; }
+.fillers-row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; min-height: 30px; font-size: 13px; cursor: pointer; }
