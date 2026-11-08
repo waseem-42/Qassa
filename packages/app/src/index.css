@@ -781,3 +781,8 @@ input[type='range']:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 .fillers-pop { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 30; width: 260px; display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid var(--color-ink-600); border-radius: 10px; background: var(--color-ink-900); box-shadow: 0 16px 48px #0009; }
 .fillers-pop > p { font-size: 11px; line-height: 1.8; color: var(--color-ink-400); margin-bottom: 4px; }
 .fillers-row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; min-height: 30px; font-size: 13px; cursor: pointer; }
+button.transport-time { border-radius: 6px; padding: 3px 6px; cursor: text; }
+button.transport-time:hover { background: var(--color-ink-800); }
+.transport-time-input { width: 150px; height: 28px; text-align: center; font-size: 13px; border: 1px solid var(--color-accent); border-radius: 6px; background: var(--color-ink-950); color: var(--color-ink-200); }
+.transport-time-input[data-bad] { border-color: var(--color-cut); }
+.transport-time-input[data-bad], .transport-time-input[data-bad]:focus, .transport-time-input[data-bad]:focus-visible { border-color: var(--color-cut); outline-color: var(--color-cut); }

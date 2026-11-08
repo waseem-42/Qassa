@@ -7,6 +7,7 @@ import {
 import { withEdit } from '../lib/graphic-edit.ts';
 import { BOTH_PANELS, useStore } from '../lib/store.ts';
 import { useMediaQuery } from '../lib/workspace-layout.ts';
+import { parseTimecode } from '../lib/timecode.ts';
 import { api, fileUrl, projectPath } from '../lib/api.ts';
 import { fadeGain, GradeRenderer, pictureView } from '../lib/glgrade.ts';
 import { EditHandles } from './EditHandles.tsx';
@@ -620,7 +621,7 @@ function Transport({ total, safe, setSafe }: { total: number; safe: boolean; set
         <button className="btn btn-ghost" title={shortcutTitle('فريم للخلف', 'frameBack', custom)} aria-label="فريم للخلف" onClick={() => seek(time - 1 / fps)}>◂</button>
         <button className="play-button" aria-label={playing ? 'إيقاف التشغيل مؤقتًا' : 'تشغيل المعاينة'} title={shortcutTitle(playing ? 'إيقاف مؤقت' : 'تشغيل', 'play', custom)} disabled={!total} onClick={() => setPlaying(!playing)}>{playing ? '❚❚' : '▶'}</button>
         <button className="btn btn-ghost" title={shortcutTitle('فريم للأمام', 'frameFwd', custom)} aria-label="فريم للأمام" onClick={() => seek(time + 1 / fps)}>▸</button>
-        <span className="transport-time num">{fmtTime(time, 2)} <span>/ {fmtTime(total, 2)}</span></span>
+        <Clock time={time} total={total} />
         <button className="btn btn-ghost transport-rate num" data-on={rate !== 1} aria-label={`سرعة المعاينة ×${rate}`} title={shortcutTitle('سرعة المعاينة للمراجعة — التصدير ما يتغير', 'rate', custom)} onClick={() => useStore.getState().cycleRate()}>{rate}×</button>
       </div>
       <div className="transport-tools">
@@ -630,6 +631,29 @@ function Transport({ total, safe, setSafe }: { total: number; safe: boolean; set
         <button className="icon-button" aria-pressed={wide} title={wide ? 'رجّع اللوحات' : 'معاينة واسعة — تخفي اللوحات'} aria-label={wide ? 'رجّع اللوحات' : 'معاينة واسعة'} onClick={toggleWide}><Icon name="expand" size={16} /></button>
       </div>
     </div>
+  );
+}
+
+/** The playhead clock; click it and type a time to jump there (83, 1:23, +5). */
+function Clock({ time, total }: { time: number; total: number }) {
+  const [draft, setDraft] = useState<string>();
+  const [bad, setBad] = useState(false);
+  if (draft === undefined) return (
+    <button className="transport-time num" title="اضغط واكتب وقتًا للانتقال إليه — مثل 1:23 أو 83 أو ‎+5" onClick={() => { useStore.getState().setPlaying(false); setDraft(fmtTime(time, 2)); setBad(false); }}>
+      {fmtTime(time, 2)} <span>/ {fmtTime(total, 2)}</span>
+    </button>
+  );
+  const go = () => {
+    const t = parseTimecode(draft, time, total);
+    if (t === null) return setBad(true);
+    useStore.getState().seek(t);
+    setDraft(undefined);
+  };
+  return (
+    <input className="transport-time-input num" data-bad={bad || undefined} aria-label="انتقل إلى وقت" aria-invalid={bad} autoFocus value={draft} dir="ltr"
+      onFocus={(e) => e.currentTarget.select()} onChange={(e) => { setDraft(e.target.value); setBad(false); }}
+      onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') go(); else if (e.key === 'Escape') setDraft(undefined); }}
+      onBlur={() => setDraft(undefined)} />
   );
 }
 
