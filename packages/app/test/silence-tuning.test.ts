@@ -1,6 +1,6 @@
 import { expect, it, vi, afterEach } from 'vitest';
 import { applyOps, defaultTracks, mainDuration, Project, reviewSavings } from '@edit/shared';
-import { acceptOps, readTuning, saveTuning, tunedRanges } from '../src/lib/silence-tuning.ts';
+import { acceptOps, readTuning, saveTuning, tunedRanges, tunedSavings } from '../src/lib/silence-tuning.ts';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -52,4 +52,17 @@ it('remembers the tuning per viewer, and survives broken or denied storage', () 
   vi.stubGlobal('localStorage', { getItem() { throw Error('denied'); }, setItem() { throw Error('denied'); } });
   expect(readTuning()).toEqual({ min: 0, pad: 0 });
   expect(() => saveTuning({ min: 1, pad: 0 })).not.toThrow();
+});
+
+it('speeding silences up keeps them (no jump cut) and saves all but a quarter of their length', () => {
+  const p = project(), t = { min: 0, pad: 0, speed: 4 };
+  const ops = acceptOps(p.suggestions, t);
+  expect(ops.filter((o) => o.op === 'speed_range')).toHaveLength(2);
+  expect(ops.filter((o) => o.op === 'cut_range')).toHaveLength(1); // the retake is still cut
+  const next = applyOps(p, ops);
+  const expected = 20 - 2 - (0.4 + 2) * 0.75;
+  expect(mainDuration(next)).toBeCloseTo(expected);
+  expect(tunedSavings((list) => reviewSavings(p, list), p.suggestions, t)).toBeCloseTo(20 - expected);
+  expect(next.suggestions).toEqual([]);
+  expect(next.clips.filter((c) => c.trackId === 'V1').some((c) => c.speed === 4)).toBe(true);
 });

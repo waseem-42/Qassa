@@ -5,7 +5,7 @@ import { api, projectPath } from '../lib/api.ts';
 import { AgentTasks } from './AgentTasks.tsx';
 import { Ideas } from './Ideas.tsx';
 import { TranscriptNeeded } from './Transcribe.tsx';
-import { acceptOps, readTuning, saveTuning, tooShort, tunedRanges, type SilenceTuning } from '../lib/silence-tuning.ts';
+import { acceptOps, readTuning, saveTuning, SILENCE_SPEED, tooShort, tunedRanges, tunedSavings, type SilenceTuning } from '../lib/silence-tuning.ts';
 
 const reasons: Record<Suggestion['reason'], string> = {
   silence: 'صمت', retake: 'إعادة تسجيل', filler: 'كلمات زائدة', mistake: 'خطأ', other: 'أخرى',
@@ -26,7 +26,7 @@ export function Assistant() {
   const picked = project.suggestions.filter((s) => !excluded.includes(s.id));
   const ticked = (id: string) => !excluded.includes(id);
   const toCut = tunedRanges(picked, tuning);
-  const saved = reviewSavings(project, toCut);
+  const saved = tunedSavings((list) => reviewSavings(project, list), picked, tuning);
   const silences = project.suggestions.filter((s) => s.reason === 'silence');
   const leftAlone = silences.filter((s) => tooShort(s, tuning)).length;
   const duration = mainDuration(project);
@@ -46,7 +46,7 @@ export function Assistant() {
     try {
       if (await ops(accept ? acceptOps(picked, tuning) : [{ op: 'resolve_suggestions', ids: picked.map((s) => s.id), accept }])) {
         setExcluded([]);
-        notify(accept ? 'تم تطبيق القص — يمكنك التراجع بخطوة واحدة' : 'تم استبعاد الاقتراحات المحددة', 'info');
+        notify(accept ? `${tuning.speed ? 'تم تسريع السكتات' : 'تم تطبيق القص'} — يمكنك التراجع بخطوة واحدة` : 'تم استبعاد الاقتراحات المحددة', 'info');
       }
     } finally { setBusy(false); }
   };
@@ -62,10 +62,15 @@ export function Assistant() {
         {silences.length > 0 && <div className="silence-tuning">
           <label><span>أقصر سكتة تُقص</span><input type="range" min={0} max={3} step={0.1} value={tuning.min} onChange={(e) => setTuning({ ...tuning, min: Number(e.target.value) })} aria-valuetext={tuning.min ? `${tuning.min} ثانية` : 'كل السكتات'} /><output className={tuning.min ? 'num' : undefined}>{tuning.min ? `${tuning.min.toFixed(1)} ث` : 'الكل'}</output></label>
           <label title="يترك هذا القدر من الصمت عند طرفي كل سكتة، عشان الكلام ما يلتصق ببعضه"><span>نَفَس عند الأطراف</span><input type="range" min={0} max={0.5} step={0.05} value={tuning.pad} onChange={(e) => setTuning({ ...tuning, pad: Number(e.target.value) })} aria-valuetext={tuning.pad ? `${tuning.pad} ثانية` : 'بدون'} /><output className={tuning.pad ? 'num' : undefined}>{tuning.pad ? `${tuning.pad.toFixed(2)} ث` : 'بدون'}</output></label>
+          <div className="silence-mode" role="radiogroup" aria-label="وش يصير بالسكتات">
+            <span>السكتات</span>
+            <button className="btn h-7 text-xs" role="radio" aria-checked={!tuning.speed} onClick={() => setTuning({ min: tuning.min, pad: tuning.pad })}>تُقص</button>
+            <button className="btn h-7 text-xs" role="radio" aria-checked={!!tuning.speed} title="تبقى السكتة لكن تمر أسرع — بدون قفزة في الصورة" onClick={() => setTuning({ ...tuning, speed: SILENCE_SPEED })}>تتسرّع ×{SILENCE_SPEED}</button>
+          </div>
           {leftAlone > 0 && <p>{leftAlone} سكتة أقصر من الحد تبقى كما هي.</p>}
         </div>}
         <div className="mt-3 flex gap-2">
-          <button className="btn btn-primary flex-1 justify-center" disabled={busy || !toCut.length || !saved || saved >= duration} onClick={() => resolve(true)}>قص المحدد ({toCut.length})</button>
+          <button className="btn btn-primary flex-1 justify-center" disabled={busy || !toCut.length || !saved || saved >= duration} onClick={() => resolve(true)}>{tuning.speed && toCut.every((x) => x.reason === 'silence') ? 'سرّع' : 'قص'} المحدد ({toCut.length})</button>
           <button className="btn" disabled={busy || !picked.length} title="تجاهل هذي الاقتراحات" onClick={() => resolve(false)}>تجاهل</button>
         </div>
         {saved > 0 && saved >= duration && <p className="mt-2 text-xs text-cut-text">هذه الاقتراحات تحذف المقطع كاملًا؛ قلّل التحديد.</p>}

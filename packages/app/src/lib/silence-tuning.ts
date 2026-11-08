@@ -3,15 +3,20 @@ import type { Op, Suggestion } from '@edit/shared';
 // Silence cuts tuned by the viewer, like the "minimum silence" and "padding" knobs of auto-cut tools:
 // silences shorter than `min` stay, and `pad` seconds of each silence edge stay as breathing room.
 
-export interface SilenceTuning { min: number; pad: number }
+/** speed: 0 = silences are cut; above 1 = they stay, played that much faster (no jump cut) */
+export interface SilenceTuning { min: number; pad: number; speed?: number }
 export const DEFAULT_TUNING: SilenceTuning = { min: 0, pad: 0 };
+export const SILENCE_SPEED = 4;
 const KEY = 'qassa.silence-tuning';
 
 export function readTuning(): SilenceTuning {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || '{}');
-    const min = Number(v.min), pad = Number(v.pad);
-    return { min: Number.isFinite(min) ? Math.max(0, Math.min(3, min)) : 0, pad: Number.isFinite(pad) ? Math.max(0, Math.min(0.5, pad)) : 0 };
+    const min = Number(v.min), pad = Number(v.pad), speed = Number(v.speed);
+    return {
+      min: Number.isFinite(min) ? Math.max(0, Math.min(3, min)) : 0, pad: Number.isFinite(pad) ? Math.max(0, Math.min(0.5, pad)) : 0,
+      ...(speed > 1 && speed <= 16 ? { speed } : {}),
+    };
   } catch { return DEFAULT_TUNING; }
 }
 export function saveTuning(t: SilenceTuning) {
@@ -38,9 +43,20 @@ export function acceptOps(picked: Suggestion[], t: SilenceTuning): Op[] {
   const cut = tunedRanges(picked, t);
   if (!cut.length) return [];
   const ids = cut.map((s) => s.id);
-  if (t.pad === 0) return [{ op: 'resolve_suggestions', ids, accept: true }];
-  // later ranges first, so each cut leaves the source times of the next one where they were
-  const ops: Op[] = [...cut].sort((a, b) => b.t0 - a.t0).map((s) => ({ op: 'cut_range', mediaId: s.mediaId, t0: s.t0, t1: s.t1 }));
+  const fast = (s: Suggestion) => !!t.speed && s.reason === 'silence';
+  if (t.pad === 0 && !cut.some(fast)) return [{ op: 'resolve_suggestions', ids, accept: true }];
+  // later ranges first, so each edit leaves the source times of the next one where they were
+  const ops: Op[] = [...cut].sort((a, b) => b.t0 - a.t0).map((s): Op => (fast(s)
+    ? { op: 'speed_range', mediaId: s.mediaId, t0: s.t0, t1: s.t1, speed: t.speed! }
+    : { op: 'cut_range', mediaId: s.mediaId, t0: s.t0, t1: s.t1 }));
   ops.push({ op: 'resolve_suggestions', ids, accept: false });
   return ops;
+}
+
+/** Seconds the tuned edit saves: cut ranges in full, sped-up silences all but 1/speed of their length. */
+export function tunedSavings(save: (list: Suggestion[]) => number, picked: Suggestion[], t: SilenceTuning): number {
+  const ranges = tunedRanges(picked, t);
+  if (!t.speed) return save(ranges);
+  const fast = ranges.filter((s) => s.reason === 'silence');
+  return save(ranges.filter((s) => s.reason !== 'silence')) + save(fast) * (1 - 1 / t.speed);
 }
