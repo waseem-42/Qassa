@@ -412,3 +412,18 @@ Walked through as a new user on a fresh project (new project → drop a talking 
 - A visible labelled grip divides viewer and timeline. Drag, arrows and double-click reset work, including maximise/restore. The split is saved as a ratio of the actual workspace, with a balanced 40% timeline default; usable older height preferences migrate, while old CSS-capped oversized defaults fall back to the balanced split. Header, timeline and transport controls wrap instead of overlapping or scrolling off-screen.
 - At heights up to 820 px, the start guide becomes a header button with live N/4 progress; clicking opens its checklist. The full guide remains on taller screens. Existing dismissal, Settings replay and «وريني» behavior are retained.
 - Real Chrome import → title → export passed at 1280×720, 1366×768 and 1536×864 (DPR 1.25 for the last). Default viewer frame heights improved 182→277, 207→306 and 257→327 CSS px; expanding the timeline exposes all four starter tracks. Three actual 2.5 s / 720p / 30 fps exports and before/after screenshots are in artifacts/qa/task25/. All 345 tests / 68 files pass with two workers; ordinary parallel runs had existing font/upload timeouts (retained in logs). Typecheck and app build pass. QA data was purged and servers stopped; no user data, op/schema, renderer, MCP, installer or commit changes.
+
+
+## Competitor features, first pass (Claude, night of 2026-11-08)
+
+Sol's Task 25 was reviewed and committed, after which Claude compared Qassa with CapCut, Descript, Gling/TimeBolt and Premiere/Resolve, and built the gaps that need no new downloads or paid AI:
+
+- **Command search** (Ctrl+K, «ابحث عن أمر» in the header): every shortcut action, panels, export/checkpoints/jobs/settings, aspect presets and other projects; Arabic spelling is folded (أ/ا، ة/ه، tashkeel) and English words work; recent commands come first. Shortcut behaviour moved to `lib/actions.ts` so keys and the search share it.
+- **Trim to the playhead** (Q / W, also in the clip menu): drop the part of the clip before / after the playhead; the main track ripples, free clips keep their place, locked tracks are skipped.
+- **Silence tuning** in the assistant's ready-made cut: «أقصر سكتة تُقص» leaves shorter silences as suggestions, «نَفَس عند الأطراف» keeps a little silence at both edges; saved per viewer; the saving preview and button follow it; still one undo.
+- **Preview speed** ×1 / ×1.5 / ×2 (Shift+R, transport button) for reviewing; export unchanged.
+- **Word-highlight captions** (`textStyle.highlight`): the spoken word takes the highlight colour in the preview and the export (one still per word, chained like other captions). Inspector «الكلمة المنطوقة» sets it on every caption of the track and for new ones; MCP `captions` takes `style.highlight`. Verified with a real transcript and a 1080p export.
+- **Filler words** («كلمات الحشو» in the text-editing panel): اممم/ممم/um and آآ/uh are picked, «يعني» and «اه/إيه» are offered unpicked; ▶ plays the first; one batch of `cut_words`.
+- **Go to time**: click the transport clock and type 83, 1:23, 1:02:03, +5 or Arabic digits.
+- Checked: 363 tests / 74 files, typecheck, app build; real Chrome checks on an isolated server (4396/5196, `artifacts/qa/claude-1108/`) for each feature, including undo; a plain 12 s export and a highlighted-caption export probed with ffprobe and inspected frame by frame.
+- Not done: face-centred auto-reframe for 9:16 (OpenCV 5 here ships no face model; it needs a downloaded model, the user's call). Contact sheets (`sheets.ts`) still draw captions without the highlight.
