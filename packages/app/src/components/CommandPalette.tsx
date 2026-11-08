@@ -114,7 +114,8 @@ function Palette() {
     <div ref={list} id="command-results" className="command-results" role="listbox" aria-label="الأوامر">
       {!results.length && <p className="command-empty">ما لقيت أمرًا بهذا الاسم. جرّب كلمة ثانية، أو اضغط <kbd>?</kbd> لكل الاختصارات.</p>}
       {results.map((c, i) => {
-        const header = c.group !== lastGroup ? (lastGroup = c.group) : undefined;
+        // ranked results are one list; groups only while browsing
+        const header = !query.trim() && c.group !== lastGroup ? (lastGroup = c.group) : undefined;
         return <div key={`${c.group}-${c.id}`}>
           {header && <div className="command-group" role="presentation">{header}</div>}
           <div id={`cmd-${c.id}`} role="option" aria-selected={i === active} data-active={i === active} className="command-item" onMouseMove={() => setActive(i)} onClick={() => run(c)}>
