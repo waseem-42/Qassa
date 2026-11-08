@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { blurFitFilters, fitFilters, framingFilters, gradeFilters, sourceFilters } from '@edit/render';
 import { bakedLut } from './luts.ts';
 import {
-  EPS, clipDuration, clipEnd, fmtTime, graphicTime, mainClips, opacityAt, outputSize, placeAt, placeFilter, timelineToSource, transformAt,
+  EPS, clipDuration, expandHighlights, clipEnd, fmtTime, graphicTime, mainClips, opacityAt, outputSize, placeAt, placeFilter, timelineToSource, transformAt,
   type Clip, type Media, type Project, type Word,
 } from '@edit/shared';
 import { graphicStills } from './graphics.ts';
@@ -66,12 +66,19 @@ const isOverlayMedia = (p: Project, c: Clip) =>
   !c.picture?.off && p.tracks.find((x) => x.id === c.trackId)?.kind === 'overlay' && p.media.some((m) => m.id === c.mediaId && m.kind !== 'audio');
 
 /** Frames of the edit as the render shows them: the main track, then b-roll, text and graphics on top. */
-export async function compositeFrames(name: string, p: Project, dir: string, times: number[], W: number, H: number, tmp: string): Promise<void> {
+export async function compositeFrames(name: string, edited: Project, dir: string, times: number[], W: number, H: number, tmp: string): Promise<void> {
+  // highlighted captions as the export draws them: one still per spoken word
+  const transcripts = new Map<string, Word[] | undefined>();
+  const words = (m: string) => {
+    if (!transcripts.has(m)) { try { transcripts.set(m, JSON.parse(readFileSync(join(dir, 'analysis', m, 'transcript.json'), 'utf8')).words); } catch { transcripts.set(m, undefined); } }
+    return transcripts.get(m);
+  };
+  const { project: p, active } = expandHighlights(edited, words);
   const layers = (t: number) => p.clips
     .filter((c) => c.trackId !== 'V1' && shownAt(p, c, t) && (c.text || c.graphic || isOverlayMedia(p, c)))
     .sort((a, b) => Number(!!a.text) - Number(!!b.text) || p.tracks.findIndex((t) => t.id === a.trackId) - p.tracks.findIndex((t) => t.id === b.trackId) || a.start - b.start);
 
-  const texts = await renderTextImages(dir, p.clips.filter((c) => c.text && times.some((t) => shownAt(p, c, t))), W, H, p.settings.theme);
+  const texts = await renderTextImages(dir, p.clips.filter((c) => c.text && times.some((t) => shownAt(p, c, t))), W, H, p.settings.theme, active);
 
   // graphics: one page per clip, a still for each frame it is in
   const stills = new Map<string, string>(); // `${clipId}@${frame}` -> file

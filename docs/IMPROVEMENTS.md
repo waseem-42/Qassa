@@ -423,7 +423,9 @@ Sol's Task 25 was reviewed and committed, after which Claude compared Qassa with
 - **Silence tuning** in the assistant's ready-made cut: «أقصر سكتة تُقص» leaves shorter silences as suggestions, «نَفَس عند الأطراف» keeps a little silence at both edges; saved per viewer; the saving preview and button follow it; still one undo.
 - **Preview speed** ×1 / ×1.5 / ×2 (Shift+R, transport button) for reviewing; export unchanged.
 - **Word-highlight captions** (`textStyle.highlight`): the spoken word takes the highlight colour in the preview and the export (one still per word, chained like other captions). Inspector «الكلمة المنطوقة» sets it on every caption of the track and for new ones; MCP `captions` takes `style.highlight`. Verified with a real transcript and a 1080p export.
+- **Silences sped up instead of cut**: «السكتات: تُقص / تتسرّع ×4» keeps them, faster, with no jump cut (TimeBolt-style).
+- Contact sheets (what Claude reviews) draw highlighted captions as the export does.
 - **Filler words** («كلمات الحشو» in the text-editing panel): اممم/ممم/um and آآ/uh are picked, «يعني» and «اه/إيه» are offered unpicked; ▶ plays the first; one batch of `cut_words`.
 - **Go to time**: click the transport clock and type 83, 1:23, 1:02:03, +5 or Arabic digits.
 - Checked: 363 tests / 74 files, typecheck, app build; real Chrome checks on an isolated server (4396/5196, `artifacts/qa/claude-1108/`) for each feature, including undo; a plain 12 s export and a highlighted-caption export probed with ffprobe and inspected frame by frame.
-- Not done: face-centred auto-reframe for 9:16 (OpenCV 5 here ships no face model; it needs a downloaded model, the user's call). Contact sheets (`sheets.ts`) still draw captions without the highlight.
+- Not done: face-centred auto-reframe for 9:16 (OpenCV 5 here ships no face model; it needs a downloaded model, the user's call).
