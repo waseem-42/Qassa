@@ -1,5 +1,12 @@
 [
   {
+    "id": "classic-dark",
+    "source": "preset",
+    "at": "2026-11-15T11:23:21.249Z",
+    "by": "claude",
+    "project": "شرح-قصة"
+  },
+  {
     "id": "lemo:brick-toy",
     "source": "library",
     "at": "2026-11-07T17:42:37.121Z",
