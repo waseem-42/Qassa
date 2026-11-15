@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { accessSync, constants, existsSync, lstatSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, lstatSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -12,6 +12,20 @@ import { fontFiles } from './textimg.ts';
 import { cutReport } from './sheets.ts';
 import type { JobContext, Jobs } from './jobs.ts';
 import type { Store } from './store.ts';
+
+/** Graphics whose template.json says `opaque: true` paint the whole frame (the review counts them as picture, not black). */
+export function opaqueGraphics(dir: string, libDir = GRAPHICS_LIB_DIR): (graphic: string) => boolean {
+  const seen = new Map<string, boolean>();
+  return (graphic) => {
+    if (!seen.has(graphic)) {
+      const folder = graphic.startsWith('lib/') ? join(libDir, graphic.slice(4)) : join(dir, graphic);
+      let opaque = false;
+      try { opaque = JSON.parse(readFileSync(join(folder, 'template.json'), 'utf8')).opaque === true; } catch { /* no template.json: a layer over the picture */ }
+      seen.set(graphic, opaque);
+    }
+    return seen.get(graphic)!;
+  };
+}
 
 const Quality = z.enum(['preview', 'final']);
 const RenderBody = z.object({ quality: Quality.default('preview'), output: z.string().max(1000).optional(), expectedRev: z.number().int().nonnegative().optional(), export: ExportSettings.optional(), marked: z.boolean().default(false) });
@@ -202,14 +216,14 @@ export function registerExportRoutes(app: FastifyInstance, store: Store, jobs: J
       const problems = cutReport(project, (id) => store.transcript(name, id)?.words).filter((c) => c.problems.length);
       if (problems.length) report.warnings.push({ code: 'cut_problems', message: `توجد ${problems.length} نقاط قص تحتاج مراجعة؛ الفحص اقتراح وليس حكمًا على جودة المونتاج.` });
     } catch { report.warnings.push({ code: 'cut_check_unavailable', message: 'تعذر قراءة التفريغ لفحص حدود القص؛ يمكن متابعة التصدير.' }); }
-    report.review = editReview(project, { aspect });
+    report.review = editReview(project, { aspect, opaque: opaqueGraphics(dir) });
     const flagged = report.review.filter((f) => f.severity === 'warn').length;
     if (flagged) report.warnings.push({ code: 'edit_review', message: `مراجعة المونتاج: ${flagged} ملاحظة قد يلاحظها المشاهد (التفاصيل في «مراجعة المونتاج»).` });
     return report;
   };
   app.get<{ Params: { name: string }; Querystring: { aspect?: string } }>('/api/projects/:name/review', async (req) => {
     const aspect = z.enum(['16:9', '9:16', '1:1', '4:5']).optional().parse(req.query.aspect);
-    return editReview(store.get(req.params.name).project, { aspect });
+    return editReview(store.get(req.params.name).project, { aspect, opaque: opaqueGraphics(store.dir(req.params.name)) });
   });
   app.get<{ Params: { name: string }; Querystring: { quality?: string; aspect?: string } }>('/api/projects/:name/render/preflight', async (req) => {
     const quality = Quality.parse(req.query.quality ?? 'final');

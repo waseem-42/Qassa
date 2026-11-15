@@ -153,6 +153,17 @@ describe('clips and tracks', () => {
     expect(graphicEntry('graphics\\a\\intro.html')).toBe('graphics/a/intro.html');
   });
 
+  it('a split graphic is one page: new graphicData reaches every piece, not another use of the same page', () => {
+    let p = applyOps(project(), [
+      { op: 'add_clip', clip: { id: 'g', trackId: 'V2', graphic: 'graphics/film', graphicData: { title: 'أ' }, start: 10, in: 0, out: 9 } },
+      { op: 'add_clip', clip: { id: 'other', trackId: 'V2', graphic: 'graphics/film', graphicData: { title: 'أ' }, start: 40, in: 0, out: 9 } },
+    ], ctx);
+    p = applyOps(p, [{ op: 'split', clipId: 'g', at: 16 }, { op: 'split', clipId: 'g', at: 13 }], ctx);
+    const mid = p.clips.filter((c) => c.graphic && c.id !== 'other').sort((a, b) => a.start - b.start)[1];
+    p = applyOps(p, [{ op: 'update_clip', clipId: mid.id, patch: { graphicData: { title: 'ب' } } }], ctx);
+    expect(p.clips.filter((c) => c.graphic).sort((a, b) => a.start - b.start).map((c) => c.graphicData)).toEqual([{ title: 'ب' }, { title: 'ب' }, { title: 'ب' }, { title: 'أ' }]);
+  });
+
   it('retime_graphic plays scenes longer, each piece keeps its part of the page and pieces stay together', async () => {
     const { graphicPageDuration, graphicQuery, graphicTime, pageToRetimed, retimedToPage } = await import('../src/graphics.ts');
     const r = { from: [0, 2, 6], to: [0, 4, 8] };

@@ -118,7 +118,9 @@ app.post<P & { Body: { ops: unknown; author?: string } }>('/api/projects/:name/o
   const before = new Set(previous.notes.map((n) => n.id));
   const r = store.apply(req.params.name, ops, author);
   if (author === 'user' && r.project.settings.aiNotes) autoNotes(req.params.name, r.project.notes.filter((n) => !before.has(n.id) && n.author === 'user'));
-  return { rev: r.rev, history: store.history(req.params.name), project: r.project, notices: r.notices, overlaps: newOverlapWarnings(previous, r.project) };
+  const had = new Set(previous.clips.map((c) => c.id));
+  const added = r.project.clips.filter((c) => !had.has(c.id)).map((c) => c.id);
+  return { rev: r.rev, history: store.history(req.params.name), project: r.project, notices: r.notices, overlaps: newOverlapWarnings(previous, r.project), added };
 });
 app.post<P & { Body: { maxWords?: number; style?: Record<string, unknown>; author?: string } }>('/api/projects/:name/captions', async (req) => {
   const name = req.params.name;

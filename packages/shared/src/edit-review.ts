@@ -31,6 +31,12 @@ function showsPicture(p: Project, c: Clip): boolean {
   const track = p.tracks.find((t) => t.id === c.trackId);
   return !!m && m.kind !== 'audio' && (c.trackId === MAIN_TRACK || track?.kind === 'overlay');
 }
+/** A graphic that paints the whole frame itself (its template.json says `opaque: true`), shown full size on a layer. */
+function paintsFrame(p: Project, c: Clip, opaque?: (graphic: string) => boolean): boolean {
+  if (!c.graphic || !opaque || hidden(p, c) || c.picture?.off) return false;
+  const track = p.tracks.find((t) => t.id === c.trackId);
+  return track?.kind === 'overlay' && (c.place?.scale ?? 1) >= 1 && (c.picture?.opacity ?? 1) >= 1 && opaque(c.graphic);
+}
 
 /** Where a text box sits, as fractions of the frame (an estimate: the renderer sizes it to its text). */
 function textBox(c: Clip, s: Pick<Settings, 'aspect' | 'resolution'>) {
@@ -47,7 +53,7 @@ function textBox(c: Clip, s: Pick<Settings, 'aspect' | 'resolution'>) {
   return { top: st.y - h / 2, bottom: st.y + h / 2, left, right };
 }
 
-export function editReview(p: Project, opts: { aspect?: Settings['aspect'] } = {}): ReviewFinding[] {
+export function editReview(p: Project, opts: { aspect?: Settings['aspect']; opaque?: (graphic: string) => boolean } = {}): ReviewFinding[] {
   const out: ReviewFinding[] = [];
   const duration = projectDuration(p);
   const settings = { ...p.settings, aspect: opts.aspect ?? p.settings.aspect };
@@ -95,7 +101,7 @@ export function editReview(p: Project, opts: { aspect?: Settings['aspect'] } = {
   }
 
   // black picture: nothing on screen
-  const pictures = p.clips.filter((c) => showsPicture(p, c)).map((c) => [c.start, clipEnd(c)] as const).sort((a, b) => a[0] - b[0]);
+  const pictures = p.clips.filter((c) => showsPicture(p, c) || paintsFrame(p, c, opts.opaque)).map((c) => [c.start, clipEnd(c)] as const).sort((a, b) => a[0] - b[0]);
   const black: [number, number][] = [];
   let covered = 0;
   for (const [a, b] of pictures) {
@@ -104,7 +110,8 @@ export function editReview(p: Project, opts: { aspect?: Settings['aspect'] } = {
   }
   if (duration > covered + .05) black.push([covered, duration]);
   const blackTotal = black.reduce((s, [a, b]) => s + b - a, 0);
-  if (duration > 0 && blackTotal > duration / 2) {
+  const behind = (a: number, b: number) => p.clips.some((c) => !hidden(p, c) && (isText(c) || !!c.graphic) && c.start < b && clipEnd(c) > a);
+  if (duration > 0 && blackTotal > duration / 2 && !black.every(([a, b]) => behind(a, b))) {
     out.push({ code: 'audio_only', severity: 'info', at: 0, end: r2(duration), clipIds: [],
       message: `الصورة سوداء في ${Math.round((blackTotal / duration) * 100)}% من المقطع (صوت فقط)`, fix: 'add a picture, a graphic or a waveform on an overlay track if this is not intended' });
   } else {
@@ -113,7 +120,7 @@ export function editReview(p: Project, opts: { aspect?: Settings['aspect'] } = {
       if (b - a < .1) continue;
       // a gap left on purpose (main-track magnet off) is not a mistake
       if (gaps.some((g) => g.start <= a + .05 && clipEnd(g) >= b - .05)) continue;
-      const over = p.clips.some((c) => !hidden(p, c) && (isText(c) || !!c.graphic) && c.start < b && clipEnd(c) > a);
+      const over = behind(a, b);
       out.push({ code: 'black_picture', severity: over ? 'info' : 'warn', at: r2(a), end: r2(b), clipIds: [],
         message: `شاشة سوداء ${(b - a).toFixed(1)}ث${over ? ' خلف نص أو رسم' : ''}`, fix: 'cover it with footage, or close the gap' });
     }

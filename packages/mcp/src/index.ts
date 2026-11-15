@@ -49,6 +49,15 @@ async function call(path: string, body?: unknown, raw = false, method?: 'PATCH' 
 
 const p = (name: string) => `/api/projects/${encodeURIComponent(name)}`;
 const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
+/** The clips an edit created (splits, adds, duplicates), so the next edit can use their ids without reading project.json. */
+function newClips(r: { added?: string[]; project: { clips: any[] } }): string[] {
+  const ids = r.added ?? [];
+  if (!ids.length) return [];
+  const byId = new Map(r.project.clips.map((c: any) => [c.id, c]));
+  const line = (c: any) => `${c.id} ${c.trackId} ${c.start.toFixed(2)}–${(c.start + (c.out - c.in) / (c.speed || 1)).toFixed(2)}s${c.label ? ` «${c.label}»` : ''}`;
+  const shown = ids.slice(0, 20).map((id) => byId.get(id)).filter(Boolean).sort((a: any, b: any) => a.start - b.start).map(line);
+  return [`new clips: ${shown.join(' · ')}${ids.length > 20 ? ` · +${ids.length - 20} more` : ''}`];
+}
 const fail = (e: unknown) => ({ content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true });
 
 // MCP clients commonly abort requests after 60s: never block longer than this per call
@@ -207,7 +216,7 @@ Useful ops:
       if (a.note) await call(`${p(a.project)}/changes`, { who: 'claude', text: a.note });
       const main = r.project.clips.filter((c: any) => c.trackId === 'V1');
       const dur = main.reduce((s: number, c: any) => s + (c.out - c.in) / c.speed, 0);
-      return text([`ok rev ${r.rev}: ${main.length} main clips, edit length ${dur.toFixed(1)}s, ${r.project.suggestions.length} suggestions pending${r.project.ideas.length ? `, ${r.project.ideas.length} visual ideas waiting` : ''}. Undo available (${r.history.undo}).`, ...(r.notices ?? []), ...(r.overlaps ?? [])].join('\n'));
+      return text([`ok rev ${r.rev}: ${main.length} main clips, edit length ${dur.toFixed(1)}s, ${r.project.suggestions.length} suggestions pending${r.project.ideas.length ? `, ${r.project.ideas.length} visual ideas waiting` : ''}. Undo available (${r.history.undo}).`, ...newClips(r), ...(r.notices ?? []), ...(r.overlaps ?? [])].join('\n'));
     } catch (e) { return fail(e); }
   },
 );
@@ -268,7 +277,7 @@ tool(
   `LOOK at an HTML motion graphic before (or after) placing it: stills at evenly spaced page times, over a dark backdrop. graphic = 'lib/<template>' (with data = its graphicData) or 'graphics/<name>'.
 Contract for a composition of your own: projects/<project>/graphics/<name>/index.html laid out at the 1080p frame (1920x1080, or 1080x1920 for 9:16), transparent background, dir="rtl" for Arabic.
 Include <script src="/api/graphics/runtime.js"></script> in <head>: it loads IBM Plex Sans Arabic, sets window.GRAPHIC = {duration, width, height, data, theme} and the theme as CSS variables (--accent, --accent-2, --panel, --text, --font) — use them instead of fixed colours so the project look applies.
-Make it editable by hand: put a template.json next to index.html {description, duration, data (defaults the page reads from GRAPHIC.data), labels:{field:'Arabic name'}, scenes:[{name, start}] (page seconds where each scene starts)}; give the parts a user may want to change a data-edit="name" (the editor picks elements on the preview and saves text/colour/move edits against that name).
+Make it editable by hand: put a template.json next to index.html {description, duration, data (defaults the page reads from GRAPHIC.data), labels:{field:'Arabic name'}, scenes:[{name, start}] (page seconds where each scene starts), opaque:true if the page paints the whole frame itself (review then counts it as picture, not black)}; give the parts a user may want to change a data-edit="name" (the editor picks elements on the preview and saves text/colour/move edits against that name).
 Time comes ONLY from the host: CSS animations (animation-delay to stagger), the Web Animations API, and GSAP timelines registered in window.__timelines (HyperFrames convention, create them {paused:true}) are paused and seeked to each frame; elements with data-start/data-duration are shown only in their window; window.renderFrame = (t, g) => {...} can draw anything else. Never use setTimeout/requestAnimationFrame/Date for motion. Page errors fail the render.
 HyperFrames compositions and catalog blocks work as-is (their audio is ignored — put music/SFX on A2).`,
   { project, graphic: z.string().describe("e.g. 'lib/steps' or 'graphics/intro'"), duration: z.number().positive(), data: z.record(z.any()).optional().describe('graphicData for a template'), count: z.number().int().max(24).default(8), times: z.array(z.number()).optional(), cols: z.number().int().default(4) },

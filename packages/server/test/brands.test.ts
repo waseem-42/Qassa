@@ -31,7 +31,7 @@ describe('brand extraction', () => {
       expect(await page.evaluate(async () => { await document.fonts.load('26px Cairo'); return [...document.fonts].some((f) => f.family === 'Cairo' && f.status === 'loaded'); })).toBe(true);
       await page.close();
     } finally { await closeBrowser(); }
-  }, 15000);
+  }, 60_000); // a cold browser launch under the full parallel suite takes far longer than alone (~2 s)
   it('stores reusable kits, confines archive paths, and maps font-face files', () => {
     const root = mkdtempSync(join(tmpdir(), 'qassa-brands-'));
     try {

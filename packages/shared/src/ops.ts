@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { Anim, Clip, Grade, GraphicEdit, Idea, MAIN_TRACK, Media, Note, Picture, Place, Project, Retime, Settings, StyleUse, Transition, Suggestion, TextStyle, Theme, Transform, Track, type Word } from './schema.ts';
 import { EPS, clipDuration, clipEnd, mainClips, opacityAt, placeAt, projectDuration, sourceToTimeline, timelineToSource, transformAt } from './timeline.ts';
 import { SFX_TRACK } from './sfx.ts';
-import { pageToRetimed, retimedToPage } from './graphics.ts';
+import { graphicPieces, pageToRetimed, retimedToPage } from './graphics.ts';
 import { ideaProblem, placeIdea } from './ideas.ts';
 import { sourceTiming, syncCaptionWords, type ClipId } from './caption-links.ts';
 import { freeTrackFor } from './placement.ts';
@@ -776,6 +776,8 @@ function applyOne(p: Project, op: Op, ctx: OpContext, newId: ClipId): void {
     case 'update_clip': {
       const c = getClip(p, op.clipId);
       const { grade, transform, place, picture, anim, textStyle, graphicEdits, ...rest } = op.patch;
+      // a graphic split on the timeline is one page: its content changes in every piece
+      if (rest.graphicData !== undefined && c.graphic) for (const x of graphicPieces(p.clips, c)) if (x !== c) x.graphicData = structuredClone(rest.graphicData);
       Object.assign(c, rest);
       if (!c.denoise) delete c.denoise;
       if (graphicEdits === null || graphicEdits?.length === 0) delete c.graphicEdits;

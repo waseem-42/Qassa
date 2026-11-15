@@ -57,6 +57,16 @@ describe('edit review', () => {
     expect(codes(audio)).toEqual(['audio_only']);
   });
 
+  it('a graphic that paints the whole frame is picture; any other graphic over black is a note, not «sound only»', () => {
+    const g = { id: 'g', trackId: 'V2', graphic: 'graphics/film', in: 0, out: 60, start: 0 };
+    const voice = { id: 'a', trackId: 'V1', mediaId: 'm', in: 0, out: 60, start: 0 };
+    const p = project([voice, g]);
+    expect(editReview(p, { opaque: (x) => x === 'graphics/film' })).toEqual([]);
+    expect(editReview(p).map((f) => [f.code, f.severity])).toEqual([['black_picture', 'info']]);
+    const small = project([voice, { ...g, place: { scale: .4 } }]);
+    expect(editReview(small, { opaque: () => true }).map((f) => f.code)).toEqual(['black_picture']);
+  });
+
   it('loud music only matters under speech', () => {
     const loud = { id: 'mm', trackId: 'A2', mediaId: 'm', in: 0, out: 20, start: 0, volume: 1 };
     expect(codes(project([...main([[0, 20]]), loud]))).toContain('loud_music');

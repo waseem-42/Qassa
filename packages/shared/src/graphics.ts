@@ -104,6 +104,22 @@ export function graphicPageDuration(c: Pick<Clip, 'out' | 'retime'>): number {
   return c.retime ? c.retime.from[c.retime.from.length - 1] : c.out;
 }
 
+/**
+ * The pieces of one graphic split on the timeline: the clip plus every piece of the same page that plays
+ * straight on from it (same track, page time and timeline time continue across the cut), in timeline order.
+ * Their content (graphicData) is one page, so a change to it goes to all of them.
+ */
+export function graphicPieces<C extends Pick<Clip, 'id' | 'trackId' | 'graphic' | 'start' | 'in' | 'out' | 'speed' | 'retime'>>(clips: C[], clip: C): C[] {
+  if (!clip.graphic) return [clip];
+  const same = clips.filter((c) => c.graphic === clip.graphic && c.trackId === clip.trackId && JSON.stringify(c.retime ?? null) === JSON.stringify(clip.retime ?? null));
+  const end = (c: C) => c.start + (c.out - c.in) / c.speed;
+  const follows = (a: C, b: C) => Math.abs(a.out - b.in) < 1e-3 && Math.abs(end(a) - b.start) < 1e-3;
+  const chain = [clip];
+  for (let c: C | undefined = clip; (c = same.find((x) => !chain.includes(x) && follows(chain[chain.length - 1], x))); ) chain.push(c);
+  for (let c: C | undefined = clip; (c = same.find((x) => !chain.includes(x) && follows(x, chain[0]))); ) chain.unshift(c);
+  return chain;
+}
+
 /** The page's own time (seconds from its start) at timeline time t. */
 export function graphicTime(c: Pick<Clip, 'start' | 'in' | 'out' | 'speed' | 'retime'>, t: number): number {
   return retimedToPage(c.retime, Math.min(c.out, Math.max(c.in, c.in + (t - c.start) * c.speed)));

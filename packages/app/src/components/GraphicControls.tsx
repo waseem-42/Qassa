@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { clipDuration, clipEnd, fmtTime, graphicBaseSize, graphicPageDuration, graphicUrl, mainClips, makeId, pageToRetimed, type Clip, type GraphicEdit, type Op, type Project, type Transition } from '@edit/shared';
+import { clipDuration, clipEnd, fmtTime, graphicBaseSize, graphicPageDuration, graphicPieces, graphicUrl, mainClips, makeId, pageToRetimed, type Clip, type GraphicEdit, type Op, type Project, type Transition } from '@edit/shared';
 import { useSlowTime, useStore } from '../lib/store.ts';
 import { api, projectPath } from '../lib/api.ts';
 import { currentMotion, graphicElement, MOTIONS, motionPatch, withEdit, type Motion } from '../lib/graphic-edit.ts';
@@ -203,7 +203,8 @@ export function GraphicContent({ clip }: { clip: Clip }) {
   const scenes = useScenes(clip);
   const { ops } = useStore.getState();
   const data = (clip.graphicData ?? {}) as Record<string, Json>;
-  const setData = (next: Record<string, Json>) => ops([{ op: 'update_clip', clipId: clip.id, patch: { graphicData: next } }]);
+  // a split graphic is one page: its content changes in every piece, in one undo step
+  const setData = (next: Record<string, Json>) => ops(pieces(useStore.getState().project!, clip).map((id): Op => ({ op: 'update_clip', clipId: id, patch: { graphicData: next } })));
   // fields the template knows about come first, in its order; then anything else on the clip
   const keys = [...new Set([...Object.keys(tpl?.data ?? {}), ...Object.keys(data)])];
 
@@ -245,9 +246,7 @@ export function GraphicPlace({ clip }: { clip: Clip }) {
 
 /** The pieces that play one page together (a graphic split on the timeline). */
 function pieces(project: Project, clip: Clip): string[] {
-  const same = (c: Clip) => c.graphic === clip.graphic && c.trackId === clip.trackId
-    && JSON.stringify(c.graphicData ?? null) === JSON.stringify(clip.graphicData ?? null) && JSON.stringify(c.retime ?? null) === JSON.stringify(clip.retime ?? null);
-  return project.clips.filter(same).map((c) => c.id);
+  return graphicPieces(project.clips, clip).map((c) => c.id);
 }
 
 export type Scene = { name: string; start: number };
