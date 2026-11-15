@@ -11,7 +11,12 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["node"]
+    "types": ["node"],
+    // workspace packages resolve from source, not node_modules links (a renamed/moved repo keeps working)
+    "paths": {
+      "@edit/shared": ["./packages/shared/src/index.ts"],
+      "@edit/render": ["./packages/render/src/index.ts"]
+    }
   },
   "include": ["packages/*/src", "packages/*/test"]
 }

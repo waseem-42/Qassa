@@ -26,6 +26,9 @@ export const SFX_IDS = Object.keys(SFX) as SfxId[];
 export interface SfxCue { sfx: SfxId; at: number; volume: number; why: string }
 
 /** Where effects belong in this edit (timeline seconds), at most one every 0.3s. Captions and plain cuts get none. */
+/** The same automatic sound closer than this to its last use is dropped. */
+export const SAME_SFX_GAP = 1.2;
+
 export function sfxPlan(p: Project): SfxCue[] {
   const cues: SfxCue[] = [];
   const shown = (trackId: string) => !p.tracks.find((t) => t.id === trackId)?.hidden;
@@ -51,5 +54,14 @@ export function sfxPlan(p: Project): SfxCue[] {
     cues.push({ sfx, at: Math.max(0, c.start - Math.min(h, 0.2)), volume: 0.55, why: `transition ${kind}` });
   });
   cues.sort((a, b) => a.at - b.at);
-  return cues.filter((q, i) => i === 0 || q.at - cues[i - 1].at >= 0.3).map((q) => ({ ...q, at: Math.round(q.at * 1000) / 1000 }));
+  // keep effects apart: anything within 0.3 s of the last kept one, or the same sound again within
+  // SAME_SFX_GAP (a title and the callout right after it), would read as a stutter — the first one stays
+  const kept: SfxCue[] = [];
+  for (const q of cues) {
+    const last = kept[kept.length - 1];
+    if (last && q.at - last.at < 0.3) continue;
+    if (kept.some((k) => k.sfx === q.sfx && q.at - k.at < SAME_SFX_GAP)) continue;
+    kept.push(q);
+  }
+  return kept.map((q) => ({ ...q, at: Math.round(q.at * 1000) / 1000 }));
 }

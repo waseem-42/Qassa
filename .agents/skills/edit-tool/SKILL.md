@@ -105,6 +105,8 @@ description: مونتاج المقاطع بأداة Edit-tool — قص السك�
 | `lib/steps` | خطوات مرقمة | 6–12ث |
 | `lib/compare` | مقارنة طريقتين/أداتين | 6–12ث |
 
+القوالب مقاسها لطبقة فوق الفيديو؛ لو استخدمت `lib/steps` أو `lib/chapter` لحالها على شاشة كاملة (خلاصة، مقدمة) كبّرها بـ `update_clip {patch:{place:{scale:1.3}}}`.
+
 1. `graphic_preview {graphic:'lib/keys', duration, data}` — شوفها بالبيانات الحقيقية قبل ما تحطها.
 2. `edit` بـ `add_clip {clip:{trackId:'V2', graphic:'lib/keys', graphicData:{...}, in:0, out:<المدة>, start}}`. تعديل النص بعدين = `update_clip {patch:{graphicData}}`.
 3. ما فيه قالب يناسب؟ اكتب تكوين خاص في `projects/<p>/graphics/<name>/index.html` (ابدأ من نسخة أقرب قالب في `graphics-lib/<name>/index.html` — يستخدم `/graphics-lib/_shared/kit.{css,js}` فياخذ الهوية والاتجاه تلقائياً): مقاس 1080p، خلفية شفافة، `dir="rtl"`. الحركة **فقط** بـ CSS animations أو Web Animations أو GSAP timeline `{paused:true}` مسجّلة في `window.__timelines` (صيغة HyperFrames — بلوكات كتالوجهم تشتغل كما هي)، أو `window.renderFrame(t)`. لا `setTimeout` ولا `requestAnimationFrame` ولا `Date`. `GRAPHIC.duration` و`GRAPHIC.data` متاحة.

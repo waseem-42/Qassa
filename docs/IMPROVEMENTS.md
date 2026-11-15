@@ -429,3 +429,12 @@ Sol's Task 25 was reviewed and committed, after which Claude compared Qassa with
 - **Go to time**: click the transport clock and type 83, 1:23, 1:02:03, +5 or Arabic digits.
 - Checked: 363 tests / 74 files, typecheck, app build; real Chrome checks on an isolated server (4396/5196, `artifacts/qa/claude-1108/`) for each feature, including undo; a plain 12 s export and a highlighted-caption export probed with ffprobe and inspected frame by frame.
 - Not done: face-centred auto-reframe for 9:16 (OpenCV 5 here ships no face model; it needs a downloaded model, the user's call).
+
+## Fixes from making the Qassa explainer video (Claude, 2026-11-15)
+
+Making a 71 s 16:9 explainer of Qassa itself (project `شرح-قصة`: real UI screenshots, callouts, step titles, «داكن كلاسيك») hit four problems; fixed:
+
+- **Renamed repo broke the server and the MCP**: `node_modules/@edit/*` were junctions to the old `Edit-tool` folder, so `@edit/shared` failed to resolve and the edit-tool MCP never connected. Workspace packages now resolve from source: `tsconfig.json` `paths` (tsx for server/MCP, tsc, esbuild for the desktop build), an alias in `packages/app/vite.config.ts` and a root `vitest.config.ts`. Checked with `node_modules/@edit` removed: MCP initialise, server imports, 365 tests, typecheck, app build, esbuild bundle.
+- **Auto SFX stuttered**: a step title and its callout 0.7–0.9 s later each got a pop (20 effects in 71 s). `sfxPlan` now drops the same sound within `SAME_SFX_GAP` (1.2 s) and measures the 0.3 s spacing against the last kept cue (it compared with dropped ones). The explainer went to 13 effects. Test in `ops.test.ts`.
+- **Black look cards in the styles window** for a podcast (sound on the main track, picture on b-roll): the cards used the main track only. Now, when the main track has no picture at the playhead, they use the composited frame without text layers (contact sheet `texts:false`, new), and nothing is fetched when the project has no picture at all.
+- Library templates (`lib/steps`, `lib/chapter`) are sized for an overlay; for a full-screen recap scale them with `place.scale` 1.3–1.35 (no template change).

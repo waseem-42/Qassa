@@ -350,6 +350,17 @@ describe('sound effects', () => {
     const plan = sfxPlan(p);
     expect(plan.map((q) => [q.sfx, q.at])).toEqual([['click', 5], ['whoosh', 12], ['pop', 20], ['swoosh', 29.8]]);
   });
+
+  it('sfxPlan drops the same sound again within a second (step title, then its callout) and spaces against kept cues', async () => {
+    const { sfxPlan } = await import('../src/sfx.ts');
+    const p = applyOps(project(), [
+      { op: 'add_text', text: 'الخطوة ١', start: 4.8, duration: 5, style: { animation: 'slide-up' } },
+      { op: 'add_clip', clip: { id: 'k1', trackId: 'V2', graphic: 'lib/callout', start: 5.7, in: 0, out: 4 } }, // pop 0.9 s after the title pop
+      { op: 'add_clip', clip: { id: 'k2', trackId: 'V2', graphic: 'lib/keys', start: 6.2, in: 0, out: 2 } }, // a different sound: stays
+      { op: 'add_clip', clip: { id: 'k3', trackId: 'V2', graphic: 'lib/callout', start: 8, in: 0, out: 2 } }, // a pop well after: stays
+    ], ctx);
+    expect(sfxPlan(p).map((q) => [q.sfx, q.at])).toEqual([['pop', 4.8], ['click', 6.2], ['pop', 8]]);
+  });
 });
 
 describe('speed_range', () => {

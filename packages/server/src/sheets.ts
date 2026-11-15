@@ -66,7 +66,7 @@ const isOverlayMedia = (p: Project, c: Clip) =>
   !c.picture?.off && p.tracks.find((x) => x.id === c.trackId)?.kind === 'overlay' && p.media.some((m) => m.id === c.mediaId && m.kind !== 'audio');
 
 /** Frames of the edit as the render shows them: the main track, then b-roll, text and graphics on top. */
-export async function compositeFrames(name: string, edited: Project, dir: string, times: number[], W: number, H: number, tmp: string): Promise<void> {
+export async function compositeFrames(name: string, edited: Project, dir: string, times: number[], W: number, H: number, tmp: string, texts = true): Promise<void> {
   // highlighted captions as the export draws them: one still per spoken word
   const transcripts = new Map<string, Word[] | undefined>();
   const words = (m: string) => {
@@ -75,10 +75,10 @@ export async function compositeFrames(name: string, edited: Project, dir: string
   };
   const { project: p, active } = expandHighlights(edited, words);
   const layers = (t: number) => p.clips
-    .filter((c) => c.trackId !== 'V1' && shownAt(p, c, t) && (c.text || c.graphic || isOverlayMedia(p, c)))
+    .filter((c) => c.trackId !== 'V1' && shownAt(p, c, t) && ((texts && c.text) || c.graphic || isOverlayMedia(p, c)))
     .sort((a, b) => Number(!!a.text) - Number(!!b.text) || p.tracks.findIndex((t) => t.id === a.trackId) - p.tracks.findIndex((t) => t.id === b.trackId) || a.start - b.start);
 
-  const texts = await renderTextImages(dir, p.clips.filter((c) => c.text && times.some((t) => shownAt(p, c, t))), W, H, p.settings.theme, active);
+  const textImgs = texts ? await renderTextImages(dir, p.clips.filter((c) => c.text && times.some((t) => shownAt(p, c, t))), W, H, p.settings.theme, active) : new Map<string, string>();
 
   // graphics: one page per clip, a still for each frame it is in
   const stills = new Map<string, string>(); // `${clipId}@${frame}` -> file
@@ -98,7 +98,7 @@ export async function compositeFrames(name: string, edited: Project, dir: string
       let prep = 'format=rgba';
       let pos = '';
       if (c.text) {
-        const img = texts.get(c.id);
+        const img = textImgs.get(c.id);
         if (!img) continue;
         inputs.push('-i', img);
         // the fade the render applies at this moment
@@ -134,15 +134,16 @@ export async function compositeFrames(name: string, edited: Project, dir: string
 
 /**
  * Tile frames into one JPEG; returns its bytes. composite = with everything the render shows on
- * top of the main track; false = the main track only (checking cuts).
+ * top of the main track; false = the main track only (checking cuts). texts: false leaves text layers out
+ * (a picture to preview looks on, which draws its own sample text).
  */
-export async function contactSheet(name: string, p: Project, dir: string, frames: Frame[], cols: number, width = 480, composite = true): Promise<Buffer> {
+export async function contactSheet(name: string, p: Project, dir: string, frames: Frame[], cols: number, width = 480, composite = true, texts = true): Promise<Buffer> {
   const tmp = `cache/sheet-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   mkdirSync(join(dir, tmp), { recursive: true });
   const { width: ow, height: oh } = outputSize(p.settings);
   const W = Math.round(width / 2) * 2, H = Math.round((width * oh) / ow / 2) * 2;
   try {
-    if (composite) await compositeFrames(name, p, dir, frames.map((f) => f.t), W, H, tmp);
+    if (composite) await compositeFrames(name, p, dir, frames.map((f) => f.t), W, H, tmp, texts);
     else await Promise.all(frames.map((f, i) => grabMain(p, dir, f.t, `${tmp}/f${String(i).padStart(3, '0')}.jpg`, W, H)));
     return await tileImages(join(dir, tmp, 'f%03d.jpg'), frames.length, cols, dir);
   } finally {

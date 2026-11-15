@@ -66,11 +66,17 @@ export function Styles() {
     let active = true;
     let objectUrl: string | undefined;
     setFrame(undefined);
-    // one real frame of the edit, plain (no grade, no overlays), to preview every look on
+    // one real frame of the edit to preview every look on: the main track alone (no overlays) when it has a
+    // picture there; a podcast (sound on the main track), a gap or a hidden picture would be black, so then
+    // the frame as the render shows it (b-roll, graphics; no text — each card draws its own sample) — never a row of black cards
     const p = useStore.getState().project!;
-    if (!p.clips.some((c) => c.trackId === 'V1' && c.mediaId)) return;
-    const t = Math.min(useStore.getState().time, Math.max(0, p.clips.filter((c) => c.trackId === 'V1').reduce((m, c) => Math.max(m, c.start + (c.out - c.in) / c.speed), 0) - 0.1));
-    fetch(`${projectPath(name)}/contact-sheet`, { method: 'POST', signal: controller.signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ times: [t], cols: 1, width: 640, composite: false }) })
+    const end = (c: Project['clips'][number]) => c.start + (c.out - c.in) / c.speed;
+    const t = Math.min(useStore.getState().time, Math.max(0, p.clips.reduce((m, c) => Math.max(m, end(c)), 0) - 0.1));
+    const main = p.clips.find((c) => c.trackId === 'V1' && c.start <= t && t < end(c));
+    const mainPicture = !!main && !main.picture?.off && p.media.some((m) => m.id === main.mediaId && m.kind !== 'audio');
+    const anyPicture = p.clips.some((c) => c.graphic || (c.mediaId && !c.picture?.off && p.media.some((m) => m.id === c.mediaId && m.kind !== 'audio')));
+    if (!anyPicture) return;
+    fetch(`${projectPath(name)}/contact-sheet`, { method: 'POST', signal: controller.signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ times: [t], cols: 1, width: 640, composite: !mainPicture, texts: false }) })
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('no frame'))))
       .then((b) => { if (active) { objectUrl = URL.createObjectURL(b); setFrame(objectUrl); } })
       .catch(() => { if (active) setFrame(undefined); });

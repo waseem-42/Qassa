@@ -260,11 +260,11 @@ app.get<P & { Querystring: { mediaId: string; from?: string; to?: string } }>('/
   return `words ${from}–${to} of ${t.words.length} · format index[✂ cut|? suggested]:word@sourceSeconds\n` + out.join(' ');
 });
 
-app.post<P & { Body: { t0?: number; t1?: number; count?: number; cols?: number; times?: number[]; width?: number; composite?: boolean } }>('/api/projects/:name/contact-sheet', async (req, reply) => {
+app.post<P & { Body: { t0?: number; t1?: number; count?: number; cols?: number; times?: number[]; width?: number; composite?: boolean; texts?: boolean } }>('/api/projects/:name/contact-sheet', async (req, reply) => {
   const p = store.get(req.params.name).project;
   const dur = projectDuration(p);
   const times = req.body.times?.length ? req.body.times : evenTimes(req.body.t0 ?? 0, Math.min(req.body.t1 ?? dur, dur - 0.05), Math.min(req.body.count ?? 12, 48));
-  const img = await contactSheet(req.params.name, p, projectDir(req.params.name), times.map((t) => ({ t, label: fmtTime(t) })), req.body.cols ?? 4, req.body.width ?? 480, req.body.composite !== false);
+  const img = await contactSheet(req.params.name, p, projectDir(req.params.name), times.map((t) => ({ t, label: fmtTime(t) })), req.body.cols ?? 4, req.body.width ?? 480, req.body.composite !== false, req.body.texts !== false);
   reply.header('x-times', times.map((t) => t.toFixed(2)).join(','));
   reply.type('image/jpeg');
   return img;
