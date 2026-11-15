@@ -11,15 +11,25 @@ const titleOf = (p: { name: string; displayName?: string }) => p.displayName || 
 /** drag type for moving a project card onto a folder card */
 export const PROJECT_DRAG = 'application/x-qassa-project';
 
-/** the folder open on the home page — kept while a project is open, so «back home» returns into it */
-export const useHomeFolder = create<{ id?: string; open(id?: string): void }>((set) => ({ open: (id) => set({ id }) }));
+/**
+ * The folder open on the home page — kept while a project is open, so «back home» returns into it, and in the
+ * address (?folder=) so a refresh stays inside it.
+ */
+const folderInUrl = () => { try { return new URL(location.href).searchParams.get('folder') ?? undefined; } catch { return undefined; } };
+export const useHomeFolder = create<{ id?: string; open(id?: string): void }>((set) => ({
+  id: folderInUrl(),
+  open: (id) => {
+    set({ id });
+    try { const url = new URL(location.href); if (id) url.searchParams.set('folder', id); else url.searchParams.delete('folder'); history.replaceState(history.state, '', url); } catch { /* no address bar */ }
+  },
+}));
 
 const sizeLabel = (n: number) => n < 1024 ? `${n} بايت` : n < 1048576 ? `${(n / 1024).toFixed(0)} ك.ب` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} م.ب` : `${(n / 1073741824).toFixed(2)} ج.ب`;
 const fileUrl = (f: ProjectFolder, name: string, download = false) => `/api/folders/${f.id}/files/${encodeURIComponent(name)}${download ? '?download=1' : ''}`;
 const fileIcon = (name: string) => /\.(png|jpe?g|webp|gif|svg)$/i.test(name) ? 'image' : /\.(mp4|mov|webm|mkv)$/i.test(name) ? 'film' : /\.(mp3|wav|m4a|aac|flac|ogg)$/i.test(name) ? 'speaker' : 'text';
 
 /** A folder on the home page: up to four project covers, its name and what is inside. Drop a project card on it to move it in. */
-export function FolderCard({ folder, projects, disabled }: { folder: ProjectFolder; projects: ProjectSummary[]; disabled: boolean }) {
+export function FolderCard({ folder, projects }: { folder: ProjectFolder; projects: ProjectSummary[] }) {
   const [over, setOver] = useState(false);
   const inside = folder.projects.map((n) => projects.find((p) => p.name === n)).filter((p): p is ProjectSummary => !!p);
   const covers = [...inside].sort((a, b) => b.modified - a.modified).slice(0, 4);
@@ -33,7 +43,7 @@ export function FolderCard({ folder, projects, disabled }: { folder: ProjectFold
         e.preventDefault(); e.stopPropagation(); setOver(false);
         addToFolder(folder.id, [name]).then(() => useStore.getState().notify(`نُقل المشروع إلى «${folder.name}».`, 'info')).catch((err: Error) => useStore.getState().notify(err.message));
       }}>
-      <button className="folder-card-open" disabled={disabled} onClick={() => useHomeFolder.getState().open(folder.id)} aria-label={`فتح مجلد ${folder.name}`}>
+      <button type="button" className="folder-card-open" onClick={() => useHomeFolder.getState().open(folder.id)} aria-label={`فتح مجلد ${folder.name}`}>
         <div className="folder-card-covers" data-count={covers.length}>
           {covers.length ? covers.map((p) => <FolderThumb key={p.name} project={p} />) : <span className="folder-card-empty"><Icon name="folder" size={30} /></span>}
         </div>
