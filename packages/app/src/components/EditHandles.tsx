@@ -79,6 +79,8 @@ export function EditHandles({ project, time, fw, fh, frame }: { project: Project
   // (runs after every render — the text moves with previews — so only set state when it changed)
   useLayoutEffect(() => {
     const el = sel?.text ? frame.current?.querySelector(`[data-clip="${sel.id}"] > div`) : null;
+    // nothing to measure: don't force a layout on every playback frame
+    if (!el) { setTextBox((prev) => prev === undefined ? prev : undefined); return; }
     const f = frame.current?.getBoundingClientRect();
     const r = el && f ? el.getBoundingClientRect() : undefined;
     const next = r && f ? { left: r.left - f.left, top: r.top - f.top, width: r.width, height: r.height } : undefined;

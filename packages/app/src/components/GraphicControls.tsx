@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { clipDuration, clipEnd, fmtTime, graphicBaseSize, graphicPageDuration, graphicUrl, mainClips, makeId, pageToRetimed, type Clip, type GraphicEdit, type Op, type Project, type Transition } from '@edit/shared';
-import { useStore } from '../lib/store.ts';
+import { useSlowTime, useStore } from '../lib/store.ts';
 import { api, projectPath } from '../lib/api.ts';
 import { currentMotion, graphicElement, MOTIONS, motionPatch, withEdit, type Motion } from '../lib/graphic-edit.ts';
 import { KeySlider, Row, Section, Slider } from './ui.tsx';
@@ -144,7 +144,7 @@ function NumberField({ value, onCommit, step = 0.1, min = 0 }: { value: number; 
 /** Start and length of a clip off the main track (text, graphic, b-roll, music). */
 export function TimingSection({ clip }: { clip: Clip }) {
   const { ops } = useStore.getState();
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   const dur = clipDuration(clip);
   const timing = (patch: { start?: number; duration?: number }) => ops([{ op: 'set_timing', clipId: clip.id, ...patch }]);
   return (
@@ -324,7 +324,7 @@ function ColorField({ value, onCommit, placeholder }: { value?: string; onCommit
 /** Any element inside the page, picked on the preview: its text, colours, visibility, place and size. */
 function ElementsSection({ clip }: { clip: Clip }) {
   const pick = useStore((s) => s.graphicPick);
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   const { setGraphicPick, ops, preview, commit, seek } = useStore.getState();
   const picking = pick?.clipId === clip.id;
   const edits = clip.graphicEdits ?? [];

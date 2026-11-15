@@ -10,6 +10,8 @@ const STRIP_FRAMES = 10;
 const TINTS = ['--color-accent', '--color-note', '--color-clip-video', '--color-clip-overlay', '--color-clip-text', '--color-clip-audio'];
 import { Icon, Spinner } from './Brand.tsx';
 import { Modal } from './Modal.tsx';
+import { FolderCard, FolderHeader, FolderNameDialog, MoveToFolder, PROJECT_DRAG, useHomeFolder } from './HomeFolders.tsx';
+import { addToFolder } from '../lib/store.ts';
 
 const titleOf = (p: { name: string; displayName?: string }) => p.displayName || p.name;
 const dateLabel = (date: string | number) => new Date(date).toLocaleDateString('ar-SA', { calendar: 'gregory', day: 'numeric', month: 'short', year: 'numeric' });
@@ -27,6 +29,13 @@ const isMedia = (f: File) => /^(video|audio)\//.test(f.type) || /\.(mp4|mov|mkv|
 export function Home() {
   const projects = useStore((s) => s.projects), trash = useStore((s) => s.trash), connection = useStore((s) => s.connection);
   const loaded = useStore((s) => s.projectsLoaded), loadError = useStore((s) => s.projectsError);
+  const folders = useStore((s) => s.folders), folderId = useHomeFolder((s) => s.id);
+  const folder = folders.find((f) => f.id === folderId);
+  const [moving, setMoving] = useState<ProjectSummary>(), [newFolder, setNewFolder] = useState(false);
+  // a folder deleted elsewhere: back to the top
+  useEffect(() => { if (folderId && loaded && !folder) useHomeFolder.getState().open(); }, [folderId, loaded, folder]);
+  const inFolder = new Set(folders.flatMap((f) => f.projects));
+  const folderOf = (name: string) => folders.find((f) => f.projects.includes(name));
   const [newName, setNewName] = useState(''), [query, setQuery] = useState(''), [sort, setSort] = useState('recent');
   const [start, setStart] = useState<ProjectStart>('video');
   const [view, setView] = useState<'grid' | 'list'>('grid'), [section, setSection] = useState<'projects' | 'trash'>('projects');
@@ -46,7 +55,8 @@ export function Home() {
   useEffect(() => { if (connected) { void refreshTrash(); useStore.getState().loadActiveJobs().catch(() => {}); } }, [connected]);
   const activeJobs = useStore((s) => s.activeJobs);
   const jobsOf = (name: string) => Object.values(activeJobs).filter((j) => j.project === name);
-  const filtered = projects.filter((p) => matches(p, query)).sort((a, b) => sort === 'name' ? titleOf(a).localeCompare(titleOf(b), 'ar') : (b.modified - a.modified) * (sort === 'oldest' ? -1 : 1));
+  const filtered = projects.filter((p) => folder ? folder.projects.includes(p.name) : query.trim() ? true : !inFolder.has(p.name)).filter((p) => matches(p, query)).sort((a, b) => sort === 'name' ? titleOf(a).localeCompare(titleOf(b), 'ar') : (b.modified - a.modified) * (sort === 'oldest' ? -1 : 1));
+  const shownFolders = folder ? [] : folders.filter((f) => matches({ name: f.name }, query));
   const filteredTrash = trash.filter((p) => matches(p, query)).sort((a, b) => sort === 'name' ? titleOf(a).localeCompare(titleOf(b), 'ar') : (Date.parse(b.deletedAt) - Date.parse(a.deletedAt)) * (sort === 'oldest' ? -1 : 1));
   const create = async (e: FormEvent) => {
     e.preventDefault();
@@ -56,7 +66,7 @@ export function Home() {
     // the folder keeps only safe characters; the title stays exactly as typed
     const { name, displayName } = projectName(title, projects.map((p) => p.name));
     setCreating(true); setCreateError('');
-    try { await useStore.getState().create(name, displayName, start); }
+    try { await useStore.getState().create(name, displayName, start, folder?.id); }
     catch (e) { setCreateError((e as Error).message); }
     finally { setCreating(false); }
   };
@@ -96,6 +106,7 @@ export function Home() {
     try {
       await api.post('/api/projects', { name });
       if (displayName) await api.patch(projectPath(name), { name: displayName });
+      if (folder) await addToFolder(folder.id, [name]).catch(() => {});
       await api.upload(`${projectPath(name)}/upload?role=source`, files);
       await useStore.getState().loadProjects();
       await useStore.getState().open(name);
@@ -115,17 +126,19 @@ export function Home() {
       <div><h1 id="home-title">مشاريعك</h1><p>{!loaded ? 'جارٍ التحميل…' : `${projects.length} مشروع${recent ? ` · آخر تعديل ${ago(recent.modified)}` : ''}`}</p></div>
       {!showCreate && <div className="home-top-actions">
         <label className="btn" aria-disabled={busy || !connected} title="أو أفلت الفيديو في أي مكان بالصفحة"><Icon name="film" size={17} />ابدأ من فيديو<input type="file" hidden accept="video/*,audio/*" multiple disabled={busy || !connected} onChange={(e) => { void startFrom([...(e.target.files ?? [])]); e.target.value = ''; }} /></label>
+        <button className="btn" disabled={busy || !connected} onClick={() => setNewFolder(true)} title="مجلد لمشروع كبير يجمع مشاريعه الصغيرة وملاحظاته وملفاته"><Icon name="folder" size={17} />مجلد جديد</button>
         <button className="btn btn-primary" disabled={busy || !connected} onClick={focusNew}><Icon name="plus" size={17} />مشروع جديد</button>
       </div>}
     </header>}
+    {!welcome && folder && section === 'projects' && <FolderHeader folder={folder} busy={busy} onNewProject={focusNew} />}
     {!welcome && showCreate && <form className="home-create" onSubmit={create} aria-busy={creating}>
       <StartChoice value={start} onChange={setStart} disabled={creating} />
-      <input ref={newInput} id="new-project-name" className="field" dir="auto" aria-label="اسم المشروع الجديد" placeholder="اسم المشروع، مثلاً: شرح الإضاءة" value={newName} onChange={(e) => { setNewName(e.target.value); setCreateError(''); }} onKeyDown={(e) => { if (e.key === 'Escape') closeCreate(); }} maxLength={80} required disabled={creating} aria-describedby={createError ? 'create-error' : undefined} aria-invalid={!!createError} />
+      <input ref={newInput} id="new-project-name" className="field" dir="auto" aria-label="اسم المشروع الجديد" placeholder={folder ? `مشروع جديد داخل «${folder.name}»` : 'اسم المشروع، مثلاً: شرح الإضاءة'} value={newName} onChange={(e) => { setNewName(e.target.value); setCreateError(''); }} onKeyDown={(e) => { if (e.key === 'Escape') closeCreate(); }} maxLength={80} required disabled={creating} aria-describedby={createError ? 'create-error' : undefined} aria-invalid={!!createError} />
       <button className="btn btn-primary" disabled={busy || !newName.trim() || !connected}>{creating ? <Spinner size={17} /> : <Icon name="plus" size={17} />}{creating ? 'جارٍ الإنشاء…' : 'إنشاء'}</button>
       <button type="button" className="btn btn-ghost" disabled={creating} onClick={closeCreate}>إلغاء</button>
       {createError && <p id="create-error" className="home-inline-error" role="alert">{createError}</p>}
     </form>}
-    {!welcome && recent && <section className="home-resume" aria-label="واصل من حيث توقفت">
+    {!welcome && !folder && recent && <section className="home-resume" aria-label="واصل من حيث توقفت">
       <button className="home-resume-cover" onClick={() => open(recent.name)} disabled={busy || !connected} aria-label={`فتح مشروع ${titleOf(recent)}`}><ProjectCover project={recent} /></button>
       <div className="home-resume-body">
         <span className="eyebrow">واصل من حيث توقفت</span>
@@ -142,18 +155,21 @@ export function Home() {
     </section>}
     {!connected && <div className="home-connection notice" role="status"><Spinner size={18} /><span>{connection === 'connecting' ? 'جارٍ الاتصال بالخادم…' : 'انقطع الاتصال. نحاول الاتصال مجددًا…'} ستتاح إدارة المشاريع عند عودة الاتصال.</span></div>}
     <section className="projects-section" aria-labelledby="projects-title">
-      <div className="section-heading"><h2 ref={libraryHeading} tabIndex={-1} id="projects-title">{welcome ? 'مكتبة مشاريعك' : 'كل المشاريع'}</h2></div>
+      <div className="section-heading"><h2 ref={libraryHeading} tabIndex={-1} id="projects-title">{welcome ? 'مكتبة مشاريعك' : folder && section === 'projects' ? `مشاريع «${folder.name}»` : 'كل المشاريع'}</h2></div>
       <div className="project-library-bar"><div className="project-sections" aria-label="أقسام مكتبة المشاريع"><button aria-pressed={section === 'projects'} onClick={() => setSection('projects')}><Icon name="folder" size={17} />المشاريع<span className="count-badge">{projects.length}</span></button><button aria-pressed={section === 'trash'} onClick={() => { setSection('trash'); if (connected) void refreshTrash(); }}><Icon name="trash" size={17} />المحذوفات{trashLoaded && <span className="count-badge">{trash.length}</span>}</button></div><div className="project-view-toggle" hidden={section === 'trash'} aria-label="طريقة عرض المشاريع">{(['grid', 'list'] as const).map((mode) => <button className="icon-button" key={mode} aria-label={mode === 'grid' ? 'عرض شبكي' : 'عرض قائمة'} title={mode === 'grid' ? 'عرض شبكي' : 'عرض قائمة'} aria-pressed={view === mode} onClick={() => setView(mode)}><Icon name={mode} size={17} /></button>)}</div></div>
       <div className="project-filters"><div className="search-field"><Icon name="search" size={18} /><input type="search" aria-label="البحث في المشاريع" placeholder={section === 'trash' ? 'ابحث في المحذوفات…' : 'ابحث عن مشروع…'} value={query} onChange={(e) => setQuery(e.target.value)} />{query && <button className="icon-button" aria-label="مسح البحث" onClick={() => setQuery('')}><Icon name="close" /></button>}</div><label className="project-sort"><span>الترتيب</span><select className="field" aria-label="ترتيب المشاريع" value={sort} onChange={(e) => setSort(e.target.value)}><option value="recent">الأحدث أولًا</option><option value="oldest">الأقدم أولًا</option><option value="name">الاسم: أ — ي</option></select></label></div>
       {deleted && trash.some((p) => p.id === deleted.id) && <div className="project-undo" role="status"><Icon name="trash" size={18} /><span>نُقل «{titleOf(deleted)}» إلى المحذوفات.</span><button className="btn btn-ghost" disabled={busy || !connected} onClick={() => restore(deleted)}><Icon name="restore" />{restoring === deleted.id ? 'جارٍ الاستعادة…' : 'تراجع عن الحذف'}</button><button className="icon-button" aria-label="إخفاء رسالة الحذف" onClick={() => setDeleted(undefined)}><Icon name="close" /></button></div>}
       {section === 'projects' ? <>
         {loadError && <div className="home-inline-error notice" role="alert">تعذّر تحديث المشاريع: {loadError}<button className="btn" disabled={!connected} onClick={() => useStore.getState().loadProjects().catch(() => {})}>إعادة المحاولة</button></div>}
         <p className="project-result-count" role="status">{query && `${filtered.length} نتيجة من ${projects.length} مشروع`}</p>
-        <div className="project-grid" data-view={view} aria-busy={!!opening}>{filtered.map((p) => <article className="project-card" key={p.name}>
-          <button className="project-card-open" onClick={() => open(p.name)} disabled={busy || !connected} aria-label={`فتح مشروع ${titleOf(p)}`}><ProjectCover project={p} /><div className="project-card-body"><h3 dir="auto" title={titleOf(p)}>{titleOf(p)}</h3><ProjectMeta project={p} /><ProjectJobs jobs={jobsOf(p.name)} /><time dateTime={new Date(p.modified).toISOString()} title={dateLabel(p.modified)}>{ago(p.modified)}</time></div><span className="project-card-arrow">{opening === p.name ? <Spinner size={18} /> : <Icon name="play" size={17} />}</span></button>
-          <div className="project-card-actions"><button className="btn btn-ghost" aria-label={`إعادة تسمية ${titleOf(p)}`} disabled={busy || !connected} onClick={() => setDialog({ kind: 'rename', project: p })}><Icon name="edit" />إعادة تسمية</button><button className="icon-button project-delete" title="نقل إلى المحذوفات" aria-label={`حذف مشروع ${titleOf(p)}`} disabled={busy || !connected} onClick={() => setDialog({ kind: 'delete', project: p })}><Icon name="trash" size={16} /></button></div>
+        {!!shownFolders.length && <div className="folder-grid" aria-label="المجلدات">{shownFolders.map((f) => <FolderCard key={f.id} folder={f} projects={projects} disabled={busy || !connected} />)}</div>}
+        {!!shownFolders.length && !!filtered.length && <h3 className="folder-loose-title">{query ? 'المشاريع' : 'مشاريع بلا مجلد'}</h3>}
+        <div className="project-grid" data-view={view} aria-busy={!!opening}>{filtered.map((p) => <article className="project-card" key={p.name} draggable={connected && !busy} onDragStart={(e) => { e.dataTransfer.setData(PROJECT_DRAG, p.name); e.dataTransfer.effectAllowed = 'move'; }}>
+          <button className="project-card-open" onClick={() => open(p.name)} disabled={busy || !connected} aria-label={`فتح مشروع ${titleOf(p)}`}><ProjectCover project={p} /><div className="project-card-body"><h3 dir="auto" title={titleOf(p)}>{titleOf(p)}</h3><ProjectMeta project={p} /><ProjectJobs jobs={jobsOf(p.name)} /><time dateTime={new Date(p.modified).toISOString()} title={dateLabel(p.modified)}>{ago(p.modified)}{!folder && query && folderOf(p.name) && <span className="project-card-folder" dir="auto"> · <Icon name="folder" />{folderOf(p.name)!.name}</span>}</time></div><span className="project-card-arrow">{opening === p.name ? <Spinner size={18} /> : <Icon name="play" size={17} />}</span></button>
+          <div className="project-card-actions"><button className="btn btn-ghost" aria-label={`إعادة تسمية ${titleOf(p)}`} disabled={busy || !connected} onClick={() => setDialog({ kind: 'rename', project: p })}><Icon name="edit" />إعادة تسمية</button><button className="btn btn-ghost" aria-label={`نقل ${titleOf(p)} إلى مجلد`} title="نقل إلى مجلد — أو اسحب البطاقة فوق المجلد" disabled={busy || !connected} onClick={() => setMoving(p)}><Icon name="folder" />مجلد</button><button className="icon-button project-delete" title="نقل إلى المحذوفات" aria-label={`حذف مشروع ${titleOf(p)}`} disabled={busy || !connected} onClick={() => setDialog({ kind: 'delete', project: p })}><Icon name="trash" size={16} /></button></div>
         </article>)}</div>
-        {!filtered.length && !loadError && <div className="empty-state home-empty">{!loaded ? <Spinner size={30} /> : <Icon name={query ? 'search' : 'film'} size={34} />}<strong>{!loaded ? 'جارٍ تحميل مشاريعك' : query ? 'لا توجد مشاريع بهذا الاسم' : 'أول لقطة، أول قصة'}</strong><p>{!loaded ? 'ستظهر مشاريعك هنا عند الاتصال بالخادم.' : query ? 'جرّب كلمة أخرى أو اعرض مكتبتك كاملة.' : 'أنشئ مشروعك الأول، وأضف اللقطات التي تريد العمل عليها.'}</p>{loaded && <button className="btn" onClick={() => query ? setQuery('') : focusNew()}>{query ? 'مسح البحث' : 'سمّ مشروعك الأول'}</button>}</div>}
+        {folder && !filtered.length && !query && <div className="empty-state home-empty"><Icon name="folder" size={34} /><strong>المجلد فاضي</strong><p>أنشئ مشروعًا هنا، أو أضف مشاريع موجودة، أو أفلت فيديو في الصفحة ليبدأ مشروع داخل المجلد.</p></div>}
+        {!folder && !shownFolders.length && !filtered.length && !loadError && <div className="empty-state home-empty">{!loaded ? <Spinner size={30} /> : <Icon name={query ? 'search' : 'film'} size={34} />}<strong>{!loaded ? 'جارٍ تحميل مشاريعك' : query ? 'لا توجد مشاريع بهذا الاسم' : 'أول لقطة، أول قصة'}</strong><p>{!loaded ? 'ستظهر مشاريعك هنا عند الاتصال بالخادم.' : query ? 'جرّب كلمة أخرى أو اعرض مكتبتك كاملة.' : 'أنشئ مشروعك الأول، وأضف اللقطات التي تريد العمل عليها.'}</p>{loaded && <button className="btn" onClick={() => query ? setQuery('') : focusNew()}>{query ? 'مسح البحث' : 'سمّ مشروعك الأول'}</button>}</div>}
       </> : <>
         <p className="project-trash-hint"><Icon name="restore" size={17} />تُحذف المشاريع وملفاتها نهائيًا بعد 30 يومًا. يمكنك استعادتها قبل ذلك.</p>
         {trashError && <div className="home-inline-error notice" role="alert">تعذّرت العملية: {trashError}<button className="btn" disabled={!connected || busy} onClick={refreshTrash}>تحديث المحذوفات</button></div>}
@@ -162,7 +178,7 @@ export function Home() {
         {!filteredTrash.length && !trashError && <div className="empty-state home-empty">{!trashLoaded ? <Spinner size={30} /> : <Icon name={query ? 'search' : 'trash'} size={34} />}<strong>{!trashLoaded ? 'جارٍ تحميل المحذوفات' : query ? 'لا توجد نتائج في المحذوفات' : 'المحذوفات فارغة'}</strong><p>{query ? 'جرّب كلمة أخرى للعثور على المشروع.' : 'عندما تحذف مشروعًا، يمكنك استعادته من هنا مع ملفاته.'}</p>{query && <button className="btn" onClick={() => setQuery('')}>مسح البحث</button>}</div>}
       </>}
     </section><footer className="home-footer"><span>قَصّة — مساحة لأسلوبك</span><span><Icon name="folder" />ملفاتك على جهازك</span></footer>
-  </div>{permanent && <PermanentDelete target={permanent} count={trash.length} onClose={() => setPermanent(undefined)} onDone={async () => { setPermanent(undefined); await refreshTrash(); }} />}{dialog && <ProjectDialog kind={dialog.kind} project={dialog.project} onClose={() => setDialog(undefined)} onDeleted={(p) => { setDeleted(p); setDialog(undefined); requestAnimationFrame(() => libraryHeading.current?.focus()); }} />}</main>;
+  </div>{moving && <MoveToFolder project={moving} onClose={() => setMoving(undefined)} />}{newFolder && <FolderNameDialog onClose={() => setNewFolder(false)} />}{permanent && <PermanentDelete target={permanent} count={trash.length} onClose={() => setPermanent(undefined)} onDone={async () => { setPermanent(undefined); await refreshTrash(); }} />}{dialog && <ProjectDialog kind={dialog.kind} project={dialog.project} onClose={() => setDialog(undefined)} onDeleted={(p) => { setDeleted(p); setDialog(undefined); requestAnimationFrame(() => libraryHeading.current?.focus()); }} />}</main>;
 }
 
 function ProjectMeta({ project: p }: { project: ProjectSummary }) {

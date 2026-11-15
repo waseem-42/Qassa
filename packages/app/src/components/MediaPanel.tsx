@@ -37,7 +37,6 @@ function MediaList() {
   const project = useStore((s) => s.project)!;
   const name = useStore((s) => s.name)!;
   const jobs = useStore((s) => s.jobs);
-  const time = useStore((s) => s.time);
   const { ops, notify } = useStore.getState();
   const [query, setQuery] = useState('');
   const [rangeMedia, setRangeMedia] = useState<Media>();
@@ -67,7 +66,7 @@ function MediaList() {
       [
         { label: many ? `أضف ${ids.length} ملفات عند المؤشر` : 'أضف عند المؤشر', key: 'addMedia' as const, run: () => placeMediaRun(ids, useStore.getState().time) },
         ...(!many && m.kind === 'video' ? [{ label: 'معاينة واختيار جزء', run: () => { useStore.getState().setPlaying(false); setRangeMedia(m); } }] : []),
-        ...(!many && m.kind === 'video' && m.hasAudio ? [{ label: 'أضف الصوت فقط', run: () => placeMedia(m.id, { at: time, soundOnly: true }) }] : []),
+        ...(!many && m.kind === 'video' && m.hasAudio ? [{ label: 'أضف الصوت فقط', run: () => placeMedia(m.id, { at: useStore.getState().time, soundOnly: true }) }] : []),
       ],
       many ? [] : [{ label: 'الاسم والدور والتحليل…', run: () => setOptions(m) }],
       [{ label: many ? `حذف ${ids.length} ملفات من المشروع` : 'حذف من المشروع', key: 'delete' as const, danger: true, run: () => removeMedia(ids) }],

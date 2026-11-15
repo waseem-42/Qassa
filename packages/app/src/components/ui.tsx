@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { animValue, clipDuration, type AnimProp, type Clip, type Ease, type Op } from '@edit/shared';
-import { useStore } from '../lib/store.ts';
+import { useSlowTime, useStore } from '../lib/store.ts';
 import { EASES, easePatch, KEY_NEAR, keyAtTime, toggleKeyPatch, valuesPatch } from '../lib/anim.ts';
 
 // Small controls shared by the inspector panels.
@@ -67,7 +67,7 @@ export function Slider({ value, min, max, step, onPreview, onCommit, fmt, def, h
  */
 export function KeySlider({ clip, prop, min, max, step, fmt, def, hardMin, hardMax }: { clip: Clip; prop: AnimProp; min: number; max: number; step: number; fmt?: (v: number) => string; def?: number; hardMin?: number; hardMax?: number }) {
   const { preview, commit, seek } = useStore.getState();
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   const t = Math.min(Math.max(0, time - clip.start), clipDuration(clip));
   const keys = clip.anim?.[prop] ?? [];
   const here = keyAtTime(keys, t);

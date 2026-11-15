@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { fmtTime, clipEnd, speechClips, routeNotes, TIERS, type Note } from '@edit/shared';
-import { useStore, type Job } from '../lib/store.ts';
+import { useSlowTime, useStore, type Job } from '../lib/store.ts';
 import { api, projectPath } from '../lib/api.ts';
 import { Icon, Spinner } from './Brand.tsx';
 import { TranscriptNeeded } from './Transcribe.tsx';
@@ -83,7 +83,7 @@ export function Notes() {
 
 function Draft() {
   const draft = useStore((s) => s.noteDraft)!;
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   const { ops, setNoteDraft, seek } = useStore.getState();
   const [text, setText] = useState('');
   const box = useRef<HTMLTextAreaElement>(null);
@@ -129,7 +129,7 @@ function Draft() {
 
 function NoteCard({ note: n, index, focused }: { note: Note; index: number; focused: boolean }) {
   const { ops, seek } = useStore.getState();
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   const name = useStore((s) => s.name)!;
   const project = useStore((s) => s.project)!;
   const contextIds = [...new Set(speechClips(project).filter((c) => c.start <= n.at && clipEnd(c) > n.at).map((c) => c.mediaId!))];

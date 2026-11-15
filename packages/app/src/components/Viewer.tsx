@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   MAIN_TRACK, clipDuration, clipEnd, clipsAt, fmtTime, GRAPHIC_RUNTIME, graphicBaseSize, graphicTime, graphicUrl, placeCss, transitionHalf, mainClips, mainDuration, outputSize,
   opacityAt, placeAt, anchoredShift, projectDuration, textLayerHtml, transformAt, volumeAt, activeWord, captionWordStarts,
   type Clip, type GraphicEdit, type Media, type Op, type Project, type Theme,
 } from '@edit/shared';
 import { withEdit } from '../lib/graphic-edit.ts';
-import { BOTH_PANELS, useStore } from '../lib/store.ts';
+import { BOTH_PANELS, useSlowTime, useStore } from '../lib/store.ts';
 import { useMediaQuery } from '../lib/workspace-layout.ts';
 import { parseTimecode } from '../lib/timecode.ts';
 import { api, fileUrl, projectPath } from '../lib/api.ts';
@@ -602,9 +602,10 @@ function GraphicLayer({ clip, project, base, theme, scale, time }: { clip: Clip;
   );
 }
 
-function Transport({ total, safe, setSafe }: { total: number; safe: boolean; setSafe: (b: boolean) => void }) {
+// memo: the viewer renders every playback frame; the transport only needs its own (slower) clock
+const Transport = memo(function Transport({ total, safe, setSafe }: { total: number; safe: boolean; setSafe: (b: boolean) => void }) {
   const custom = useKeys((s) => s.custom);
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   const playing = useStore((s) => s.playing);
   const { aspect, resolution, fps } = useStore((s) => s.project!.settings);
   const panels = useStore((s) => s.panels);
@@ -632,7 +633,7 @@ function Transport({ total, safe, setSafe }: { total: number; safe: boolean; set
       </div>
     </div>
   );
-}
+});
 
 /** The playhead clock; click it and type a time to jump there (83, 1:23, +5). */
 function Clock({ time, total }: { time: number; total: number }) {
@@ -673,7 +674,7 @@ function toggleWide() {
 
 /** The frame at the playhead becomes the project's cover on the home page. */
 function SetCover() {
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   const cover = useStore((s) => s.project!.settings.cover);
   const here = cover !== undefined && Math.abs(cover - time) < 0.02;
   const set = async () => {

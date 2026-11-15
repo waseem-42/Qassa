@@ -64,7 +64,7 @@ export class Store extends EventEmitter {
 
   list(): { name: string; displayName: string; modified: number; media: number; duration?: number; aspect?: string; exports?: number }[] {
     return readdirSync(this.root, { withFileTypes: true })
-      .filter((d) => d.isDirectory() && d.name !== '.trash')
+      .filter((d) => d.isDirectory() && !d.name.startsWith('.'))
       .flatMap((d) => {
         let file: string;
         try { file = join(this.dir(d.name), 'project.json'); if (!existsSync(file)) return []; }

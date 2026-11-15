@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { freeTrackFor, fmtTime, type Media } from '@edit/shared';
 import { Modal } from './Modal.tsx';
 import { fileUrl } from '../lib/api.ts';
-import { useStore } from '../lib/store.ts';
+import { useSlowTime, useStore } from '../lib/store.ts';
 import { sourceRangeOp } from '../lib/source-range.ts';
 
 export function SourceRange({ media, projectId, onClose }: { media: Media; projectId: string; onClose(): void }) {
@@ -13,7 +13,7 @@ export function SourceRange({ media, projectId, onClose }: { media: Media; proje
   const [track, setTrack] = useState(media.role === 'broll' ? tracks.find((t) => t.kind === 'overlay')?.id ?? 'V1' : 'V1');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const connection = useStore((s) => s.connection);
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   const start = from.trim() ? Number(from) : NaN, end = to.trim() ? Number(to) : NaN;
   let invalid = '';
   try { sourceRangeOp(media, start, end, track, time); } catch (e) { invalid = (e as Error).message; }

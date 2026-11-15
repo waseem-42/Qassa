@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { applyOps, markedRange, projectDuration, type Clip, type ExportSettings, type Op, type Project, type ProjectStart, type Shot, type Transcript } from '@edit/shared';
 import { api, projectPath } from './api.ts';
@@ -20,11 +21,14 @@ export interface Checkpoint { id: string; label: string; createdAt: string; sour
 export interface Peaks { rate: number; data: number[] }
 export interface Thumbs { interval: number; w: number; h: number; cols: number; rows: number; count: number; sheets: string[] }
 export interface Analysis { peaks?: Peaks; thumbs?: Thumbs; shots?: Shot[] }
+/** A home-page folder: a big project holding smaller ones, with its notes and shared files (server folders.ts). */
+export interface ProjectFolder { id: string; name: string; notes: string; projects: string[]; createdAt: string; modified: number; files: { name: string; size: number; modified: number }[] }
 export interface ProjectSummary { name: string; displayName?: string; modified: number; media: number; duration?: number; thumbnail?: string; aspect?: string; exports?: number }
 export interface TrashedProject { id: string; name: string; displayName?: string; deletedAt: string }
 
 interface State {
   projects: ProjectSummary[];
+  folders: ProjectFolder[];
   trash: TrashedProject[];
   projectsLoaded: boolean;
   projectsError?: string;
@@ -101,7 +105,8 @@ interface State {
   open(name: string): Promise<void>;
   close(): void;
   /** `displayName` when the title the user typed differs from the folder name */
-  create(name: string, displayName?: string, start?: ProjectStart): Promise<void>;
+  /** folder: a home-page folder id the new project joins */
+  create(name: string, displayName?: string, start?: ProjectStart, folder?: string): Promise<void>;
   ops(ops: Op[]): Promise<boolean>;
   /** Show ops locally without saving (slider drags); commit() saves one undo step. */
   preview(ops: Op[]): void;
@@ -137,6 +142,7 @@ export const PREVIEW_RATES = [1, 1.5, 2];
 
 export const useStore = create<State>((set, get) => ({
   projects: [],
+  folders: [],
   trash: [],
   projectsLoaded: false,
   rev: 0,
@@ -249,7 +255,7 @@ export const useStore = create<State>((set, get) => ({
 
   async loadProjects() {
     const sequence = ++projectsSequence;
-    try { const projects = await api.get<ProjectSummary[]>('/api/projects'); if (sequence === projectsSequence) set({ projects, projectsLoaded: true, projectsError: undefined }); }
+    try { const [projects, folders] = await Promise.all([api.get<ProjectSummary[]>('/api/projects'), api.get<ProjectFolder[]>('/api/folders').catch(() => get().folders)]); if (sequence === projectsSequence) set({ projects, folders, projectsLoaded: true, projectsError: undefined }); }
     catch (e) { if (sequence === projectsSequence) set({ projectsError: (e as Error).message }); throw e; }
   },
   async loadTrash() {
@@ -354,9 +360,10 @@ export const useStore = create<State>((set, get) => ({
     set({ name: undefined, mediaOverlay: false, project: undefined, playing: false, selected: [], jobs: {}, lastRender: undefined, draftBase: undefined, noteDraft: undefined, focusNote: undefined, graphicPick: undefined, transcripts: {}, analysis: {}, checkpoints: [], stylesOpen: false, playRange: undefined, rangeDeletePrompt: false });
   },
 
-  async create(name, displayName, start = 'video') {
+  async create(name, displayName, start = 'video', folder) {
     await api.post('/api/projects', { name, start });
     if (displayName) await api.patch(projectPath(name), { name: displayName });
+    if (folder) await addToFolder(folder, [name]).catch(() => {});
     await get().loadProjects();
     await get().open(name);
   },
@@ -608,3 +615,38 @@ export function connectLive() {
 
 // handy for debugging from the browser console in dev
 if (import.meta.env.DEV) (window as unknown as { __store: typeof useStore }).__store = useStore;
+
+/**
+ * The playhead for panels (inspector, comments, transport clock): exact while paused or scrubbing, about 8 times a
+ * second while playing. The preview and the timeline's playhead stay per frame; panels re-rendering on every frame made
+ * the timeline stutter while playing.
+ */
+export function useSlowTime(): number {
+  const [time, setTime] = useState(() => useStore.getState().time);
+  useEffect(() => {
+    let last = 0;
+    setTime(useStore.getState().time);
+    return useStore.subscribe((s, p) => {
+      if (s.time === p.time && s.playing === p.playing) return;
+      const now = performance.now();
+      if (s.playing && p.playing && now - last < 125) return;
+      last = now;
+      setTime(s.time);
+    });
+  }, []);
+  return time;
+}
+
+/** Puts projects into a home-page folder (a project is in one folder at most: the server takes it out of any other). */
+export async function addToFolder(id: string, names: string[]) {
+  const f = useStore.getState().folders.find((x) => x.id === id) ?? (await api.get<ProjectFolder[]>('/api/folders')).find((x) => x.id === id);
+  if (!f) throw new Error('المجلد غير موجود');
+  await api.patch(`/api/folders/${id}`, { projects: [...new Set([...f.projects, ...names])] });
+  await useStore.getState().loadProjects().catch(() => {});
+}
+/** Takes projects out of their folders (back to the top of the library). */
+export async function removeFromFolders(names: string[]) {
+  for (const f of useStore.getState().folders.filter((x) => x.projects.some((p) => names.includes(p))))
+    await api.patch(`/api/folders/${f.id}`, { projects: f.projects.filter((p) => !names.includes(p)) });
+  await useStore.getState().loadProjects().catch(() => {});
+}

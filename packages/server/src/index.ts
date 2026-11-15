@@ -17,6 +17,7 @@ import { registerRecentStyles } from './recent-styles.ts';
 import { registerBrands } from './brands.ts';
 import { PeakCache } from './peaks.ts';
 import { registerProjectManagement } from './project-management.ts';
+import { registerFolders } from './folders.ts';
 import { registerCheckpoints } from './checkpoints.ts';
 import { Jobs, runPython, type Job } from './jobs.ts';
 import { addMedia, queueAnalysis, readAnalysis } from './media.ts';
@@ -94,6 +95,7 @@ const view = (name: string) => {
 };
 
 registerProjectManagement(app, store, jobs);
+const folders = registerFolders(app, store);
 registerCheckpoints(app, store, jobs);
 registerClipTools(app, store, jobs);
 registerBrands(app, store, agentJobs);
@@ -204,6 +206,11 @@ function overview(name: string, p: Project): string {
 app.get<P & { Querystring: { media?: string } }>('/api/projects/:name/summary', async (req, reply) => {
   const p = store.get(req.params.name).project;
   const parts = [overview(req.params.name, p)];
+  // the bigger project this one belongs to (home-page folder): its brief and shared files
+  const folder = folders.of(req.params.name);
+  if (folder) parts.push([`## المجلد: ${folder.name}`, `يتبع هذا المشروع مجلد «${folder.name}» مع ${folder.projects.length - 1} مشروع آخر.`,
+    folder.notes.trim() ? `### ملاحظات المجلد\n${folder.notes.trim()}` : '',
+    folder.files.length ? `### ملفات المجلد المشتركة (اقرأها عند الحاجة)\n${folder.files.map((f) => `- ${join(store.root, '.folders', folder.id, 'files', f.name)}`).join('\n')}` : ''].filter(Boolean).join('\n\n'));
   for (const m of p.media) {
     if (req.query.media && req.query.media !== m.id) continue;
     const f = join(projectDir(req.params.name), 'analysis', m.id, 'summary.md');

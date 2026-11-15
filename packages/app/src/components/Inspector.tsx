@@ -1,7 +1,7 @@
 import { BrandKits } from './BrandKits.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { captionWordStarts, clipDuration, clipEnd, fmtTime, Grade, MAIN_TRACK, Picture, Place, PLACE_LIMITS, placeAt, TextStyle, textLayerHtml, Theme, THEME_FONTS, transformAt, AUTO_MARK, SFX_TRACK, type Clip, type Op, type Project } from '@edit/shared';
-import { useStore } from '../lib/store.ts';
+import { useSlowTime, useStore } from '../lib/store.ts';
 import { api, projectPath } from '../lib/api.ts';
 import { EaseRow, KeySlider, Row, Section, Slider } from './ui.tsx';
 import { playOneShot } from '../lib/audio.ts';
@@ -181,7 +181,7 @@ function AudioSection({ clip }: { clip: Clip }) {
 /** Zoom into the picture and the point it centres on — keyed at the playhead once it has keys. */
 function ZoomSection({ clip }: { clip: Clip }) {
   const { preview, commit, ops } = useStore.getState();
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   const tr = clip.transform;
   const local = Math.min(Math.max(0, time - clip.start), clipDuration(clip));
   const now = transformAt(tr, local);
@@ -227,7 +227,7 @@ function ZoomSection({ clip }: { clip: Clip }) {
 /** A layer above the main track: where it sits on the frame and how big (picture-in-picture), keyable. */
 function PlaceSection({ clip }: { clip: Clip }) {
   const { ops } = useStore.getState();
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   // a corner / the centre at the playhead (a key there when the place moves); full frame drops the place and its keys
   const plOps = (patch: Partial<Place> | null): Op[] => [{ op: 'update_clip', clipId: clip.id, patch: patch ? valuesPatch(clip, patch, time - clip.start) : { place: null, anim: { dx: null, dy: null, scale: null } } }];
   const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -260,7 +260,7 @@ const positionName = (x: number, y: number) => x === 0 && y === 0 ? 'الوسط'
 /** Where the size grows from: 9 quick points, exact values, and ◎ to see / drag it on the preview. The picture never jumps. */
 function AnchorRow({ clip }: { clip: Clip }) {
   const { commit } = useStore.getState();
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   const showFocus = useLayout((s) => s.showFocus);
   const pl = placeAt(clip, time - clip.start);
   const set = (ax: number, ay: number) => commit([{ op: 'update_clip', clipId: clip.id, patch: anchorPatch(clip, pl, ax, ay) }]);
@@ -384,7 +384,7 @@ function DenoiseRow({ clip }: { clip: Clip }) {
 /** One-click edits on a clip (CapCut's toolbar): hold a frame, play backwards, detach the sound, copy / paste its look. */
 function ClipActions({ clip, project }: { clip: Clip; project: Project }) {
   const { ops, clipTool, copyLook, pasteLook } = useStore.getState();
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   const look = useStore((s) => s.look);
   const selected = useStore((s) => s.selected);
   const media = project.media.find((m) => m.id === clip.mediaId);
@@ -655,7 +655,7 @@ function ThemeReach({ project }: { project: Project }) {
 /** Sound effects: place them automatically on what happens on screen, or one at the playhead. */
 function SfxSection({ project }: { project: Project }) {
   const name = useStore((s) => s.name)!;
-  const time = useStore((s) => s.time);
+  const time = useSlowTime();
   const { notify } = useStore.getState();
   const [list, setList] = useState<{ id: string; name: string; description: string }[]>([]);
   useEffect(() => { api.get('/api/sfx').then(setList).catch(() => setList([])); }, []);
