@@ -921,6 +921,16 @@ Don't fix anything in this task, not even small things. Put them in the list.
 > - The measurement used one 640×360 source in headless Chrome. The user edits real camera and screen footage, so Task 30 repeats the speed measurement on real-size footage before anything is called fast.
 > - The ±10% repeat rule is relaxed: compare medians of three runs in the same cache state, and report the range.
 
+### Night run 2026-11-16 (the user is asleep; these rules replace rules 4 and 9 for tonight only)
+
+- Do Tasks 27 → 32 in order in one run, without waiting for Claude between them. Read each task again when you start it.
+- **One local commit per finished task**, on `master`, so Claude can review each task alone in the morning. Message: `Task <N> (sol): <what changed>`. Commit only the files of that task. Never commit `styles/favorites.json` or `styles/recent.json`. Never push, and never rewrite history.
+- A task is finished only when its «Done when» list holds and `npm test`, `npm run typecheck` and the app build pass. Write its Report entry and its `docs/IMPROVEMENTS.md` entry before the commit, in the same commit.
+- If a task is blocked, or a «Done when» line can't be met: commit what works and passes the checks, write exactly what is missing under Report, and go on to the next task. Don't leave the tree broken, and don't spend more than about two hours on one task.
+- A product decision you are unsure about: take the option that changes less, and write the question under Report.
+- No one will answer questions tonight. Nothing destructive, no user projects, no ports 4317/5173, as always.
+- When all tasks are done, or you must stop, finish with a short «Night summary» under Report: per task done / partly / not started, and what Claude must look at first.
+
 ---
 
 ## Task 27 — Exports never fail, and a short part exports fast (after Task 26)
