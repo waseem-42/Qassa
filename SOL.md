@@ -10,7 +10,7 @@ You (sol) build; Claude is the project manager and reviews your work. The user w
    - `npm run typecheck`: clean.
    - `npm run build -w packages/app` (or the app's build script): passes.
    - The feature works in the real editor (`npm run dev`, http://localhost:5173). puppeteer-core plus the system Chrome (`C:/Program Files/Google/Chrome/Application/chrome.exe`) works for headless checks.
-3. **Never touch the user's projects** («صافي», «تجربة», «تجربة-جديدة», and anything in `projects/.trash`). To test, make a temporary project and delete it afterwards.
+3. **Never touch the user's projects**: everything in the repo's `projects/` (on 2026-11-16: «ad-for-shafi», «night-qa», «تبصر-جرم-صغير», «تجربة», «تشويقة», «شرح-الأردوينو», «شرح-قصة», «يار-بودكاست-تبصر», «يارا-تشويقة», plus `projects/.folders` and `projects/.trash`). To test, make a temporary project in an isolated `EDIT_DATA_DIR` and delete it afterwards.
 4. **Don't commit.** From 2026-11-07 the repo has a baseline commit. Claude reviews each task and commits it; you leave your changes uncommitted. Never run `git reset`, `git checkout -- …`, `git stash` or `git clean`.
 5. Keep the code style of the file you edit: same naming, same comment density (short "why" comments, no essays).
 6. After each task:
@@ -860,6 +860,191 @@ Do:
 
 ---
 
+## Practical plan (2026-11-16) — Tasks 26–32: fast daily work for someone who knows the editor
+
+The user now edits real videos in Qassa: Claude makes the first cut through MCP, then the user adjusts by hand in the editor. The user's words: the program is «غير عملي أبدا» in working and exporting. Asked what exactly, the user picked all of these:
+
+- the timeline and cutting (too many steps, surprising behaviour),
+- slowness and freezes,
+- working with Claude (slow, costly, or needs a lot of fixing by hand),
+- a crowded interface (tools are hard to find fast, too many panels and clicks),
+- export: too many steps. The user wants one button and the file comes out.
+
+Tasks 22–25 were for a first-time user (wording, a guide). These tasks are different: they are about **speed for a daily user**. The measure is clicks and seconds of waiting per operation, not looks. The user chose «measure, then fix»: Task 26 measures and fixes nothing; every later task repeats the same measurement and reports before/after numbers.
+
+Starting point: commit `307128e`. `styles/favorites.json` and `styles/recent.json` are the user's own data and stay uncommitted. Do the tasks in order, one per run, as in **How to work**. Evidence goes in `artifacts/qa/task<N>/`.
+
+Claude reviews Task 26's findings and may rewrite Tasks 28–31 from them before you start those. Read each task again when you start it.
+
+---
+
+## Task 26 — Measure a real edit from import to export (first; fix nothing)
+
+Set up an isolated server (ports other than 4317/5173, isolated `EDIT_DATA_DIR`) with two projects:
+
+- **Light:** one short clip (about 1 min), a title, one overlay.
+- **Heavy:** a synthetic project built from sample footage: about 10 min, 150+ clips on V1, 4 tracks with overlays, music and 100+ captions, and 3 HTML graphics from `graphics-lib/`. The user's real projects are small (the largest `project.json` is «تشويقة»), so also copy «تشويقة» into the isolated data dir as a real case. Copy only; the original is read-only for you.
+
+Drive the real editor in Chrome (puppeteer-core) and keep the scripts, so later tasks can rerun them: `artifacts/qa/task26/measure-*.mjs`, each printing JSON.
+
+Measure, for the light and the heavy project:
+
+1. **Export.** From clicking «تصدير» to the file shown in its folder: clicks, seconds waiting for preflight, render seconds per minute of video (first export and a repeat with warm caches), and clicks after the render ends. Also «صدّر المحدد» for a marked part.
+2. **Timeline operations.** For each one, count the clicks/keys and the time from input to the screen showing the result:
+   - split at the playhead, delete a section (ripple), move a clip on V1, move a free clip to another track, trim an edge, trim to the playhead,
+   - add a title, put a b-roll clip over a section, change a clip's volume, mute a track, undo/redo,
+   - select several clips and delete them, zoom the timeline in/out and find a place in a 10 min edit.
+   Write down every surprise: nothing happens, the wrong clip moves, a silent refusal, a selection that is lost.
+3. **Speed.** Project open time; time per op (request sent → store updated → painted); preview frame rate while playing and while scrubbing; dropped frames while dragging a clip. Record a Chrome performance profile for each freeze over 200 ms and name its cause (function or component).
+4. **Working with Claude.**
+   - From the existing `projects/*/ai-tasks.jsonl` (read-only, no new spending): duration, tokens and cost per kind of request and tier.
+   - Through MCP (`scripts/check-project-mcp.mjs` shows how): the number of tool calls and seconds for a standard brief on the light project («cut the silences, add a title and captions, export»). No paid `claude -p` run is needed for this; you call the tools yourself.
+   - In the editor: what the user sees while an AI task runs, and how many clicks it takes to see what changed and to undo all of it.
+5. **Clutter.** Count the visible controls in the header, the rail, the timeline toolbar, the transport, each inspector tab and the assistant panel, at 1600×1000 and 1366×768. Mark which ones the daily path in points 1–2 used.
+
+Write `docs/research/practical-2026-11.md`:
+- one table per point above (operation, clicks, seconds, what gets in the way),
+- **the 15 worst points, ranked by time lost per edit session**, each with its cause in the code (`file:line`) and a proposed fix in one or two lines,
+- anything broken that you met on the way (a bug list, separate from the slow points).
+
+Don't fix anything in this task, not even small things. Put them in the list.
+
+**Done when:**
+- `docs/research/practical-2026-11.md` has the five tables with real numbers for both projects, and the ranked 15.
+- The measuring scripts rerun with one command each and print the same numbers (±10%).
+- The isolated data dir is deleted, and `git status` shows only the new doc, the Report line and `docs/IMPROVEMENTS.md`.
+
+---
+
+> **Rewritten by Claude on 2026-11-16 from Task 26's findings** (`docs/research/practical-2026-11.md`). What changed:
+> - Timeline edits are already optimistic and paint in under 35 ms on the heavy project (`store.ts:371`), and no freeze over 200 ms appeared after loading. So the old «optimistic updates» and «no freezes» work is dropped. What the measurement did find: an export that fails, a slow marked export, a drop that vanishes, a seek that goes off screen, long and costly AI requests.
+> - The measurement used one 640×360 source in headless Chrome. The user edits real camera and screen footage, so Task 30 repeats the speed measurement on real-size footage before anything is called fast.
+> - The ±10% repeat rule is relaxed: compare medians of three runs in the same cache state, and report the range.
+
+---
+
+## Task 27 — Exports never fail, and a short part exports fast (after Task 26)
+
+From Task 26's bug list and export table:
+
+1. **`spawn ENAMETOOLONG`.** A timeline with about 120 animated text layers fails in the final pass, in full and marked exports. The filtergraph goes to ffmpeg as a command-line argument (`packages/render/src/run.ts:40`; per-text filters are built at `compile.ts:598`), and Windows refuses the long command. This is a real export a user can make: an animated caption per sentence in a 10 min video.
+2. **A 5 s marked part of the heavy project takes 33.6 s.** The compiler builds the whole timeline and applies the range late (`compile.ts:654`).
+
+Do:
+- Pass the filtergraph through a file (`-filter_complex_script`, or `-/filter_complex` on the bundled ffmpeg version; check which one it supports) whenever it is long, written inside the project's `cache/` with a project-relative path (cwd stays the project folder). If the input count is the limit too, compose in bounded passes. Reproduce first with `artifacts/qa/task26/measure-compile.mjs`.
+- Marked export: drop the clips, texts and graphics that lie fully outside the range before preparing them, so only what the range shows is captured and composed. The output must be the same frames and sound as the same range cut from a full export.
+- Add compiler tests: a project with 150 animated texts compiles to a command under the Windows limit; a ranged compile only references clips that touch the range.
+
+**Done when:**
+- The 120-animated-text heavy variant exports cold, warm and marked, and ffprobe shows the right duration and frame count.
+- The heavy 5 s marked export takes under 10 s warm (it was 33.6 s). Report cold and warm medians.
+- A marked export and the same range of a full export match (frame hashes at 5 sampled frames, and audio duration).
+- Full exports of the light and heavy baselines are not slower than in Task 26 (medians).
+- `npm test`, `npm run typecheck` and the app build pass.
+
+---
+
+## Task 28 — Export with one click (after Task 27)
+
+What Task 26 measured: a repeat export is 2 clicks, a preflight wait, then 1 click to reveal. When the user closes the dialog to keep working, it is 5 clicks, with 2 of them after the render ends, and nothing tells the user it finished. The file name falls back to the project name each time the dialog opens (`ExportDialog.tsx:29` strips the saved name), so a «مراجعة» export loses its suffix.
+
+Do:
+- **Split button in the header** (`Header.tsx:71`). The main part «تصدير» exports straight away with the project's last export settings (`qassa.export.<name>`). A small arrow beside it opens the dialog as today. A project with no saved export settings opens the dialog the first time.
+- **Preflight in the background.** The quick export runs the same preflight and the same `canSubmitExport` / `startRender` path. A blocker opens the dialog on the blockers. Warnings and review findings don't stop it; show their count in the finished notice, and a click opens the dialog on them.
+- **Progress where the user looks.** While a render runs, the header button shows the percentage. The user keeps editing; the export is of the snapshot, as today.
+- **A finished notice** (design-system toast; stays until dismissed or the next export): file name, duration, «تشغيل», «إظهار في المجلد». A failed export shows the error and «افتح التفاصيل».
+- **Marked part:** when the project has In/Out marks, the arrow menu offers «صدّر المحدد» as one click (`render marked:true` path).
+- **File names:** keep the preset suffix when the dialog reopens with a remembered preset. A name the user typed is remembered for that project. Quick export never overwrites an earlier file: same rule as today's versions.
+- **Shortcuts** in `lib/keys.ts` with behaviour in `runAction`: quick export, and open the export dialog. They appear in the command search.
+- Don't change the export contract, the preflight, the review list or the file output.
+
+**Done when:**
+- The second export of a project is one click (or one key), and the file opens from the notice with one more click, with the dialog never opened. Before/after click counts from `measure-export.mjs`.
+- A blocker still stops the export and shows why. A stale revision still asks for a recheck.
+- The exported file is the same as before the change (ffprobe, same project and settings).
+- Tests cover «which settings and name does quick export use» and the first-time fallback.
+
+---
+
+## Task 29 — Timeline: the four things that got in the way (after Task 28)
+
+From Task 26's surprises. Speed is fine here; these are about the hand.
+
+1. **A library clip dropped exactly on the playhead vanishes**: no clip, no message (6 of 6 trials). The playhead line takes pointer events (`Timeline.tsx:851`), so the hit test at `Timeline.tsx:465` finds no track row. People aim at the playhead on purpose.
+2. **Typing a time in the clock while zoomed in leaves the playhead off screen** (`Viewer.tsx:638`; the scroll-follow at `Timeline.tsx:287` only runs while playing).
+3. **Clicking a clip under the playhead line scrubs instead of selecting** (the 9 px strip).
+4. **Volume is 4 actions the first time**: select → الخصائص → الصوت → slider (`Inspector.tsx:88`, `:167`).
+
+Do:
+- During a media or clip drag, resolve the track from the row geometry at the pointer, so the playhead never blocks a drop. Landing box and snapping work there too. Keep scrubbing by the playhead head and line when nothing is being dragged.
+- Any explicit jump while paused (clock entry, a review finding, a comment, a command) scrolls the timeline so the playhead is in view, with some margin. Ordinary scrubbing and dragging don't move the view.
+- A plain click on a clip selects it even under the playhead line. The line scrubs on drag only; a click without movement goes to what is under it.
+- Volume without opening a panel: a volume control in the clip menu, and two rebindable keys in `keys.ts` + `runAction` (louder / quieter by 1 dB for the selection, one undo per burst). The inspector stays as it is.
+- Look for the same silent-nothing pattern in other drops (onto a locked track, onto the ruler, between rows) and give each one a one-line reason near the pointer.
+
+**Done when:**
+- The playhead drop succeeds 3 of 3 on both fixtures (`measure-editor.mjs` / `measure-placement.mjs` playhead trial).
+- At 40 px/s, a clock jump to 8:30 on the heavy project shows the playhead in view (`measure-navigation.mjs`).
+- A click on a clip under the playhead selects it; dragging the line still scrubs.
+- Volume takes one key, or two clicks from the clip menu.
+- Tests for any new op or helper. No timeline operation in Task 26's table got slower (medians).
+
+---
+
+## Task 30 — Speed on real-size footage (after Task 29)
+
+Task 26 found the editor fast, but on a 640×360 source in headless Chrome. The user says the editor feels slow and hangs, and edits real footage: 1080p and 4K camera files, long screen recordings, several source files, on the dev servers started by `Start-Qassa.bat`. Measure that before fixing anything.
+
+Do:
+- Make real-size fixtures with ffmpeg (no user files): 5 different sources, among them 4K/30 H.264, 1080p/60, a 20 min screen recording and a HEVC file. Import them through the editor, so proxies, peaks and thumbnails are made the normal way, and time the import until the project is fully usable.
+- Rerun `measure-load.mjs` and `measure-editor.mjs` on a 10 min edit of these sources, in a headed Chrome window too (the user's case), not only headless: open, play across cuts, scrub, drag, and export at 1080p final quality.
+- Check that the preview plays proxies, not originals, and that waveforms and thumbnails are not recomputed on reopen.
+- Fix what crosses these lines, worst first: a main-thread task over 100 ms while editing or playing; playback under the project's frame rate; a wait over 1 s with nothing on screen saying why. Also defer the first-load WebGL setup that Task 26 profiled at 296 ms (`glgrade.ts:135`, `Viewer.tsx:121`) and the forced layout in `Timeline.tsx:241`.
+- If everything is inside the lines, say so with the numbers and fix only the first-load task. Don't invent work.
+
+**Done when:**
+- The Report has the real-size table (import, open, play, scrub, drag, export) for headless and headed, before and after.
+- No main-thread task over 100 ms in the measured path after loading, or the Report names what remains and why.
+- 1080p final export time per minute is reported, with the slowest stage named.
+
+---
+
+## Task 31 — Working with Claude: cheaper requests, one undo (after Task 30)
+
+From Task 26 point 4:
+- Old deep requests ran 5.5–8.4 min and cost about $2 each (graphics and cuts). Cache-read tokens are in the millions per request: each turn rereads a large context.
+- The running card already shows the tool steps (`agent.ts:142`), so progress is not the gap.
+- A finished task shows a reply, but no list of what changed, and undoing it takes one undo per batch (3 in the standard brief).
+
+Do:
+- **One undo per task.** Mark the task's edits with a task boundary so «تراجع عن كل ما سوّاه» on the finished card restores the project to before the task in one step. The user's own edits made while the task ran must survive, or the button says it can't and why. Tests.
+- **What changed.** The finished card lists the changes from the ops the task applied (cuts, new clips, moved clips, changed texts), grouped and short. A click seeks and selects.
+- **Cost.** Find where the turns and the context go: log per task the number of turns, tool calls and the largest tool results (extend `ai-tasks.jsonl`). Then cut the biggest ones: smaller tool results by default (the summary before the full state), fewer round trips for common briefs, and the right tier from `router.ts`. Show the estimate before sending for deep requests («قد يأخذ ~5 دقائق»).
+- Paid runs: at most 3 `claude -p` runs, on the light project. Write their cost in the Report. Compare one brief before/after; one pair is a sample, so report it as such.
+
+**Done when:**
+- Undoing a finished AI task is one click, and tests cover it with and without user edits in between.
+- The finished card lists the changes, and a click goes to each.
+- The per-task log has turns, tool calls and result sizes; the Report says what was cut and the measured before/after of the one compared brief.
+
+---
+
+## Task 32 — Less on screen in the inspector (last)
+
+From Task 26 point 5: the header, rail, toolbar and transport are 6–12 controls each, which is fine. The crowd is in the inspector: 33 controls on a video's picture tab, 37 on a graphic's place tab, 23 on audio, 21 on SFX.
+
+Do:
+- In each inspector tab, the few controls used most stay open. The rest go into closed groups with a clear name, remembered per viewer when opened. A group that holds a changed value shows a dot, so nothing set is hidden.
+- Nothing is removed, and every command stays in `runAction` and the command search.
+- Follow the design system (`brand/README.md`), RTL, and the laptop rules from Task 25.
+
+**Done when:**
+- No inspector tab shows more than 15 controls by default at 1600×1000 (`measure-clutter.mjs` before/after, screenshots at 1600×1000 and 1366×768).
+- A changed value inside a closed group is marked.
+- No daily operation needs more clicks than after Task 29.
+
+---
+
 ## Report
 
 (sol: one block per task — status, files changed, tests, open questions for Claude)
@@ -1134,3 +1319,9 @@ Do:
 ### Claude, night of 2026-11-08 — after Task 25 (new baseline for sol)
 
 Task 25 reviewed and committed (38c3b18). Claude then added competitor features (see docs/IMPROVEMENTS.md «Competitor features, first pass»): command search Ctrl+K (`CommandPalette.tsx`, shortcut behaviour now in `lib/actions.ts` `runAction`), Q/W trim to playhead, silence tuning (min length, breathing room, speed up ×4 instead of cut), preview speed ×1/×1.5/×2 (Shift+R), word-highlight captions (`textStyle.highlight`, `shared/src/caption-highlight.ts`, export expands to one still per word), filler words («كلمات الحشو», `shared/src/fillers.ts`), click-the-clock go-to-time. 364 tests pass. Open product question for the user: face-centred auto-reframe for 9:16 needs a downloaded face model (OpenCV 5 here has none).
+
+### Task 26 — measurement delivered (2026-11-16; no fixes)
+
+- Report: `docs/research/practical-2026-11.md` has all five measurement areas, 15 explicitly modelled priorities and a separate bug list; evidence/runnable JSON scripts are in `artifacts/qa/task26/`. Light/heavy/copy of تشويقة; isolated 4496/5296 only. Heavy cold/warm/5 s marked exports: 119.78/102.08/33.63 s; 90 editor attempts, 13 historical AI records, real MCP brief 6 calls / 3 undo clicks, two viewport inventories; one 296 ms startup freeze profiled (GradeRenderer/WebGL + Timeline layout). Confirmed animated-text `ENAMETOOLONG`, silent drop on playhead, zoomed paused seek off-screen, filename-reset behavior; none fixed. Native Explorer screenshots/accessibility confirmed both marked files visibly selected; those observation times include controller delay and are upper bounds. 373 tests/75 files, typecheck and app build pass. All temporary data removed and owned servers stopped; no paid agent/Whisper, user-project writes or commit; prior SOL/style changes preserved. Limit for Claude: ±10% timing stability was not achieved; task is not an unconditional acceptance pass. Decide naming persistence and review measured causes before Tasks 27–31; sol stops here.
+
+**Review by Claude (2026-11-16):** accepted as a measurement. Spot-checked the cited code (`store.ts:371` optimistic ops, `Timeline.tsx:465`/`:851` playhead hit test, `compile.ts:654` late range): correct. The ±10% rule is relaxed to medians of three runs in the same cache state. File names: keep the preset suffix and remember a typed name per project (now in Task 28). Tasks 27–32 are rewritten from these findings; the open gap is speed on real-size footage (Task 30).
