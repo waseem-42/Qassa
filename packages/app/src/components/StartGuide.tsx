@@ -52,8 +52,10 @@ export function StartGuide({ compact = false }: { compact?: boolean }) {
     <div className="start-guide-heading"><strong>دليل البداية</strong><button className="icon-button" aria-label="إغلاق دليل البداية" title="إغلاق — يمكنك إعادته من الإعدادات" onClick={() => { clear(); close(); }}><Icon name="close" size={14} /></button></div>
     <ol>{STEPS.map((label, i) => <li key={label} data-complete={done[i]}><span className="guide-step-number" aria-label={done[i] ? 'اكتملت' : 'لم تكتمل'}>{done[i] ? '✓' : i + 1}</span><span>{label}</span><button type="button" aria-label={`وريني: ${label}`} onClick={() => show(i)}>وريني</button></li>)}</ol>
   </section>;
-  if (!compact) return <div className="guide-full">{checklist}</div>;
-  return <div className="guide-compact">
+  // the full row is for the very start; after two steps it only takes room from the work
+  const started = done.filter(Boolean).length >= 2;
+  if (!compact) return started ? null : <div className="guide-full">{checklist}</div>;
+  return <div className="guide-compact" data-started={started || undefined}>
     <button className="btn btn-ghost guide-trigger" aria-expanded={open} onClick={() => setOpen(!open)}><span>دليل البداية</span><bdi className="num">{done.filter(Boolean).length}/4</bdi></button>
     {open && <><button className="guide-backdrop" aria-label="طي دليل البداية" onClick={() => setOpen(false)} /><div className="guide-popover">{checklist}</div></>}
   </div>;

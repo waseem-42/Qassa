@@ -58,7 +58,7 @@ export function Assistant() {
           <span className="text-ink-500">مجاني — بدون ذكاء</span>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2"><span className="num text-base">{fmtTime(duration, 1)} ← {fmtTime(Math.max(0, duration - saved), 1)}</span><span className="text-xs text-ink-400">توفير {fmtTime(saved, 1)}</span></div>
-        <p className="mt-2 text-[11px] leading-5 text-ink-400">{picked.length} من {project.suggestions.length} محددة — شيل علامة اللي تبي تخليه، و«انتقل» يوريك المكان قبل القص.</p>
+        <p className="mt-2 text-[12.5px] leading-5 text-ink-400">{picked.length} من {project.suggestions.length} محددة — شيل علامة اللي تبي تخليه، و«انتقل» يوريك المكان قبل القص.</p>
         {silences.length > 0 && <div className="silence-tuning">
           <label><span>أقصر سكتة تُقص</span><input type="range" min={0} max={3} step={0.1} value={tuning.min} onChange={(e) => setTuning({ ...tuning, min: Number(e.target.value) })} aria-valuetext={tuning.min ? `${tuning.min} ثانية` : 'كل السكتات'} /><output className={tuning.min ? 'num' : undefined}>{tuning.min ? `${tuning.min.toFixed(1)} ث` : 'الكل'}</output></label>
           <label title="يترك هذا القدر من الصمت عند طرفي كل سكتة، عشان الكلام ما يلتصق ببعضه"><span>نَفَس عند الأطراف</span><input type="range" min={0} max={0.5} step={0.05} value={tuning.pad} onChange={(e) => setTuning({ ...tuning, pad: Number(e.target.value) })} aria-valuetext={tuning.pad ? `${tuning.pad} ثانية` : 'بدون'} /><output className={tuning.pad ? 'num' : undefined}>{tuning.pad ? `${tuning.pad.toFixed(2)} ث` : 'بدون'}</output></label>
@@ -90,7 +90,7 @@ export function Assistant() {
           <label className="flex cursor-pointer items-center gap-2">
             <input type="checkbox" disabled={busy} checked={ticked(s.id)} onChange={(e) => setExcluded(e.target.checked ? excluded.filter((id) => id !== s.id) : [...excluded, s.id])} />
             <span className="text-sm">{reasons[s.reason]}</span>
-            {short && <span className="text-[11px] text-ink-500">أقصر من الحد — تبقى</span>}
+            {short && <span className="text-[12.5px] text-ink-500">أقصر من الحد — تبقى</span>}
             <span className="num mr-auto text-xs text-ink-400">{fmtTime(s.t0, 1)}–{fmtTime(s.t1, 1)}</span>
           </label>
           <p className="mt-2 truncate text-xs text-ink-500">{project.media.find((m) => m.id === s.mediaId)?.name ?? s.mediaId}</p>
@@ -113,15 +113,15 @@ export function Assistant() {
           <button className="btn w-full justify-center" disabled={busy || !!active.length || !missing.length} onClick={analyze}>
             {active.length ? `جارٍ التحليل · ${active.length} مهمة` : missing.length ? `تحليل ${missing.length} ملف` : 'أضف مقطعًا من الوسائط للبدء'}
           </button>
-          {active.length > 0 && <p className="mt-2 text-[11px] leading-5 text-ink-500">اقتراحات القص (السكتات والإعادات) تطلع هنا أول ما يخلص.</p>}
+          {active.length > 0 && <p className="mt-2 text-[12.5px] leading-5 text-ink-500">اقتراحات القص (السكتات والإعادات) تطلع هنا أول ما يخلص.</p>}
         </div>
-      ) : !project.suggestions.length && <p className="text-[11px] leading-5 text-ink-500">التحليل مكتمل وما فيه اقتراحات قص — تقدر تقص من «النص» أو تطلب من الذكاء.</p>}
+      ) : !project.suggestions.length && <p className="text-[12.5px] leading-5 text-ink-500">التحليل مكتمل وما فيه اقتراحات قص — تقدر تقص من «النص» أو تطلب من الذكاء.</p>}
       <div className="rounded-xl border border-ink-700 p-3">
         <h3 className="mb-2 text-sm">مقاس الفيديو</h3>
         <div className="flex gap-2">
           {([['16:9', 'يوتيوب'], ['9:16', 'شورتس'], ['1:1', 'مربع']] as const).map(([aspect, label]) => <button key={aspect} className={`btn flex-1 justify-center text-xs ${project.settings.aspect === aspect ? 'border-accent text-accent' : ''}`} aria-pressed={project.settings.aspect === aspect} disabled={busy} onClick={() => ops([{ op: 'set_settings', patch: { aspect } }])}>{label} {aspect}</button>)}
         </div>
-        <p className="mt-2 text-[11px] leading-5 text-ink-400">راجع تأطير اللقطات في المعاينة بعد تغيير المقاس.</p>
+        <p className="mt-2 text-[12.5px] leading-5 text-ink-400">راجع تأطير اللقطات في المعاينة بعد تغيير المقاس.</p>
       </div>
     </div>
   );

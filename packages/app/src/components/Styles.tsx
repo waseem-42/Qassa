@@ -236,7 +236,7 @@ function StyleCard({ s, frame, project, busy, current, used, onApply, onView, on
         </div>
         {onView && <button className="absolute inset-0" tabIndex={-1} aria-label={`تفاصيل ${s.name}`} onClick={onView} />}
         {used && <span className="style-used-badge">مستخدم في هذا المشروع</span>}
-        {current && <span className="absolute left-2 top-2 rounded bg-accent px-2 py-0.5 text-[11px] font-semibold text-ink-950">نفس لوحة الألوان</span>}
+        {current && <span className="absolute left-2 top-2 rounded bg-accent px-2 py-0.5 text-[12.5px] font-semibold text-ink-950">نفس لوحة الألوان</span>}
       </div>
       <div className="p-3">
         <div className="mb-1 flex items-center gap-2">
@@ -246,10 +246,10 @@ function StyleCard({ s, frame, project, busy, current, used, onApply, onView, on
             {[theme.accent, theme.accent2, theme.panel, theme.text].map((c, i) => <span key={i} className="h-3.5 w-3.5 rounded-full border border-ink-600" style={{ background: c }} />)}
           </div>
           <div className="flex-1" />
-          {s.transition && <span className="rounded bg-ink-800 px-1.5 py-0.5 text-[10px] text-ink-300">⧖ {TRANSITIONS[s.transition.kind]}</span>}
+          {s.transition && <span className="rounded bg-ink-800 px-1.5 py-0.5 text-[12px] text-ink-300">⧖ {TRANSITIONS[s.transition.kind]}</span>}
         </div>
         <p className="mb-2 min-h-10 text-xs leading-5 text-ink-400">{s.description}</p>
-        {s.inspiredBy && <div className="mb-2 text-[10px] text-ink-500" dir="ltr">✧ {s.inspiredBy}</div>}
+        {s.inspiredBy && <div className="mb-2 text-[12px] text-ink-500" dir="ltr">✧ {s.inspiredBy}</div>}
         <div className="flex gap-2">
           <button className="btn btn-primary h-8 flex-1 justify-center" disabled={busy} onClick={onApply}>{busy ? '…' : 'طبّق الهوية'}</button>
           {onDelete && <button className="btn btn-ghost h-8 text-xs text-cut-text" onClick={onDelete}>حذف</button>}

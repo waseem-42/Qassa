@@ -79,13 +79,13 @@ function MediaList() {
         <button type="button" data-guide="import" onClick={() => picker.current?.click()} className="media-dropzone btn flex-1 justify-center gap-2 text-xs" title="فيديو أو صوت أو صور — تنضاف لمكتبة المشروع، ثم اسحبها للتايملاين"><Icon name="upload" />استيراد ملفات</button>
         <button type="button" onClick={() => folder.current?.click()} className="btn justify-center gap-2 text-xs" title="كل الفيديو والصوت والصور داخل مجلد">استيراد مجلد</button>
       </div>
-      <p className="mb-2 text-center text-[10px] text-ink-500">أو اسحب الملفات هنا · تنضاف للمكتبة، وتحطها بسحبها للتايملاين</p>
+      <p className="mb-2 text-center text-[12px] text-ink-500">أو اسحب الملفات هنا · تنضاف للمكتبة، وتحطها بسحبها للتايملاين</p>
       <input ref={picker} type="file" multiple className="hidden" accept="video/*,audio/*,image/*" onChange={(e) => { importFiles([...(e.target.files ?? [])]); e.target.value = ''; }} />
       <input ref={folder} type="file" multiple className="hidden" {...{ webkitdirectory: '' }} onChange={(e) => { const files = [...(e.target.files ?? [])].filter((f) => /^(video|audio|image)\//.test(f.type)); if (files.length) importFiles(files); else notify('ما فيه فيديو أو صوت أو صور في هذا المجلد'); e.target.value = ''; }} />
       <Uploads />
       {!!project.media.length && <div className="search-field mb-3"><Icon name="search" /><input aria-label="البحث في الوسائط" placeholder="ابحث في ملفات المشروع" value={query} onChange={(e) => setQuery(e.target.value)} />{query && <button aria-label="مسح بحث الوسائط" onClick={() => setQuery('')}><Icon name="close" /></button>}</div>}
       {query && !items.length && <p className="py-8 text-center text-xs text-ink-400">لا توجد ملفات بهذا الاسم.</p>}
-      {selected.length > 1 && <div className="mb-2 flex items-center gap-2 rounded-lg bg-ink-850 px-2 py-1 text-[11px] text-ink-300" role="status"><span className="flex-1">محدد {selected.length} ملفات</span><button className="btn h-6 px-2 text-[11px]" onClick={() => placeMediaRun(selected, useStore.getState().time)}>أضف عند المؤشر</button><button className="btn h-6 px-2 text-[11px] text-cut-text" onClick={() => removeMedia(selected)}>حذف</button><button className="icon-button" aria-label="إلغاء التحديد" onClick={() => selectMedia()}><Icon name="close" /></button></div>}
+      {selected.length > 1 && <div className="mb-2 flex items-center gap-2 rounded-lg bg-ink-850 px-2 py-1 text-[12.5px] text-ink-300" role="status"><span className="flex-1">محدد {selected.length} ملفات</span><button className="btn h-6 px-2 text-[12.5px]" onClick={() => placeMediaRun(selected, useStore.getState().time)}>أضف عند المؤشر</button><button className="btn h-6 px-2 text-[12.5px] text-cut-text" onClick={() => removeMedia(selected)}>حذف</button><button className="icon-button" aria-label="إلغاء التحديد" onClick={() => selectMedia()}><Icon name="close" /></button></div>}
       <div className="flex flex-col gap-1">
         {items.map((m) => <MediaCard key={m.id} media={m} name={name} selected={selected.includes(m.id)} count={project.clips.filter((c) => c.mediaId === m.id).length} job={jobFor(m)} menuOpen={menu?.media.id === m.id} onPick={(e) => pick(m, e)} onMenu={(x, y, toggle) => setMenu(toggle && menu?.media.id === m.id ? undefined : { media: m, x, y })} onRange={() => { useStore.getState().setPlaying(false); setRangeMedia(m); }} />)}
       </div>
@@ -121,9 +121,9 @@ function MediaCard({ media: m, name, selected, menuOpen, count, job, onPick, onM
   return <div data-media-id={m.id} data-selected={selected || undefined} draggable tabIndex={0} role="group" aria-label={`وسيط ${m.name}`} onClick={(e) => onPick(e)} onContextMenu={(e) => { e.preventDefault(); if (!selected) onPick({ ctrlKey: false, metaKey: false, shiftKey: false }); onMenu(e.clientX, e.clientY); }} onDoubleClick={() => { if (m.kind === 'video') onRange(); }} onDragStart={(e) => { if (!selected) selectMedia(m.id); setDraggingMedia(m.id); e.dataTransfer.setData(MEDIA_DRAG, m.id); e.dataTransfer.effectAllowed = 'copy'; }} onDragEnd={() => setDraggingMedia()} className={`media-card group relative flex h-14 cursor-grab items-center gap-2 rounded-lg border bg-ink-850 p-1 ${selected ? 'border-accent' : 'border-ink-700 hover:border-ink-500'}`}>
     <div data-media-thumb className="relative h-12 w-16 shrink-0 overflow-hidden rounded bg-ink-950" onMouseMove={(e) => { if (thumbs && m.kind === 'video') setFrame(Math.min(thumbs.count - 1, Math.floor((e.clientX - e.currentTarget.getBoundingClientRect().left) / e.currentTarget.clientWidth * thumbs.count))); }} onMouseLeave={() => setFrame(0)} style={thumb ? { backgroundImage: `url("${thumb}")`, backgroundSize: m.kind === 'image' ? 'cover' : `${thumbs!.cols * 100}% ${thumbs!.rows * 100}%`, backgroundPosition: m.kind === 'image' ? 'center' : `${j % thumbs!.cols / Math.max(1, thumbs!.cols - 1) * 100}% ${Math.floor(j / thumbs!.cols) / Math.max(1, thumbs!.rows - 1) * 100}%` } : undefined}>
       {!thumb && <span className="flex h-full items-center justify-center text-ink-400">{m.kind === 'audio' ? '♪' : '▷'}</span>}
-      {m.kind !== 'image' && <span className="num absolute bottom-0 end-0 rounded bg-ink-950/85 px-1 text-[10px] text-ink-200">{fmtTime(m.duration, 0)}</span>}
+      {m.kind !== 'image' && <span className="num absolute bottom-0 end-0 rounded bg-ink-950/85 px-1 text-[12px] text-ink-200">{fmtTime(m.duration, 0)}</span>}
     </div>
-    <div className="min-w-0 flex-1"><div className="truncate text-xs text-ink-200" dir="auto" title={m.name}>{m.name}</div><div className="mt-1 flex items-center gap-1 text-[10px] text-ink-400"><span>{m.kind === 'audio' ? '♪ صوت' : m.kind === 'image' ? '▧ صورة' : '▷ فيديو'}</span><span>·</span><span>{count ? `على التايملاين ×${count}` : 'اسحب إلى التايملاين'}</span></div>{job && <div title={`${stageLabel(job.stage)} ${Math.round(job.progress * 100)}%`} className="mt-1 h-0.5 bg-ink-700"><div className="h-full bg-accent" style={{ width: `${job.progress * 100}%` }} /></div>}</div>
+    <div className="min-w-0 flex-1"><div className="truncate text-xs text-ink-200" dir="auto" title={m.name}>{m.name}</div><div className="mt-1 flex items-center gap-1 text-[12px] text-ink-400"><span>{m.kind === 'audio' ? '♪ صوت' : m.kind === 'image' ? '▧ صورة' : '▷ فيديو'}</span><span>·</span><span>{count ? `على التايملاين ×${count}` : 'اسحب إلى التايملاين'}</span></div>{job && <div title={`${stageLabel(job.stage)} ${Math.round(job.progress * 100)}%`} className="mt-1 h-0.5 bg-ink-700"><div className="h-full bg-accent" style={{ width: `${job.progress * 100}%` }} /></div>}</div>
     <button className="media-add rounded px-1 text-xs text-accent opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" aria-label={`إضافة ${m.name} عند المؤشر`} title="+ عند المؤشر (Shift+A)" onDoubleClick={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); placeMedia(m.id, { at: useStore.getState().time }); }}>＋</button>
     <button className="px-1 text-ink-300" aria-label={`خيارات ${m.name}`} aria-haspopup="menu" aria-expanded={menuOpen} onDoubleClick={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); onMenu(r.left, r.bottom + 2, true); }}>⋯</button>
   </div>;
@@ -146,7 +146,7 @@ function AudioTracks({ media, name }: { media: Media; name: string }) {
   return (
     <fieldset className="flex flex-col gap-1 rounded-lg border border-ink-700 p-2 text-xs" aria-label="مسارات الصوت">
       <legend className="px-1 text-ink-300">مسارات الصوت ({info.tracks.length})</legend>
-      <p className="text-[11px] leading-5 text-ink-400">{info.mixed ? 'اللي عليه علامة ينسمع في المعاينة والتصدير.' : 'الملف فيه أكثر من مسار صوت، والحين ينسمع الأول بس. اختر اللي تبيه وطبّق.'} لو المسار الأول فيه كل الأصوات مدموجة من قبل، اختره لحاله عشان ما يتكرر الصوت.</p>
+      <p className="text-[12.5px] leading-5 text-ink-400">{info.mixed ? 'اللي عليه علامة ينسمع في المعاينة والتصدير.' : 'الملف فيه أكثر من مسار صوت، والحين ينسمع الأول بس. اختر اللي تبيه وطبّق.'} لو المسار الأول فيه كل الأصوات مدموجة من قبل، اختره لحاله عشان ما يتكرر الصوت.</p>
       {info.tracks.map((t, i) => (
         <label key={i} className="flex items-center gap-2">
           <input type="checkbox" checked={pick.includes(i)} onChange={(e) => setPick(e.target.checked ? [...pick, i].sort((a, b) => a - b) : pick.filter((x) => x !== i))} />
@@ -170,7 +170,7 @@ function StyleButton({ media }: { media: Media }) {
   const name = useStore((s) => s.name)!;
   const notify = useStore((s) => s.notify);
   return (
-    <button className="btn h-6 px-2 text-[11px] text-accent" onClick={() =>
+    <button className="btn h-6 px-2 text-[12.5px] text-accent" onClick={() =>
       api.post(`${projectPath(name)}/style`, { refMediaId: media.id, strength: 0.6, apply: 'default' }).then(() => notify('يبني الستايل من الرفرنس…', 'info')).catch((e) => notify(e.message))
     }>✦ طابق الستايل</button>
   );
@@ -206,10 +206,10 @@ function Shots() {
           className={`cursor-pointer overflow-hidden rounded-lg border bg-ink-850 transition-all ${selected.includes(c.id) ? 'border-accent' : 'border-ink-700 hover:border-ink-500'} ${overIdx === i && dragId !== c.id ? 'ring-2 ring-accent/60' : ''} ${dragId === c.id ? 'opacity-40' : ''}`}
         >
           <ClipThumb clip={c} name={name} thumbs={analysis[c.mediaId ?? '']?.thumbs} />
-          <div className="flex items-center gap-1 px-2 py-1 text-[11px]">
+          <div className="flex items-center gap-1 px-2 py-1 text-[12.5px]">
             <span className="num text-ink-500">{i + 1}</span>
             <span className="flex-1 truncate text-ink-300">{c.label ?? fmtTime(c.in, 0)}</span>
-            {c.speed !== 1 && <span className="rounded bg-accent px-1 text-[10px] text-black">×{c.speed}</span>}
+            {c.speed !== 1 && <span className="rounded bg-accent px-1 text-[12px] text-black">×{c.speed}</span>}
             <span className="num text-ink-400">{clipDuration(c).toFixed(1)}s</span>
           </div>
         </div>
@@ -274,10 +274,10 @@ function Style() {
           {style.styleframe && (
             <figure className="mb-3">
               <img src={fileUrl(name, style.styleframe) + `?v=${project.style}`} className="w-full rounded" />
-              <figcaption className="mt-1 flex justify-between text-[10px] text-ink-500"><span>الرفرنس</span><span>بعد الـLUT</span><span>مقطعك</span></figcaption>
+              <figcaption className="mt-1 flex justify-between text-[12px] text-ink-500"><span>الرفرنس</span><span>بعد الـLUT</span><span>مقطعك</span></figcaption>
             </figure>
           )}
-          <dl className="grid grid-cols-2 gap-y-1 text-[11px] text-ink-400">
+          <dl className="grid grid-cols-2 gap-y-1 text-[12.5px] text-ink-400">
             <dt>الإضاءة</dt><dd className="num">{style.color.mean[0].toFixed(0)}</dd>
             <dt>التباين</dt><dd className="num">{style.color.std[0].toFixed(1)}</dd>
             <dt>التشبع</dt><dd className="num">{style.color.chroma}</dd>

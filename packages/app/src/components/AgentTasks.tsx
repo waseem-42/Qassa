@@ -85,8 +85,8 @@ export function AgentTasks({ compact = false }: { compact?: boolean }) {
         onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(); }} />
       {!text && (
         <div className="mt-1 flex flex-wrap gap-1">
-          {(openNotes ? ['نفّذ التعليقات', ...IDEAS] : IDEAS).map((i) => <button key={i} className="btn btn-ghost h-6 px-2 text-[11px]" onClick={() => setText(i)}>{i}</button>)}
-          <button className="btn btn-ghost h-6 px-2 text-[11px] text-accent" title="من الكلام المفرّغ، بدون ذكاء وبدون تكلفة" onClick={autoCaptions}>كابشن من الكلام · مجاني</button>
+          {(openNotes ? ['نفّذ التعليقات', ...IDEAS] : IDEAS).map((i) => <button key={i} className="btn btn-ghost h-6 px-2 text-[12.5px]" onClick={() => setText(i)}>{i}</button>)}
+          <button className="btn btn-ghost h-6 px-2 text-[12.5px] text-accent" title="من الكلام المفرّغ، بدون ذكاء وبدون تكلفة" onClick={autoCaptions}>كابشن من الكلام · مجاني</button>
         </div>
       )}
       {!transcribed && !compact && <TranscriptNeeded text="الكابشن والقص بالكلمات يحتاجان تفريغًا" />}
@@ -98,13 +98,13 @@ export function AgentTasks({ compact = false }: { compact?: boolean }) {
             ))}
           </div>
           {info ? (
-            <div className="text-[11px] leading-5 text-ink-400">
+            <div className="text-[12.5px] leading-5 text-ink-400">
               <span className="text-ink-200">{info.model} · جهد {info.effort === 'low' ? 'منخفض' : info.effort === 'medium' ? 'متوسط' : 'عالٍ'}</span>
               {' — '}{tier ? 'اخترته أنت' : (route ?? local)?.why}{route?.cost ? ` (التصنيف كلّف ${usd(route.cost)})` : ''}
               <div>التكلفة المتوقعة <span className="text-ink-200"><Usd>{`${usd(info.estimate[0])}–${usd(info.estimate[1])}`}</Usd></span> · الحد الأقصى <Usd>{usd(info.budget)}</Usd></div>
               {shown === 'deep' && <div>قد يأخذ ~5 دقائق؛ الوقت يختلف حسب الطلب.</div>}
             </div>
-          ) : <div className="text-[11px] text-ink-500">ما عرفت حجم الطلب من كلماته — اضغط «اطلب» ويصنّفه نموذج صغير (أقل من سنت)، أو اختر بنفسك.</div>}
+          ) : <div className="text-[12.5px] text-ink-500">ما عرفت حجم الطلب من كلماته — اضغط «اطلب» ويصنّفه نموذج صغير (أقل من سنت)، أو اختر بنفسك.</div>}
         </div>
       )}
       <button className="btn btn-primary mt-2 w-full justify-center" disabled={busy || !text.trim()} onClick={send}>
@@ -113,7 +113,7 @@ export function AgentTasks({ compact = false }: { compact?: boolean }) {
 
       {agentJobs.length > 0 && <div className="mt-3 space-y-2">{agentJobs.slice(0, 6).map((j) => <TaskCard key={j.id} job={j} />)}</div>}
       {log.tasks.length > agentJobs.length && (
-        <details className="mt-3 text-[11px] text-ink-500">
+        <details className="mt-3 text-[12.5px] text-ink-500">
           <summary className="cursor-pointer">طلبات سابقة ({log.tasks.length})</summary>
           {log.tasks.slice(0, 30).map((t) => (
             <div key={t.at} className="mt-1 flex gap-2 border-t border-ink-800 pt-1">
@@ -168,28 +168,28 @@ function TaskCard({ job }: { job: Job }) {
       <div className="flex items-center gap-2">
         {live && <Spinner size={12} />}
         <span className="min-w-0 flex-1 truncate text-ink-200" dir="auto" title={job.label}>{job.label}</span>
-        {live && <button className="btn btn-ghost h-6 px-2 text-[11px]" onClick={() => api.post(`/api/jobs/${job.id}/cancel`).catch(() => {})}>إيقاف</button>}
+        {live && <button className="btn btn-ghost h-6 px-2 text-[12.5px]" onClick={() => api.post(`/api/jobs/${job.id}/cancel`).catch(() => {})}>إيقاف</button>}
         {r?.cost !== undefined && <span className="num shrink-0 text-ink-400" title={`${r.model} · ${Math.round((r.durationMs ?? 0) / 1000)} ث`}>{usd(r.cost)}</span>}
       </div>
       {job.status === 'running' && (
         <>
-          <div className="mt-2 flex justify-between text-[11px] text-ink-400"><span className="num">{pct}%</span><span className="num" title="الوقت من بداية الطلب">{clock((now - job.createdAt) / 1000)}</span></div>
+          <div className="mt-2 flex justify-between text-[12.5px] text-ink-400"><span className="num">{pct}%</span><span className="num" title="الوقت من بداية الطلب">{clock((now - job.createdAt) / 1000)}</span></div>
           <div className="mt-1 h-1 overflow-hidden rounded bg-ink-700"><div className="h-full bg-accent transition-all" style={{ width: `${pct}%` }} /></div>
         </>
       )}
-      {live && <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-ink-500" dir="auto" title={job.message}>{job.status === 'queued' ? 'ينتظر دوره…' : job.message ?? 'يبدأ…'}</div>}
-      {job.status === 'done' && r?.reply && <p className="mt-1 whitespace-pre-line text-[11px] leading-5 text-ink-300" dir="auto">{r.reply}</p>}
+      {live && <div className="mt-1 line-clamp-2 text-[12.5px] leading-5 text-ink-500" dir="auto" title={job.message}>{job.status === 'queued' ? 'ينتظر دوره…' : job.message ?? 'يبدأ…'}</div>}
+      {job.status === 'done' && r?.reply && <p className="mt-1 whitespace-pre-line text-[12.5px] leading-5 text-ink-300" dir="auto">{r.reply}</p>}
       {!live && edits && <div className="mt-2 space-y-1">
-        {edits.changes.map((change) => <button key={change.label} className="btn btn-ghost h-auto w-full justify-start text-[11px]" onClick={() => {
+        {edits.changes.map((change) => <button key={change.label} className="btn btn-ghost h-auto w-full justify-start text-[12.5px]" onClick={() => {
           const s = useStore.getState();
           s.seek(change.at); s.select(change.clipIds.filter((id) => s.project?.clips.some((c) => c.id === id)), false);
         }}>{change.label} · {change.count}</button>)}
-        {!!edits.changes.length && <button className="btn h-auto w-full text-[11px]" disabled={!edits.available || undoing} onClick={undoTask}>تراجع عن كل ما سوّاه</button>}
-        {edits.reason && <p className="text-[11px] leading-5 text-ink-500">{edits.reason}</p>}
+        {!!edits.changes.length && <button className="btn h-auto w-full text-[12.5px]" disabled={!edits.available || undoing} onClick={undoTask}>تراجع عن كل ما سوّاه</button>}
+        {edits.reason && <p className="text-[12.5px] leading-5 text-ink-500">{edits.reason}</p>}
       </div>}
-      {job.status === 'done' && r?.model && <p className="num mt-1 text-[11px] text-ink-500" title="التوكنز اللي استخدمها — حد الخمس ساعات يحسبها (قراءة الكاش أخف بكثير)">{usageLine(r.model, r.usage, r.durationMs ?? 0)}</p>}
-      {job.status === 'error' && <p className="mt-1 text-[11px] leading-5 text-cut-text" dir="auto">{job.error}</p>}
-      {job.status === 'cancelled' && <p className="mt-1 text-[11px] text-ink-500">أُوقف.</p>}
+      {job.status === 'done' && r?.model && <p className="num mt-1 text-[12.5px] text-ink-500" title="التوكنز اللي استخدمها — حد الخمس ساعات يحسبها (قراءة الكاش أخف بكثير)">{usageLine(r.model, r.usage, r.durationMs ?? 0)}</p>}
+      {job.status === 'error' && <p className="mt-1 text-[12.5px] leading-5 text-cut-text" dir="auto">{job.error}</p>}
+      {job.status === 'cancelled' && <p className="mt-1 text-[12.5px] text-ink-500">أُوقف.</p>}
     </div>
   );
 }

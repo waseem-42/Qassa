@@ -546,7 +546,7 @@ export function Timeline() {
       <div className="timeline-toolbar flex shrink-0 items-center gap-3 border-b border-ink-800 px-3" dir="rtl">
         <span className="panel-title">التايملاين</span>
         <button className="btn btn-ghost text-xs" aria-label="تكبير مساحة التايملاين" aria-pressed={maximised} onClick={() => useTimelineView.getState().toggleMax()} title={shortcutTitle("تكبير / استعادة", "timelineMax", custom)}>{maximised ? 'استعادة ↙' : 'توسيع ↗'}</button>
-        <select className="rounded border border-ink-700 bg-ink-900 text-xs text-ink-300" aria-label="حجم المسارات" value={size} onChange={(e) => useTimelineView.getState().setSize(e.target.value as typeof size)}><option value="compact">مضغوط</option><option value="normal">عادي</option><option value="large">كبير</option></select>
+        <select className="rounded border border-ink-700 bg-ink-900 text-xs text-ink-300" aria-label="حجم المسارات" value={size} onChange={(e) => useTimelineView.getState().setSize(e.target.value as typeof size)}><option value="compact">مسارات مضغوطة</option><option value="normal">مسارات عادية</option><option value="large">مسارات كبيرة</option></select>
         <div className="timeline-tools">
           <button className="btn btn-ghost timeline-tool" title={shortcutTitle("تقسيم عند المؤشر", "split", custom)} aria-label="تقسيم عند المؤشر" disabled={!project.clips.length} onClick={() => { const s = useStore.getState(); const target = project.clips.find((c) => selected.includes(c.id) && s.time > c.start && s.time < clipEnd(c)) ?? timelineToSource(project, s.time)?.clip; if (target && s.time > target.start && s.time < clipEnd(target)) ops([{ op: 'split', clipId: target.id, at: s.time }]); else s.notify('حرّك المؤشر داخل اللقطة لتقسيمها', 'info'); }}><Icon name="cut" size={16} /><span>تقسيم</span></button>
           <button className="btn btn-ghost timeline-tool" title={shortcutTitle("حذف المحدد", "delete", custom)} aria-label="حذف المحدد" disabled={!selected.length && !range} onClick={async () => { if (!selected.length) return useStore.getState().deleteMarkedRange(); if (await ops(deleteOps(selected))) select([]); }}><Icon name="trash" size={16} /></button>
@@ -569,11 +569,11 @@ export function Timeline() {
         for (const el of e.currentTarget.querySelectorAll<HTMLElement>('[data-ruler]')) el.style.transform = y;
       }}>
         <div className="h-max shrink-0 border-r border-ink-800" style={{ width: HEAD }}>
-          <div data-ruler style={{ height: RULER }} className="relative z-20 border-b border-ink-800 bg-ink-900"><div className="px-2 text-[10px] leading-[22px] text-ink-500" dir="rtl">جزء التصدير</div><AddTrack /></div>
+          <div data-ruler style={{ height: RULER }} className="relative z-20 border-b border-ink-800 bg-ink-900"><div className="px-2 text-[12px] leading-[22px] text-ink-500" dir="rtl">جزء التصدير</div><AddTrack /></div>
           {tracks.map((t, i) => (
             <TrackHead key={t.id} track={t} index={i} count={tracks.length} ghost={!project.tracks.some((x) => x.id === t.id)} />
           ))}
-          <div className="flex items-center px-2 text-[10px] text-ink-500" style={{ height: 38 }} dir="rtl">مسار جديد بالسحب</div>
+          <div className="flex items-center px-2 text-[12px] text-ink-500" style={{ height: 38 }} dir="rtl">مسار جديد بالسحب</div>
           <div className="flex items-center gap-1 border-b border-ink-800 px-2 text-xs" style={{ height: NOTES_LANE }} dir="rtl">
             <span className="h-3 w-1 rounded bg-note" />
             <span className="flex-1 truncate text-ink-300">التعليقات</span>
@@ -589,8 +589,8 @@ export function Timeline() {
             >
               <div data-mark-lane className="absolute inset-x-0 top-0 border-b border-ink-800" style={{ height: MARKS }}>
                 {range && <div data-marked-span className="pointer-events-none absolute inset-y-0 bg-accent/20" style={{ left: range[0] * zoom, width: (range[1] - range[0]) * zoom }} />}
-                {marks.in === undefined && marks.out === undefined && <span className="pointer-events-none sticky left-7 px-2 text-[10px] leading-[22px] text-ink-500" dir="rtl">اسحب المقبضين لتصدير جزء فقط</span>}
-                {(['in', 'out'] as const).map((edge) => !project.clips.length && marks[edge] === undefined ? null : <button key={edge} type="button" data-mark-edge={edge} data-default-mark={marks[edge] === undefined || undefined} className={`absolute top-px z-40 flex h-5 w-6 cursor-ew-resize items-center justify-center rounded border border-accent font-mono text-[11px] font-bold ${marks[edge] === undefined ? 'bg-ink-900 text-accent' : 'bg-accent text-ink-950'}`} style={{ left: shownMarks[edge] * zoom - 12 }} aria-label={edge === 'in' ? 'سحب بداية التصدير In' : 'سحب نهاية التصدير Out'} title={`${edge === 'in' ? 'In' : 'Out'} · ${fmtTime(shownMarks[edge], 3)} — اسحب بالمغناطيس؛ Alt يفكّه مؤقتًا`} onPointerDown={(e) => {
+                {marks.in === undefined && marks.out === undefined && <span className="pointer-events-none sticky left-7 px-2 text-[12px] leading-[22px] text-ink-500" dir="rtl">اسحب المقبضين لتصدير جزء فقط</span>}
+                {(['in', 'out'] as const).map((edge) => !project.clips.length && marks[edge] === undefined ? null : <button key={edge} type="button" data-mark-edge={edge} data-default-mark={marks[edge] === undefined || undefined} className={`absolute top-px z-40 flex h-5 w-6 cursor-ew-resize items-center justify-center rounded border border-accent font-mono text-[12.5px] font-bold ${marks[edge] === undefined ? 'bg-ink-900 text-accent' : 'bg-accent text-ink-950'}`} style={{ left: shownMarks[edge] * zoom - 12 }} aria-label={edge === 'in' ? 'سحب بداية التصدير In' : 'سحب نهاية التصدير Out'} title={`${edge === 'in' ? 'In' : 'Out'} · ${fmtTime(shownMarks[edge], 3)} — اسحب بالمغناطيس؛ Alt يفكّه مؤقتًا`} onPointerDown={(e) => {
                   if (e.button !== 0) return;
                   capture(e);
                   setDrag({ kind: 'mark', edge, value: shownMarks[edge], offset: xToTime(e.clientX) - shownMarks[edge], base: { ...shownMarks }, targets: timelineTargets(project, useStore.getState().time) });
@@ -598,7 +598,7 @@ export function Timeline() {
               </div>
               <div data-scrub-ruler className="absolute inset-x-0 bottom-0 cursor-crosshair" style={{ top: MARKS }} onPointerDown={(e) => startScrub(e)} title="انقر أو اسحب لتحريك المؤشر بالمغناطيس — مقابض التصدير في السطر العلوي">
                 {ticks.map((t) => (
-                  <div key={t} className="absolute top-0 h-full border-l border-ink-700 pl-1 text-[10px] text-ink-500" style={{ left: t * zoom }}>
+                  <div key={t} className="absolute top-0 h-full border-l border-ink-700 pl-1 text-[12px] text-ink-500" style={{ left: t * zoom }}>
                     <span className="num">{fmtTime(t, step < 1 ? 1 : 0)}</span>
                   </div>
                 ))}
@@ -731,7 +731,7 @@ function TrackHead({ track, index, count, ghost }: { track: Track; index: number
   const canMute = track.kind === 'audio' || track.kind === 'overlay' || track.id === MAIN_TRACK;
   const canHide = track.kind === 'overlay' || track.kind === 'text';
   const toggle = (on: boolean, label: string, onTitle: string, offTitle: string, icon: [IconName, IconName], patch: Partial<Track>) => (
-    <button className={`flex ${size === 'compact' ? 'h-4 w-4' : 'h-5 w-5'} items-center justify-center rounded text-[13px] transition-colors ${on ? 'bg-cut/25 text-cut-text' : 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'}`}
+    <button className={`flex ${size === 'compact' ? 'h-4 w-4' : 'h-5 w-5'} items-center justify-center rounded text-[14.5px] transition-colors ${on ? 'bg-cut/25 text-cut-text' : 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'}`}
       title={on ? onTitle : offTitle} aria-label={label} aria-pressed={on}
       onClick={async () => { if (await ops([{ op: 'set_track', trackId: track.id, patch }]) && patch.locked) { const s = useStore.getState(); s.select(s.selected.filter((id) => s.project?.clips.find((c) => c.id === id)?.trackId !== track.id)); } }}>
       <Icon name={on ? icon[1] : icon[0]} />
@@ -828,7 +828,7 @@ function NotesLane({ zoom, xToTime }: { zoom: number; xToTime: (clientX: number)
         const done = n.status === 'done';
         const w = n.end !== undefined ? Math.max(22, (n.end - n.at) * zoom) : 22;
         return (
-          <div key={n.id} className="group absolute top-1 flex h-[22px] cursor-grab items-center gap-1 overflow-hidden rounded-md px-1.5 text-[11px] font-semibold text-ink-950 active:cursor-grabbing"
+          <div key={n.id} className="group absolute top-1 flex h-[22px] cursor-grab items-center gap-1 overflow-hidden rounded-md px-1.5 text-[12.5px] font-semibold text-ink-950 active:cursor-grabbing"
             style={{ left: n.at * zoom, width: n.end !== undefined ? w : undefined, maxWidth: n.end !== undefined ? undefined : 220, background: done ? 'var(--color-ink-500)' : 'var(--color-note)', outline: n.id === focus ? '2px solid white' : undefined }}
             title={n.text}
             onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget.parentElement as HTMLElement).setPointerCapture(e.pointerId); setDrag({ id: n.id, kind: 'move', x0: e.clientX, at: n.at, end: n.end, moved: false }); }}>
@@ -857,7 +857,7 @@ function TransitionMarks({ zoom }: { zoom: number }) {
         const h = transitionHalf(main[i - 1], c);
         if (!h) return null;
         return (
-          <button key={c.id} className="absolute z-20 flex h-4 items-center justify-center rounded-sm border border-ink-950 bg-accent text-[9px] font-bold text-ink-950"
+          <button key={c.id} className="absolute z-20 flex h-4 items-center justify-center rounded-sm border border-ink-950 bg-accent text-[11px] font-bold text-ink-950"
             style={{ top: RULER + mainH - 18, left: (c.start - h) * zoom, width: Math.max(10, 2 * h * zoom) }}
             title={`انتقال: ${c.transition!.kind} ${c.transition!.duration}ث`} onPointerDown={(e) => { e.stopPropagation(); select([c.id]); }}>
             ⧖
@@ -1075,8 +1075,8 @@ function TrackRow({ track, project, name, zoom, view, analysis, selected, drag, 
             onContextMenu={(e) => onClipMenu(e, c)}
             title={`${label}\n${fmtTime(c.start)} → ${fmtTime(clipEnd(c))}${c.speed !== 1 ? `  ×${c.speed}` : ''}`}
           >
-            <div className="pointer-events-none absolute left-1.5 right-1.5 top-0.5 truncate text-[11px] font-medium text-white/90" dir="auto" style={{ textShadow: '0 1px 2px #000' }}>
-              {c.speed !== 1 && <span className="mr-1 rounded bg-accent px-1 text-[10px] text-black">×{c.speed}</span>}
+            <div className="pointer-events-none absolute left-1.5 right-1.5 top-0.5 truncate text-[12.5px] font-medium text-white/90" dir="auto" style={{ textShadow: '0 1px 2px #000' }}>
+              {c.speed !== 1 && <span className="mr-1 rounded bg-accent px-1 text-[12px] text-black">×{c.speed}</span>}
               {(c.grade || c.transform || c.picture || c.anim) && <span className="mr-1 text-accent">●</span>}
               {width > 40 ? label : ''}
               {(c.picture?.off || track.kind === 'audio') && <span className="ms-1">♪</span>}
@@ -1151,7 +1151,7 @@ function SceneBands({ clip, zoom, width }: { clip: Clip; zoom: number; width: nu
         const a = x(now[i]), b = x(now[i + 1]);
         if (b < 0 || a > width) return null;
         return (
-          <div key={i} className="pointer-events-none absolute bottom-0.5 truncate px-1 text-[9px] text-white/55" style={{ left: Math.max(0, a), width: Math.max(0, Math.min(width, b) - Math.max(0, a)) }} dir="auto">
+          <div key={i} className="pointer-events-none absolute bottom-0.5 truncate px-1 text-[11px] text-white/55" style={{ left: Math.max(0, a), width: Math.max(0, Math.min(width, b) - Math.max(0, a)) }} dir="auto">
             {b - a > 34 ? sc.name : ''}
           </div>
         );

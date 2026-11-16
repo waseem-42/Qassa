@@ -131,7 +131,7 @@ function Words({ tr, project, mediaId }: { tr: T; project: Project; mediaId: str
               <button className="btn h-7" disabled={!onMain} onClick={restore}>↺ استرجاع</button>
             ) : (
               <>
-                <button className="btn h-7 border-cut/60 text-cut-text" disabled={!onMain} onClick={cut}>✂ قص <kbd className="text-[10px] text-ink-500">Del</kbd></button>
+                <button className="btn h-7 border-cut/60 text-cut-text" disabled={!onMain} onClick={cut}>✂ قص <kbd className="text-[12px] text-ink-500">Del</kbd></button>
                 <button className="btn h-7" disabled={!onMain} onClick={() => speed(2)} title="تسريع الجزء">×2</button>
                 <button className="btn h-7" onClick={() => { play(range[0]); setPlaying(true); }}>▶</button>
               </>
@@ -146,7 +146,7 @@ function Words({ tr, project, mediaId }: { tr: T; project: Project; mediaId: str
           </>
         )}
       </div>
-      <div ref={box} className="min-h-0 flex-1 overflow-y-auto px-4 py-3 text-[15px] leading-[2.1]" dir="rtl" onPointerLeave={() => (dragging.current = false)}>
+      <div ref={box} className="min-h-0 flex-1 overflow-y-auto px-4 py-3 text-[16px] leading-[2.1]" dir="rtl" onPointerLeave={() => (dragging.current = false)}>
         {tr.segments.map((s, si) => {
           const gap = si ? s.t0 - tr.segments[si - 1].t1 : s.t0;
           return (
@@ -204,8 +204,8 @@ const Para = memo(function Para(props: {
   }
   return (
     <p className="mb-2">
-      {gap >= 0.8 && <span className="ml-2 inline-block rounded bg-ink-800 px-1.5 text-[11px] leading-5 text-ink-500" title="سكتة">⏸ {gap.toFixed(1)}ث</span>}
-      <span className="num ml-2 text-[10px] text-ink-600">{fmtTime(t0, 0)}</span>
+      {gap >= 0.8 && <span className="ml-2 inline-block rounded bg-ink-800 px-1.5 text-[12.5px] leading-5 text-ink-500" title="سكتة">⏸ {gap.toFixed(1)}ث</span>}
+      <span className="num ml-2 text-[12px] text-ink-600">{fmtTime(t0, 0)}</span>
       {words}
     </p>
   );

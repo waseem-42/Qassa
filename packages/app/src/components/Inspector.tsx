@@ -153,7 +153,7 @@ function ClipSummary({ clip, count, project, kind }: { clip: Clip; count: number
         {media && media.kind !== 'image' && <span className="num" dir="ltr">{fmtTime(clip.in, 2)} → {fmtTime(clip.out, 2)}</span>}
         {clip.speed !== 1 && <span className="num" dir="ltr">×{clip.speed}</span>}
       </div>
-      {kind === 'visual' && graded && <p className="text-[11px] text-ink-400">عليه تلوين — <button className="underline" onClick={() => ops(ids.map((id) => ({ op: 'update_clip' as const, clipId: id, patch: { grade: project.settings.defaultGrade ? { ...NEUTRAL, lut: '' } : null } })))}>إزالة</button></p>}
+      {kind === 'visual' && graded && <p className="text-[12.5px] text-ink-400">عليه تلوين — <button className="underline" onClick={() => ops(ids.map((id) => ({ op: 'update_clip' as const, clipId: id, patch: { grade: project.settings.defaultGrade ? { ...NEUTRAL, lut: '' } : null } })))}>إزالة</button></p>}
       <div className="clip-summary-actions">
         {count === 1 && <ClipActions clip={clip} project={project} />}
         <button className="btn btn-ghost clip-delete" title="حذف (Delete)" onClick={async () => { if (await ops(deleteOps(ids))) select([]); }}><Icon name="trash" size={14} /> حذف</button>
@@ -236,7 +236,7 @@ function ZoomSection({ clip }: { clip: Clip }) {
       {!!tr?.keyframes.length && (
         <div className="mt-1 flex flex-wrap gap-1">
           {[...tr.keyframes].sort((a, b) => a.t - b.t).map((k) => (
-            <button key={k.t} className="btn h-6 px-2 text-[11px]" onClick={() => useStore.getState().seek(clip.start + k.t)}
+            <button key={k.t} className="btn h-6 px-2 text-[12.5px]" onClick={() => useStore.getState().seek(clip.start + k.t)}
               onContextMenu={(e) => { e.preventDefault(); ops(trOps({ keyframes: tr.keyframes.filter((x) => x !== k) })); }}
               title="نقرة: انتقل · زر يمين: احذف">
               ◆ <span className="num">{k.t.toFixed(1)}s</span> {Math.round(k.scale * 100)}%
@@ -279,7 +279,7 @@ function PlaceSection({ clip, advanced }: { clip: Clip; advanced?: React.ReactNo
       <AnchorRow clip={clip} />
       {advanced}
       </InspectorGroup>
-      <div className="text-[11px] text-ink-500">أو اسحبها على الفيديو، والزاوية للحجم. اكتب أي رقم في الخانة لقيم أبعد من الشريط (الحجم لين {PLACE_LIMITS.scaleMax * 100}%).</div>
+      <div className="text-[12.5px] text-ink-500">أو اسحبها على الفيديو، والزاوية للحجم. اكتب أي رقم في الخانة لقيم أبعد من الشريط (الحجم لين {PLACE_LIMITS.scaleMax * 100}%).</div>
     </Section>
   );
 }
@@ -302,7 +302,7 @@ function AnchorRow({ clip }: { clip: Clip }) {
             <button key={`${x}-${y}`} type="button" aria-pressed={Math.abs(pl.ax - x) < 0.01 && Math.abs(pl.ay - y) < 0.01} aria-label={positionName(x * 2 - 1, y * 2 - 1)} title={positionName(x * 2 - 1, y * 2 - 1)} onClick={() => set(x, y)} />
           )))}
         </div>
-        <button type="button" className="btn btn-ghost h-6 px-2 text-[11px]" aria-pressed={showFocus} title="أظهر نقطة الارتكاز على المعاينة واسحبها لأي مكان" onClick={() => useLayout.getState().setShowFocus(!showFocus)}>◎ على المعاينة</button>
+        <button type="button" className="btn btn-ghost h-6 px-2 text-[12.5px]" aria-pressed={showFocus} title="أظهر نقطة الارتكاز على المعاينة واسحبها لأي مكان" onClick={() => useLayout.getState().setShowFocus(!showFocus)}>◎ على المعاينة</button>
       </div>
     </Row>
     <Row label="ارتكاز أفقي"><Slider value={pl.ax} min={0} max={1} step={0.01} def={0.5} fmt={pct} onPreview={() => {}} onCommit={(v) => set(v, pl.ay)} /></Row>
@@ -339,7 +339,7 @@ function FrameSection({ clip }: { clip: Clip }) {
       <Row label="تدوير">
         <div className="flex items-center gap-1">
           <div className="min-w-0 flex-1"><Slider value={pic.rotate} min={-180} max={180} step={1} def={0} fmt={(v) => `${Math.round(v)}°`} {...slide((v) => picOps({ rotate: v }))} /></div>
-          <button className="btn btn-ghost h-6 px-1.5 text-[11px]" title="90° مع عقارب الساعة" onClick={() => ops(picOps({ rotate: ((pic.rotate + 90 + 180) % 360) - 180 }))}>↻</button>
+          <button className="btn btn-ghost h-6 px-1.5 text-[12.5px]" title="90° مع عقارب الساعة" onClick={() => ops(picOps({ rotate: ((pic.rotate + 90 + 180) % 360) - 180 }))}>↻</button>
         </div>
       </Row>
       <Row label="قلب">
@@ -392,11 +392,11 @@ function DenoiseRow({ clip }: { clip: Clip }) {
           onPreview={(x) => preview([{ op: 'update_clip', clipId: clip.id, patch: { denoise: x } }])}
           onCommit={(x) => commit([{ op: 'update_clip', clipId: clip.id, patch: { denoise: x } }])} />
         <div className="mt-1 flex gap-1">
-          <button className="btn btn-ghost h-6 flex-1 justify-center text-[11px]" aria-pressed={playing === 'off'} onClick={() => listen('off')}>{playing === 'off' ? '■ ' : '▶ '}الأصل</button>
-          <button className="btn btn-ghost h-6 flex-1 justify-center text-[11px]" aria-pressed={playing === 'on'} onClick={() => listen('on')}>{playing === 'on' ? '■ ' : '▶ '}بعد التنقية{v ? '' : ' (50%)'}</button>
+          <button className="btn btn-ghost h-6 flex-1 justify-center text-[12.5px]" aria-pressed={playing === 'off'} onClick={() => listen('off')}>{playing === 'off' ? '■ ' : '▶ '}الأصل</button>
+          <button className="btn btn-ghost h-6 flex-1 justify-center text-[12.5px]" aria-pressed={playing === 'on'} onClick={() => listen('on')}>{playing === 'on' ? '■ ' : '▶ '}بعد التنقية{v ? '' : ' (50%)'}</button>
         </div>
         {siblings.length > 0 && siblings.some((c) => (c.denoise ?? 0) !== v) && (
-          <button className="btn btn-ghost mt-1 h-6 w-full justify-center text-[11px]" title="بعد القص صار التسجيل الواحد عدة لقطات"
+          <button className="btn btn-ghost mt-1 h-6 w-full justify-center text-[12.5px]" title="بعد القص صار التسجيل الواحد عدة لقطات"
             onClick={() => commit(siblings.map((c) => ({ op: 'update_clip' as const, clipId: c.id, patch: { denoise: v } })))}>
             نفس التنقية لكل لقطات هذا التسجيل ({siblings.length + 1})
           </button>
@@ -607,7 +607,7 @@ function ThemeSection({ project }: { project: Project }) {
               <small><bdi>{f.family}</bdi> · {f.about}</small>
             </button>
           ))}
-          {!project.settings.brand && !THEME_FONTS.some((f) => f.family === th.font) && <p className="text-[11px] text-cut-text">الخط «{th.font}» مو من خطوط المحرر — بيطلع بخط ثاني في التصدير. اختر واحد من فوق.</p>}
+          {!project.settings.brand && !THEME_FONTS.some((f) => f.family === th.font) && <p className="text-[12.5px] text-cut-text">الخط «{th.font}» مو من خطوط المحرر — بيطلع بخط ثاني في التصدير. اختر واحد من فوق.</p>}
         </div>
         <Row label="الاتجاه">
           <select className="field" value={th.direction} onChange={(e) => theme({ direction: e.target.value as Theme['direction'] })}>
@@ -668,13 +668,13 @@ function ThemeReach({ project }: { project: Project }) {
       {ownLook.length > 0 && (
         <div className="theme-reach-row">
           <span>{ownLook.length} نص لها لون أو خط خاص، فما تتغيّر معها.</span>
-          <button className="btn h-6 text-[11px]" onClick={() => ops(ownLook.map((c) => ({ op: 'update_clip' as const, clipId: c.id, patch: { textStyle: { color: null, background: null, font: null } } })))}>خلّها تتبع الهوية</button>
+          <button className="btn h-6 text-[12.5px]" onClick={() => ops(ownLook.map((c) => ({ op: 'update_clip' as const, clipId: c.id, patch: { textStyle: { color: null, background: null, font: null } } })))}>خلّها تتبع الهوية</button>
         </div>
       )}
       {apart.map((g) => (
         <div key={g} className="theme-reach-row">
           <span>رسمة «<bdi>{g.replace(/^graphics\//, '')}</bdi>» ألوانها مكتوبة داخلها{own.find((o) => o.graphic === g)?.themedFont ? ' (تاخذ الخط بس)' : ''}، فما تتغيّر معها.</span>
-          <button className="btn h-6 text-[11px]" title="مهمة ذكاء (النموذج المتوسط) تبدّل ألوانها وخطها بمتغيرات الهوية" onClick={() => link(g)}>اربطها بالذكاء</button>
+          <button className="btn h-6 text-[12.5px]" title="مهمة ذكاء (النموذج المتوسط) تبدّل ألوانها وخطها بمتغيرات الهوية" onClick={() => link(g)}>اربطها بالذكاء</button>
         </div>
       ))}
     </div>
@@ -699,11 +699,11 @@ function SfxSection({ project }: { project: Project }) {
     <div key={s.id} className="flex items-center gap-1 rounded border border-ink-800 px-1.5 py-1" title={s.description}>
       <button className="text-ink-400 hover:text-accent" title="اسمع" onClick={() => playOneShot(`/api/sfx/${s.id}/audio`, 0.8)}>▶</button>
       <span className="flex-1 truncate text-xs text-ink-200">{s.name}</span>
-      <button className="btn btn-ghost h-6 px-1.5 text-[11px]" title="أضفه عند المؤشر" onClick={() => add(s.id)}>+</button>
+      <button className="btn btn-ghost h-6 px-1.5 text-[12.5px]" title="أضفه عند المؤشر" onClick={() => add(s.id)}>+</button>
     </div>
   ));
   return (
-    <Section title="مؤثرات صوتية" actions={<span className="text-[11px] text-ink-500">{onTrack ? `${onTrack} على مسار المؤثرات` : ''}</span>}>
+    <Section title="مؤثرات صوتية" actions={<span className="text-[12.5px] text-ink-500">{onTrack ? `${onTrack} على مسار المؤثرات` : ''}</span>}>
       <button className="btn btn-primary mb-2 w-full justify-center" onClick={auto} title="هووش للرسوم، بوب للعناوين، سووش للانتقالات — يستبدل التلقائية القديمة ويخلي اللي حطيتها بيدك">
         {AUTO_MARK} ضع المؤثرات تلقائياً
       </button>

@@ -109,10 +109,10 @@ export function Section({ title, children, actions }: { title: string; children:
 export function EaseRow({ value, onPick }: { value: Ease | undefined; onPick: (e: Ease) => void }) {
   const on = value ?? 'smooth';
   return (
-    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-0.5 text-[10px] text-ink-500" title="كيف تتحرك القيمة من هذا المفتاح للي بعده">
+    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-0.5 text-[12px] text-ink-500" title="كيف تتحرك القيمة من هذا المفتاح للي بعده">
       <span className="me-0.5">منحنى:</span>
       {EASES.map(([v, label]) => (
-        <button key={v} className={`btn btn-ghost h-5 px-1.5 text-[10px] ${on === v ? 'text-accent' : ''}`} aria-pressed={on === v} onClick={() => onPick(v)}>{label}</button>
+        <button key={v} className={`btn btn-ghost h-5 px-1.5 text-[12px] ${on === v ? 'text-accent' : ''}`} aria-pressed={on === v} onClick={() => onPick(v)}>{label}</button>
       ))}
     </div>
   );

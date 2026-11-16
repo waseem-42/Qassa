@@ -66,7 +66,7 @@ export function Notes() {
           </div>
         )}
       </div>
-      <div className="shrink-0 space-y-2 border-t border-ink-800 p-2 text-[11px] text-ink-500">
+      <div className="shrink-0 space-y-2 border-t border-ink-800 p-2 text-[12.5px] text-ink-500">
         {open.length > 1 && (
           <button className="btn h-7 w-full justify-center text-xs" disabled={busy} title={plan(open).hint} onClick={() => runNotes(name, open)}>
             <Icon name="sparkles" size={13} /> نفّذ كل المفتوحة ({open.length}) · {plan(open).label}
@@ -101,11 +101,11 @@ function Draft() {
         <button className="num text-note" onClick={() => seek(draft.at)}>{fmtTime(draft.at, 2)}{draft.end !== undefined && ` – ${fmtTime(draft.end, 2)}`}</button>
         <div className="flex-1" />
         {draft.end === undefined ? (
-          <button className="btn btn-ghost h-6 text-[11px]" disabled={!canEnd} title="حرّك المؤشر لنهاية الجزء ثم اضغط" onClick={() => setNoteDraft({ ...draft, end: time })}>
+          <button className="btn btn-ghost h-6 text-[12.5px]" disabled={!canEnd} title="حرّك المؤشر لنهاية الجزء ثم اضغط" onClick={() => setNoteDraft({ ...draft, end: time })}>
             ⟷ مدى لين المؤشر
           </button>
         ) : (
-          <button className="btn btn-ghost h-6 text-[11px]" onClick={() => setNoteDraft({ at: draft.at })}>لحظة بس</button>
+          <button className="btn btn-ghost h-6 text-[12.5px]" onClick={() => setNoteDraft({ at: draft.at })}>لحظة بس</button>
         )}
       </div>
       <textarea
@@ -149,21 +149,21 @@ function NoteCard({ note: n, index, focused }: { note: Note; index: number; focu
     <div ref={el} className="mb-2 rounded-md border bg-ink-850 p-2 text-sm"
       style={{ borderColor: focused || here ? 'var(--color-note)' : 'var(--color-ink-800)', opacity: done ? 0.6 : 1 }}>
       <div className="mb-1 flex items-center gap-2 text-xs">
-        <span className="grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] font-bold text-ink-950" style={{ background: done ? 'var(--color-ink-500)' : 'var(--color-note)' }}>{index}</span>
+        <span className="grid h-5 min-w-5 place-items-center rounded-full px-1 text-[12px] font-bold text-ink-950" style={{ background: done ? 'var(--color-ink-500)' : 'var(--color-note)' }}>{index}</span>
         <button className="num text-note hover:underline" onClick={() => seek(n.at)} title="انتقل">
           {fmtTime(n.at, 2)}{n.end !== undefined && ` – ${fmtTime(n.end, 2)}`}
         </button>
         <span className="text-ink-500">{n.author === 'claude' ? 'سؤال من الـ AI' : ''}</span>
         <div className="flex-1" />
         {!done && !working && n.author === 'user' && (
-          <button className="btn btn-ghost h-6 px-1.5 text-[11px] text-accent" title={plan([n]).hint} onClick={() => runNotes(name, [n])}>
+          <button className="btn btn-ghost h-6 px-1.5 text-[12.5px] text-accent" title={plan([n]).hint} onClick={() => runNotes(name, [n])}>
             <Icon name="sparkles" size={12} /> نفّذ · {plan([n]).label}
           </button>
         )}
-        <button className="btn btn-ghost h-6 px-1.5 text-[11px]" onClick={() => ops([{ op: 'update_note', id: n.id, patch: { status: done ? 'open' : 'done' } }])}>
+        <button className="btn btn-ghost h-6 px-1.5 text-[12.5px]" onClick={() => ops([{ op: 'update_note', id: n.id, patch: { status: done ? 'open' : 'done' } }])}>
           {done ? '↺ افتح' : '✓ تم'}
         </button>
-        <button className="btn btn-ghost h-6 px-1.5 text-[11px] text-cut-text" onClick={() => ops([{ op: 'delete_note', id: n.id }])}>حذف</button>
+        <button className="btn btn-ghost h-6 px-1.5 text-[12.5px] text-cut-text" onClick={() => ops([{ op: 'delete_note', id: n.id }])}>حذف</button>
       </div>
       {editing ? (
         <textarea className="field h-16 w-full resize-none py-1 leading-6" autoFocus value={text} onChange={(e) => setText(e.target.value)}
@@ -174,13 +174,13 @@ function NoteCard({ note: n, index, focused }: { note: Note; index: number; focu
       )}
       <TranscriptNeeded mediaIds={contextIds} text="سياق الكلام يحتاج تفريغًا؛ يمكنك تعديل التعليق وتنفيذه بدونه." />
       {working && (
-        <div className="mt-2 flex items-center gap-2 text-[11px] text-ink-400">
+        <div className="mt-2 flex items-center gap-2 text-[12.5px] text-ink-400">
           <Spinner size={12} />
           <span className="min-w-0 flex-1 truncate" dir="auto">{job!.status === 'queued' ? 'ينتظر دوره…' : job!.message ?? 'الذكاء يقرأ التعليق…'}</span>
-          <button className="btn btn-ghost h-6 px-1.5 text-[11px]" onClick={() => api.post(`/api/jobs/${job!.id}/cancel`).catch(() => {})}>إيقاف</button>
+          <button className="btn btn-ghost h-6 px-1.5 text-[12.5px]" onClick={() => api.post(`/api/jobs/${job!.id}/cancel`).catch(() => {})}>إيقاف</button>
         </div>
       )}
-      {job?.status === 'error' && !done && <div className="mt-2 text-[11px] leading-5 text-cut-text" dir="auto">ما كمل: {job.error}</div>}
+      {job?.status === 'error' && !done && <div className="mt-2 text-[12.5px] leading-5 text-cut-text" dir="auto">ما كمل: {job.error}</div>}
       {n.reply && (
         <div className="mt-2 rounded border-r-2 border-accent bg-ink-900 px-2 py-1 text-xs leading-5 text-ink-300">
           <span className="text-accent">AI:</span> {n.reply}

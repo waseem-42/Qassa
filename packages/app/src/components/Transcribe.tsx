@@ -10,7 +10,7 @@ export function TranscribeButton({ mediaId, label = 'فرّغ الكلام' }: {
   const [busy, setBusy] = useState(false);
   const setupNeeded = useRuntime((s) => s.runtime?.desktop && !s.runtime.ready);
   const job = Object.values(jobs).find((j) => j.kind === 'analyze' && j.mediaId === mediaId && j.steps?.includes('transcribe') && ['queued', 'running'].includes(j.status));
-  return <button className="btn h-7 px-2 text-[11px]" disabled={busy || !!job} onClick={async () => {
+  return <button className="btn h-7 px-2 text-[12.5px]" disabled={busy || !!job} onClick={async () => {
     if (setupNeeded) return useRuntime.getState().setOpen(true);
     setBusy(true);
     try {

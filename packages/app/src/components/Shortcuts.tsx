@@ -52,13 +52,13 @@ export function Shortcuts() {
                           <span key={k} className="flex items-center gap-0.5 rounded px-0.5 hover:bg-ink-800" dir="ltr">
                             {/* one box per key: "Shift" "←" rather than "Shift+←" */}
                             {(k === '+' ? ['+'] : k.split('+')).map((part, i) => (
-                              <kbd key={i} className="rounded border border-ink-600 bg-ink-800 px-1.5 py-0.5 text-[11px] text-ink-200">{prettyKey(part)}</kbd>
+                              <kbd key={i} className="rounded border border-ink-600 bg-ink-800 px-1.5 py-0.5 text-[12.5px] text-ink-200">{prettyKey(part)}</kbd>
                             ))}
                           </span>
                         )) : <span className="text-xs text-ink-500">بدون — اضغط للتعيين</span>}
                       </button>
                     )}
-                    {changed && <button className="text-[11px] text-ink-500 hover:text-ink-300" title="رجّع الافتراضي" onClick={() => reset(a.id)}>↺</button>}
+                    {changed && <button className="text-[12.5px] text-ink-500 hover:text-ink-300" title="رجّع الافتراضي" onClick={() => reset(a.id)}>↺</button>}
                   </div>
                 );
               })}

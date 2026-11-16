@@ -75,7 +75,7 @@ export function GraphicPicker() {
   const item = (t: Template) => (
     <button key={t.graphic} className="block w-full rounded-md px-2 py-1.5 text-start hover:bg-ink-800" onClick={() => place(t)}>
       <div className="text-xs text-ink-100">{t.name ?? t.graphic.replace(/^lib\//, '')}{t.duration ? <span className="num mr-2 text-ink-500">{t.duration}ث</span> : null}</div>
-      {t.about && <div className="mt-0.5 text-[11px] leading-4 text-ink-500">{t.about}</div>}
+      {t.about && <div className="mt-0.5 text-[12.5px] leading-4 text-ink-500">{t.about}</div>}
     </button>
   );
   return (
@@ -86,9 +86,9 @@ export function GraphicPicker() {
       }}><Icon name="shapes" size={16} /><span>رسمة</span></button>
       {open && (
         <div className="fixed z-50 max-h-[60vh] w-72 overflow-y-auto rounded-lg border border-ink-700 bg-ink-900 p-1 shadow-xl" style={open}>
-          <div className="px-2 py-1 text-[11px] text-ink-500">تنحط عند المؤشر، وتعدّل كلامها ومشاهدها من «الخصائص».</div>
+          <div className="px-2 py-1 text-[12.5px] text-ink-500">تنحط عند المؤشر، وتعدّل كلامها ومشاهدها من «الخصائص».</div>
           {library.map(item)}
-          {own.length > 0 && <div className="mt-1 border-t border-ink-800 px-2 pt-2 text-[11px] text-ink-500">رسومات المشروع</div>}
+          {own.length > 0 && <div className="mt-1 border-t border-ink-800 px-2 pt-2 text-[12.5px] text-ink-500">رسومات المشروع</div>}
           {own.map(item)}
         </div>
       )}
@@ -157,7 +157,7 @@ export function TimingSection({ clip }: { clip: Clip }) {
         <button className="btn h-7 flex-1 justify-center text-xs" onClick={() => timing({ start: time })}>تبدأ عند المؤشر</button>
         <button className="btn h-7 flex-1 justify-center text-xs" disabled={time <= clip.start + 0.1} onClick={() => timing({ duration: time - clip.start })}>تنتهي عند المؤشر</button>
       </div>
-      <div className="mt-1 text-[11px] text-ink-500 num" dir="ltr">{fmtTime(clip.start, 2)} → {fmtTime(clip.start + dur, 2)}</div>
+      <div className="mt-1 text-[12.5px] text-ink-500 num" dir="ltr">{fmtTime(clip.start, 2)} → {fmtTime(clip.start + dur, 2)}</div>
     </Section>
   );
 }
@@ -185,13 +185,13 @@ export function TransitionSection({ clip, project }: { clip: Clip; project: Proj
       {i === 0 ? <div className="text-xs text-ink-500">هذي أول لقطة — ما قبلها شي.</div> : (
         <>
           <div className="mb-2 grid grid-cols-4 gap-1">
-            <button className={`btn h-7 justify-center px-1 text-[11px] ${!tr ? 'border-accent bg-accent/15 text-accent' : ''}`} onClick={() => set(null)}>قص</button>
+            <button className={`btn h-7 justify-center px-1 text-[12.5px] ${!tr ? 'border-accent bg-accent/15 text-accent' : ''}`} onClick={() => set(null)}>قص</button>
             {(Object.keys(TRANSITIONS) as Transition['kind'][]).map((k) => (
-              <button key={k} className={`btn h-7 justify-center px-1 text-[11px] ${tr?.kind === k ? 'border-accent bg-accent/15 text-accent' : ''}`} onClick={() => set(k)}>{TRANSITIONS[k]}</button>
+              <button key={k} className={`btn h-7 justify-center px-1 text-[12.5px] ${tr?.kind === k ? 'border-accent bg-accent/15 text-accent' : ''}`} onClick={() => set(k)}>{TRANSITIONS[k]}</button>
             ))}
           </div>
           {tr && <Row label="المدة"><Slider value={tr.duration} min={0.1} max={2} step={0.05} fmt={(v) => `${v.toFixed(2)}ث`} onPreview={(v) => dur(v, false)} onCommit={(v) => dur(v, true)} /></Row>}
-          {tr && <div className="text-[11px] text-ink-500">نص المدة قبل القص ونصها بعده — طول المقطع ما يتغيّر.</div>}
+          {tr && <div className="text-[12.5px] text-ink-500">نص المدة قبل القص ونصها بعده — طول المقطع ما يتغيّر.</div>}
         </>
       )}
     </Section>
@@ -219,7 +219,7 @@ export function GraphicContent({ clip }: { clip: Clip }) {
   return (
     <>
       <Section title="المحتوى">
-        {(tpl?.about ?? tpl?.description) && <div className="mb-2 text-[11px] leading-5 text-ink-500" dir="auto">{tpl!.about ?? tpl!.description}</div>}
+        {(tpl?.about ?? tpl?.description) && <div className="mb-2 text-[12.5px] leading-5 text-ink-500" dir="auto">{tpl!.about ?? tpl!.description}</div>}
         {keys.length ? fields(primary) : <div className="text-xs text-ink-500">هذي الرسمة ما لها بيانات — عدّل عناصرها مباشرة من «عناصر الرسمة».</div>}
         {keys.some((k) => !primary.includes(k)) && <InspectorGroup id={`graphic-data:${clip.graphic}`} title="بقية بيانات الرسمة" changed={keys.filter((k) => !primary.includes(k)).some((k) => changedValue(data[k], tpl?.data?.[k]))}>{fields(keys.filter((k) => !primary.includes(k)))}</InspectorGroup>}
       </Section>
@@ -245,7 +245,7 @@ export function GraphicPlace({ clip }: { clip: Clip }) {
         <InspectorGroup id="graphic-opacity" title="شفافية الرسمة" changed={(clip.picture?.opacity ?? 1) !== 1 || !!clip.anim?.opacity?.length}>
         <Row label="الشفافية"><KeySlider clip={clip} prop="opacity" min={0} max={1} step={0.01} def={1} fmt={pct} /></Row>
         </InspectorGroup>
-        <div className="text-[11px] text-ink-500">أو اسحب الرسمة على الفيديو، والزاوية للحجم. ◆ حركة عند المؤشر: أضف نقطتين بقيم مختلفة وتتحرك بينها.</div>
+        <div className="text-[12.5px] text-ink-500">أو اسحب الرسمة على الفيديو، والزاوية للحجم. ◆ حركة عند المؤشر: أضف نقطتين بقيم مختلفة وتتحرك بينها.</div>
       </Section>
       <MotionSection clip={clip} />
     </>
@@ -301,7 +301,7 @@ function ScenesSection({ clip, scenes }: { clip: Clip; scenes: Scene[] }) {
           </div>
         );
       })}
-      <div className="text-[11px] text-ink-500">طوّل أي مشهد: حركته تمشي بسرعتها وبعدين يثبت. قصّره: يسرع. اللي بعده يمشي معه، والرسمة ما تنعاد.</div>
+      <div className="text-[12.5px] text-ink-500">طوّل أي مشهد: حركته تمشي بسرعتها وبعدين يثبت. قصّره: يسرع. اللي بعده يمشي معه، والرسمة ما تنعاد.</div>
     </Section>
   );
 }
@@ -358,7 +358,7 @@ function ElementsSection({ clip }: { clip: Clip }) {
       {!picking ? (
         <>
           <button className="btn h-8 w-full justify-center text-xs" onClick={start}>اختر عنصر من الرسمة</button>
-          <div className="mt-1 text-[11px] text-ink-500">اضغط على أي نص أو شكل في الفيديو وغيّر كلامه ولونه ومكانه — بدون ما تحتاج الذكاء.</div>
+          <div className="mt-1 text-[12.5px] text-ink-500">اضغط على أي نص أو شكل في الفيديو وغيّر كلامه ولونه ومكانه — بدون ما تحتاج الذكاء.</div>
         </>
       ) : !target ? (
         <>
@@ -369,11 +369,11 @@ function ElementsSection({ clip }: { clip: Clip }) {
         <div className="rounded border border-accent/40 px-2 py-1">
           <div className="mb-1 flex items-center gap-1">
             <span className="min-w-0 flex-1 truncate text-xs text-accent" title={target}>{pick?.label}</span>
-            <button className="btn btn-ghost h-6 px-1 text-[11px]" title="اختر اللي يحتويه (البطاقة أو المجموعة)" onClick={parent}>الأكبر ↑</button>
-            {cur && <button className="btn btn-ghost h-6 px-1 text-[11px]" onClick={() => ops(editOps(null))}>إعادة</button>}
-            <button className="btn btn-ghost h-6 px-1 text-[11px]" onClick={() => setGraphicPick(undefined)}>تم</button>
+            <button className="btn btn-ghost h-6 px-1 text-[12.5px]" title="اختر اللي يحتويه (البطاقة أو المجموعة)" onClick={parent}>الأكبر ↑</button>
+            {cur && <button className="btn btn-ghost h-6 px-1 text-[12.5px]" onClick={() => ops(editOps(null))}>إعادة</button>}
+            <button className="btn btn-ghost h-6 px-1 text-[12.5px]" onClick={() => setGraphicPick(undefined)}>تم</button>
           </div>
-          {!el && <div className="text-[11px] text-ink-500">العنصر مو ظاهر الحين — حرّك المؤشر لوقت يظهر فيه.</div>}
+          {!el && <div className="text-[12.5px] text-ink-500">العنصر مو ظاهر الحين — حرّك المؤشر لوقت يظهر فيه.</div>}
           {(cur?.text !== undefined || (el && !el.children.length && (el.textContent ?? '').trim())) && (
             <Row label="النص"><TextField value={cur?.text ?? el?.textContent ?? ''} onCommit={(s) => ops(editOps({ text: s }))} /></Row>
           )}
@@ -387,7 +387,7 @@ function ElementsSection({ clip }: { clip: Clip }) {
       )}
       {edits.length > 0 && (
         <div className="mt-2">
-          <div className="mb-1 text-[11px] text-ink-500">معدّل ({edits.length})</div>
+          <div className="mb-1 text-[12.5px] text-ink-500">معدّل ({edits.length})</div>
           {edits.map((e) => (
             <div key={e.target} className={`flex items-center gap-1 rounded px-1 ${e.target === target ? 'bg-accent/10' : ''}`}>
               <button className="min-w-0 flex-1 truncate py-0.5 text-start text-xs text-ink-300 hover:text-accent" title={e.target} onClick={() => setGraphicPick({ clipId: clip.id, target: e.target, label: e.label })}>{e.label ?? e.target}</button>
@@ -408,7 +408,7 @@ export function MotionSection({ clip }: { clip: Clip }) {
   const row = (side: 'enter' | 'exit') => (
     <div className="grid grid-cols-5 gap-1">
       {(Object.keys(MOTIONS) as Motion[]).map((m) => (
-        <button key={m} className={`btn h-7 justify-center px-1 text-[11px] ${now[side] === m ? 'border-accent bg-accent/15 text-accent' : ''}`}
+        <button key={m} className={`btn h-7 justify-center px-1 text-[12.5px] ${now[side] === m ? 'border-accent bg-accent/15 text-accent' : ''}`}
           onClick={() => (side === 'enter' ? set(m, now.exit ?? 'none') : set(now.enter ?? 'none', m))}>{MOTIONS[m]}</button>
       ))}
     </div>
@@ -419,7 +419,7 @@ export function MotionSection({ clip }: { clip: Clip }) {
       {row('enter')}
       <div className="mb-1 mt-2 text-xs text-ink-400">الخروج</div>
       {row('exit')}
-      {!now.enter && !now.exit && clip.anim && <div className="mt-1 text-[11px] text-ink-500">فيها مفاتيح حركة خاصة — اختيار قالب يستبدلها.</div>}
+      {!now.enter && !now.exit && clip.anim && <div className="mt-1 text-[12.5px] text-ink-500">فيها مفاتيح حركة خاصة — اختيار قالب يستبدلها.</div>}
     </Section></InspectorGroup>
   );
 }
@@ -470,7 +470,7 @@ function Field({ name, label: shown, value, example, options, onChange }: {
         <div className="mb-1 text-xs text-ink-400">{label}</div>
         {items.slice(0, 3).map((it, i) => (
           <div key={i} className="mb-1 flex items-start gap-1">
-            <span className="num mt-1.5 w-4 text-[10px] text-ink-500">{i + 1}</span>
+            <span className="num mt-1.5 w-4 text-[12px] text-ink-500">{i + 1}</span>
             <div className="min-w-0 flex-1">
               {typeof it === 'object' && it !== null && !Array.isArray(it)
                 ? <Group value={it} example={typeof sample === 'object' ? (sample as Record<string, Json>) : undefined} onChange={(g) => set(i, g)} />

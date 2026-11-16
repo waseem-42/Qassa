@@ -498,3 +498,13 @@ One 82 s full-frame HTML graphic over a voice track, later split into 8 scene pi
 - Text capture prepares its document/fonts once per worker and swaps the layer, with up to four CPU-bounded browser processes. Duplicate images share work; cancellation closes workers. Cache keys/version/layout stay compatible. Export results include timings.text, and the jobs dialog shows a moving «نصوص n/total» counter.
 - Three fresh-cache 121-text heavy exports: text stage 3.036 / 2.544 / 3.324 s, median 3.036 s (target <30 s); all outputs 600 s / 18,000 frames. Old/new decoded RGBA matched exactly on 120 Arabic/Latin preset/font/highlight samples; new files match across all three runs. Sample PNG storage grows 62–79% with fast lossless compression. The old-function-only control measured a 9.998 s median here, so the earlier recorded ≈193 s is not presented as a reproduced baseline.
 - 391 tests/83 files, typecheck/build and Chrome progress/cache/contact-sheet/cover/strip checks pass. Evidence in artifacts/qa/task33/; detailed acceptance and initial harness corrections under SOL.md Report. Isolated data/processes cleaned, protected files unchanged, concurrent styles-window work preserved; no commit by this task.
+
+## 2026-11-16 — a pass over every panel for daily use (Claude)
+
+User: «للحين أحس البرنامج غير عملي… تدخل على كل قائمة وتحسنها». Walked every panel, inspector tab, menu and dialog on an isolated server at 1920×1040 and 1366×768 (`artifacts/qa/claude-1116/walk.mjs`, before `a-*.png`, after `b-*.png` / `c-*.png`). What was wrong and changed:
+
+- **Text was too small everywhere**: most labels were 10–12 px (55 rules at 11 px, 84 `text-[11px]`). Every small size went up one step (9→11, 10→12, 11→12.5, 12→13.5, 13→14.5, 14→15, 15→16; `--text-xs` 13.5, `--text-sm` 15). Sizes of 17 px and up, exported text and graphics are untouched.
+- **Closed inspector groups looked like grey captions** (Task 32 folded most controls into them). A group is now a readable row: 14.5 px, light text, hover background, gold when open.
+- **The start guide took a full row for good.** After two steps it is only the header button («دليل البداية 3/4») on every screen; the row comes back for a new empty project.
+- **Clip menu order**: cut / copy / paste first, then picture and sound (volume ±1 dB now sits with them), delete last. Volume was the first thing in the menu.
+- The track-height select said only «عادي»; it now reads «مسارات عادية / مضغوطة / كبيرة».

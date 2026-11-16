@@ -41,7 +41,7 @@ export function Fillers({ tr, states, mediaId }: { tr: Transcript; states: WordS
               <input type="checkbox" checked={on(g.key, g.picked)} onChange={(e) => setPicked({ ...picked, [g.key]: e.target.checked })} />
               <span>{g.label}</span>
               <span className="num text-ink-400">{g.words.length}</span>
-              <button className="btn btn-ghost h-6 px-2 text-[11px]" onClick={(e) => { e.preventDefault(); listen(g.words[0]); }} title="اسمع أول واحدة">▶</button>
+              <button className="btn btn-ghost h-6 px-2 text-[12.5px]" onClick={(e) => { e.preventDefault(); listen(g.words[0]); }} title="اسمع أول واحدة">▶</button>
             </label>
           ))}
           <button className="btn btn-primary mt-1 w-full justify-center" disabled={!chosen.length} onClick={cut}>احذف المحدد ({chosen.length})</button>
