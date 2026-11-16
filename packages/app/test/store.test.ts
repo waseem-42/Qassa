@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Project } from '../../shared/src/index.ts';
+import { applyOps, Project } from '../../shared/src/index.ts';
 
 vi.stubGlobal('window', { innerWidth: 1200 });
 vi.stubGlobal('location', { href: 'http://localhost/?p=old', protocol: 'http:', host: 'localhost' });
@@ -22,6 +22,21 @@ it('allows the playhead to land on the exact final cut without extending the pro
 });
 
 describe('project isolation', () => {
+  it('saves a repeated volume-key burst as one batch and leaves idle edits synchronous', async () => {
+    vi.useFakeTimers();
+    try {
+      const project = Project.parse({ name: 'old', createdAt: '', tracks: [{ id: 'V1', kind: 'video', name: 'V1', magnetic: true }], media: [{ id: 'm', path: 'a.wav', name: 'a', kind: 'audio', role: 'source', hasAudio: true }], clips: [{ id: 'c', trackId: 'V1', mediaId: 'm', start: 0, in: 0, out: 10 }] });
+      useStore.setState({ name: 'old', project, selected: ['c'], rev: 0, history: { undo: 0, redo: 0 } });
+      vi.mocked(api.post).mockImplementation(async (_, body: any) => ({ project: applyOps(project, body.ops), rev: 1, history: { undo: 1, redo: 0 } }));
+      for (let i = 0; i < 3; i++) useStore.getState().adjustVolume(1);
+      expect(api.post).not.toHaveBeenCalled();
+      expect(useStore.getState().project?.clips[0].volume).toBeCloseTo(10 ** .15);
+      await vi.advanceTimersByTimeAsync(301);
+      await useStore.getState().flushVolume();
+      expect(api.post).toHaveBeenCalledTimes(1);
+      expect(useStore.getState().history.undo).toBe(1);
+    } finally { vi.useRealTimers(); }
+  });
   it('restores the last project if an edit and recovery request both fail', async () => {
     const initial = response('old');
     useStore.setState({ name: 'old', ...initial });

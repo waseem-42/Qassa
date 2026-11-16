@@ -8,6 +8,7 @@ import type { ExportQuality } from './export.ts';
 import { lookOf, pasteLookOps, type Look } from './look.ts';
 import { duplicateOps, pasteOps } from './clipboard.ts';
 import { titlePlan } from './title.ts';
+import { volumeOps } from './volume.ts';
 import { useStartGuide } from './start-guide.ts';
 
 export interface Job {
@@ -43,6 +44,7 @@ interface State {
   analysis: Record<string, Analysis>;
   checkpoints: Checkpoint[];
   time: number;
+  seekSerial: number;
   playing: boolean;
   playRange?: [number, number];
   rangeDeletePrompt: boolean;
@@ -114,7 +116,9 @@ interface State {
   draftBase?: Project;
   undo(): Promise<void>;
   redo(): Promise<void>;
-  seek(t: number): void;
+  seek(t: number, reveal?: boolean): void;
+  adjustVolume(db: number): void;
+  flushVolume(): Promise<void>;
   setPlaying(p: boolean): void;
   select(ids: string[]): void;
   setZoom(z: number): void;
@@ -128,6 +132,30 @@ interface State {
 }
 
 let openSequence = 0, projectsSequence = 0, trashSequence = 0, checkpointsSequence = 0;
+let volumePending: { name: string; ops: Op[]; before: Project } | undefined;
+let volumeTimer: ReturnType<typeof setTimeout> | undefined;
+let volumeSave = Promise.resolve();
+let volumeJobs = 0;
+function flushVolume(): Promise<void> {
+  clearTimeout(volumeTimer);
+  const batch = volumePending; volumePending = undefined;
+  if (batch) { volumeJobs++; const sequence = openSequence; volumeSave = volumeSave.then(async () => {
+    try {
+      const r = await api.post(`${projectPath(batch.name)}/ops`, { ops: batch.ops, author: 'user' });
+      useStartGuide.getState().record(batch.before, batch.ops);
+      const s = useStore.getState();
+      if (sequence === openSequence && s.name === batch.name && r.rev >= s.rev) useStore.setState({ ...r, project: volumePending?.name === batch.name ? applyOps(r.project, volumePending.ops) : r.project });
+    } catch (e) {
+      const s = useStore.getState();
+      if (sequence === openSequence && s.name === batch.name) {
+        s.notify((e as Error).message);
+        const r = await api.get(projectPath(batch.name)).catch(() => undefined);
+        if (r && useStore.getState().name === batch.name) useStore.setState(r);
+      }
+    }
+  }).finally(() => { volumeJobs--; }); }
+  return volumeSave;
+}
 /** wide enough for the tools panel, the video and the media panel side by side */
 export const BOTH_PANELS = '(min-width: 1600px)';
 const bothFit = () => typeof matchMedia === 'function' && matchMedia(BOTH_PANELS).matches;
@@ -153,6 +181,7 @@ export const useStore = create<State>((set, get) => ({
   analysis: {},
   checkpoints: [],
   time: 0,
+  seekSerial: 0,
   playing: false,
   rangeDeletePrompt: false,
   playMarked() {
@@ -322,6 +351,7 @@ export const useStore = create<State>((set, get) => ({
     return r.safetyCheckpoint;
   },
   async startRender(quality, expectedRev, settings, marked) {
+    if (volumePending || volumeJobs) await flushVolume();
     const { name, rev } = get(), sequence = openSequence;
     if (!name) throw new Error('افتح مشروعًا لتصديره.');
     if (rev !== expectedRev) throw new Error('تغيّر المشروع بعد فحص الجاهزية. أعد الفحص قبل التصدير.');
@@ -369,6 +399,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async ops(ops) {
+    if (volumePending || volumeJobs) await flushVolume();
     const { name, project, transcripts } = get();
     const sequence = openSequence;
     if (!name || !project) return false;
@@ -429,6 +460,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   async undo() {
+    if (volumePending || volumeJobs) await flushVolume();
     const { name } = get();
     const sequence = openSequence;
     if (!name) return;
@@ -438,6 +470,7 @@ export const useStore = create<State>((set, get) => ({
     } catch (e) { get().notify((e as Error).message); }
   },
   async redo() {
+    if (volumePending || volumeJobs) await flushVolume();
     const { name } = get();
     const sequence = openSequence;
     if (!name) return;
@@ -461,14 +494,27 @@ export const useStore = create<State>((set, get) => ({
   showNote(id) {
     const n = get().project?.notes.find((x) => x.id === id);
     if (n) {
-      set({ focusNote: id, panel: 'notes', time: n.at });
+      set({ focusNote: id, panel: 'notes' });
+      get().seek(n.at);
       get().showPanel('tools', true);
     }
   },
-  seek(t) {
+  adjustVolume(db) {
+    const s = get();
+    if (!s.project || !s.name) return;
+    const ops = volumeOps(s.project, s.selected, db);
+    if (!ops.length) return s.notify('حدّد لقطة صوت غير مقفولة أولًا.');
+    const previous = volumePending?.name === s.name ? volumePending : undefined;
+    const byId = new Map([...(previous?.ops ?? []), ...ops].map((op) => [(op as Extract<Op, { op: 'update_clip' }>).clipId, op]));
+    volumePending = { name: s.name, before: previous?.before ?? s.project, ops: [...byId.values()] };
+    set({ project: applyOps(s.project, ops) });
+    clearTimeout(volumeTimer); volumeTimer = setTimeout(() => { void flushVolume(); }, 300);
+  },
+  flushVolume,
+  seek(t, reveal = true) {
     const p = get().project;
     const max = p ? projectDuration(p) : 0;
-    set({ time: Math.max(0, Math.min(max, t)), playRange: undefined });
+    set((s) => ({ time: Math.max(0, Math.min(max, t)), playRange: undefined, seekSerial: s.seekSerial + (reveal && !s.playing ? 1 : 0) }));
   },
   setPlaying(playing) {
     if (playing) resumeAudio(); // inside the click / key press that started playback

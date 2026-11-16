@@ -25,6 +25,10 @@ export function ClipMenu({ clip, x, y, onClose }: { clip: Clip; x: number; y: nu
   };
 
   const groups: MenuItem[][] = [
+    ...(media?.hasAudio ? [[
+      { label: 'رفع الصوت 1 ديسيبل', key: 'volumeUp' as const, run: () => { s.select(ids); s.adjustVolume(1); } },
+      { label: 'خفض الصوت 1 ديسيبل', key: 'volumeDown' as const, run: () => { s.select(ids); s.adjustVolume(-1); } },
+    ]] : []),
     [
       { label: 'قص عند المؤشر', key: 'split', disabled: !inside, run: () => s.ops([{ op: 'split', clipId: clip.id, at: time }]) },
       { label: 'احذف ما قبل المؤشر', key: 'trimStart', disabled: !inside, run: () => trim('start') },

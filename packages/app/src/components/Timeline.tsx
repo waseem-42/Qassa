@@ -18,6 +18,7 @@ import { GraphicPicker, sceneEdges, useScenes } from './GraphicControls.tsx';
 import { draggingMediaId, importFiles, isFileDrag, MEDIA_DRAG, placeMedia, setDraggingMedia } from '../lib/import.ts';
 import { Modal } from './Modal.tsx';
 import { bandHits, bandSelection } from '../lib/selection.ts';
+import { rowAtY } from '../lib/timeline-target.ts';
 type IconName = Parameters<typeof Icon>[0]['name'];
 
 const HEAD = 150;
@@ -31,8 +32,8 @@ type Drag =
   | { kind: 'trim'; clip: Clip; edge: 'in' | 'out'; x0: number; scroll0: number; value: number }
   /** over: another track the clip would land on (dropped there: it moves to that track) */
   /** at: main-track magnet off — the main-track clip's new time (move_main) */
-  | { kind: 'move'; clip: Clip; group: Clip[]; fixedTracks?: boolean; x0: number; scroll0: number; start: number; dx: number; over?: string; plan?: Op[]; index?: number; at?: number }
-  | { kind: 'scrub'; offset: number; targets: number[] }
+  | { kind: 'move'; clip: Clip; group: Clip[]; fixedTracks?: boolean; x0: number; scroll0: number; start: number; dx: number; over?: string; plan?: Op[]; index?: number; at?: number; refusal?: string }
+  | { kind: 'scrub'; offset: number; targets: number[]; x0: number; clickClip?: string; moved?: boolean }
   | { kind: 'mark'; edge: 'in' | 'out'; value: number; offset: number; base: Project['settings']['marks']; targets: number[] }
   | { kind: 'band'; x0: number; y0: number; x: number; y: number; from: number; to: number; moved: boolean; mode: 'replace' | 'add' | 'toggle'; base: string[] };
 
@@ -163,6 +164,13 @@ export function Timeline() {
   const setDrag = (next: Drag | undefined) => { dragRef.current = next; setDragState(next); };
   const [dropIndex, setDropIndex] = useState<number>();
   const [landing, setLandingState] = useState<Landing>();
+  const [dropError, setDropError] = useState<{ text: string; x: number; y: number }>();
+  const dropErrorTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(dropErrorTimer.current), []);
+  const refuseDrop = (text: string, x: number, y: number) => {
+    clearTimeout(dropErrorTimer.current); setDropError({ text, x, y });
+    dropErrorTimer.current = setTimeout(() => setDropError(undefined), 3500);
+  };
   const landingRef = useRef<Landing>();
   const setLanding = (next?: Landing) => { landingRef.current = next; setLandingState(next); };
   const size = useTimelineView((s) => s.size), maximised = useTimelineView((s) => s.maximised);
@@ -217,7 +225,7 @@ export function Timeline() {
       setDrag(undefined); setLanding(); setSnapAt(undefined); setDropIndex(undefined); pointer.current = undefined;
     };
     window.addEventListener('keydown', cancel, true);
-    const end = () => { setLanding(); pointer.current = undefined; setSnapAt(undefined); };
+    const end = () => { const last = landingRef.current; if (last?.error) refuseDrop(last.error, last.x, last.y); setLanding(); pointer.current = undefined; setSnapAt(undefined); };
     window.addEventListener('dragend', end);
     let frame = 0, last = 0;
     const tick = (now: number) => {
@@ -281,10 +289,12 @@ export function Timeline() {
   useEffect(
     () =>
       useStore.subscribe((s, prev) => {
-        if (s.time === prev.time || !scroller.current) return;
+        const explicit = s.seekSerial !== prev.seekSerial;
+        if ((!explicit && s.time === prev.time) || !scroller.current) return;
         const el = scroller.current;
         const x = s.time * s.zoom;
-        if (s.playing && (x > el.scrollLeft + el.clientWidth - 80 || x < el.scrollLeft)) el.scrollLeft = x - 80;
+        if (explicit && (x < el.scrollLeft + 80 || x > el.scrollLeft + el.clientWidth - 80)) el.scrollLeft = Math.max(0, x - el.clientWidth / 2);
+        else if (s.playing && (x > el.scrollLeft + el.clientWidth - 80 || x < el.scrollLeft)) el.scrollLeft = x - 80;
       }),
     [],
   );
@@ -319,15 +329,18 @@ export function Timeline() {
     const at = xToTime(e.clientX), offset = grab ? at - useStore.getState().time : 0;
     // The moving playhead must never become its own magnet target.
     const points = timelineTargets(project, undefined);
-    if (!grab) seek(snapCursor(e, at, points));
-    setDrag({ kind: 'scrub', offset, targets: points });
+    if (!grab) seek(snapCursor(e, at, points), false);
+    const under = grab && (e.target as Element).closest('[data-playhead-line]')
+      ? document.elementsFromPoint(e.clientX, e.clientY).map((el) => el.closest<HTMLElement>('[data-clip-id]')?.dataset.clipId).find(Boolean) : undefined;
+    const clip = project.clips.find((c) => c.id === under);
+    setDrag({ kind: 'scrub', offset, targets: points, x0: e.clientX, clickClip: clip && !project.tracks.find((t) => t.id === clip.trackId)?.locked ? clip.id : undefined });
   };
   const startBand = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     capture(e);
     const box = content.current!.getBoundingClientRect(), x = e.clientX - box.left, y = e.clientY - box.top;
     // a press on empty space puts the playhead there at once; dragging on draws a selection box
-    seek(clampTime(xToTime(e.clientX)));
+    seek(clampTime(xToTime(e.clientX)), false);
     setDrag({ kind: 'band', x0: x, y0: y, x, y, from: clampTime(xToTime(e.clientX)), to: clampTime(xToTime(e.clientX)), moved: false, mode: e.ctrlKey ? 'toggle' : e.shiftKey ? 'add' : 'replace', base: [...selected] });
   };
   const marks = { ...(drag?.kind === 'mark' ? drag.base : project.settings.marks) };
@@ -338,11 +351,23 @@ export function Timeline() {
   const range = marks.in !== undefined && marks.out !== undefined ? [marks.in, marks.out] : undefined;
   const shownMarks = { in: marks.in ?? 0, out: marks.out ?? projectDuration(project) };
 
+  const hitRow = (x: number, y: number) => {
+    const bounds = scroller.current!.getBoundingClientRect();
+    if (x < bounds.left || x > bounds.right || y < bounds.top + RULER) return;
+    const exact = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-track-row],[data-new-track],[data-insert-track]');
+    if (exact) return exact;
+    return rowAtY([...(rows.current?.querySelectorAll<HTMLElement>('[data-track-row],[data-new-track],[data-insert-track]') ?? [])].map((el) => {
+      const rect = el.getBoundingClientRect(); return { el, top: rect.top, bottom: rect.bottom };
+    }), y)?.el;
+  };
   const onPointerMove = (e: { clientX: number; clientY: number; altKey: boolean; shiftKey?: boolean }) => {
     const drag = dragRef.current;
     if (!drag) return;
     pointer.current = { clientX: e.clientX, clientY: e.clientY, altKey: e.altKey, shiftKey: e.shiftKey };
-    if (drag.kind === 'scrub') return seek(snapCursor(e, xToTime(e.clientX) - drag.offset, drag.targets));
+    if (drag.kind === 'scrub') {
+      if (Math.abs(e.clientX - drag.x0) > 3) dragRef.current = { ...drag, moved: true };
+      return seek(snapCursor(e, xToTime(e.clientX) - drag.offset, drag.targets), false);
+    }
     if (drag.kind === 'mark') return setDrag({ ...drag, value: snapCursor(e, xToTime(e.clientX) - drag.offset, drag.targets) });
     if (drag.kind === 'band') {
       const box = content.current!.getBoundingClientRect(), x = e.clientX - box.left, y = e.clientY - box.top;
@@ -373,41 +398,47 @@ export function Timeline() {
         setDrag({ ...drag, value: v });
       }
     } else if (drag.kind === 'move') {
+      const move = { ...drag, refusal: undefined };
       // the track under the pointer, when the clip can go there (dropped: it moves to that track)
-      const row = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-track-row]')?.dataset.trackRow;
+      const hit = hitRow(e.clientX, e.clientY), row = hit?.dataset.trackRow;
       const target = project.tracks.find((t) => t.id === row);
-      const over = drag.fixedTracks ? undefined : target && !target.locked && fitsTrack(drag.clip, target, project) ? target.id === drag.clip.trackId ? undefined : target.id : drag.over;
-      const onMain = over === MAIN_TRACK || (!over && drag.clip.trackId === MAIN_TRACK);
-      if (onMain && !over && drag.clip.trackId === MAIN_TRACK && !mainMagnet) {
+      if (!hit || target?.locked || target && !move.fixedTracks && !fitsTrack(move.clip, target, project)) {
+        setDrag({ ...move, refusal: !hit ? 'أسقط على مسار، وليس على المسطرة.' : target?.locked ? 'المسار مقفول — افتح القفل أولًا.' : 'هذه اللقطة لا تناسب المسار.' });
+        return;
+      }
+
+      const over = move.fixedTracks ? undefined : target && !target.locked && fitsTrack(move.clip, target, project) ? target.id === move.clip.trackId ? undefined : target.id : move.over;
+      const onMain = over === MAIN_TRACK || (!over && move.clip.trackId === MAIN_TRACK);
+      if (onMain && !over && move.clip.trackId === MAIN_TRACK && !mainMagnet) {
         // main-track magnet off: the clip moves in time; the space it leaves or takes is a gap (the clip before stops it)
         setDropIndex(undefined);
-        const order = mainClips(project), i = order.findIndex((c) => c.id === drag.clip.id), prev = order[i - 1];
-        const floor = prev?.gap ? prev.start : drag.start;
-        const at = Math.max(floor, snap(e, drag.start + dt, drag.clip.id));
-        return setDrag({ ...drag, dx: (at - drag.start) * zoom, over: undefined, index: undefined, plan: undefined, at });
+        const order = mainClips(project), i = order.findIndex((c) => c.id === move.clip.id), prev = order[i - 1];
+        const floor = prev?.gap ? prev.start : move.start;
+        const at = Math.max(floor, snap(e, move.start + dt, move.clip.id));
+        return setDrag({ ...move, dx: (at - move.start) * zoom, over: undefined, index: undefined, plan: undefined, at });
       }
       if (onMain) {
         // joining or reordering the main track: where it would go between the others
         const t = xToTime(e.clientX);
-        const own = drag.clip.trackId === MAIN_TRACK;
-        const order = mainClips(project).filter((c) => c.id !== drag.clip.id);
-        const idx = order.findIndex((c) => t < c.start + clipDuration(c) / 2 - (own && c.start > drag.clip.start ? clipDuration(drag.clip) : 0));
+        const own = move.clip.trackId === MAIN_TRACK;
+        const order = mainClips(project).filter((c) => c.id !== move.clip.id);
+        const idx = order.findIndex((c) => t < c.start + clipDuration(c) / 2 - (own && c.start > move.clip.start ? clipDuration(move.clip) : 0));
         const index = idx < 0 ? order.length : idx;
         setDropIndex(index);
         setSnapAt(undefined);
-        return setDrag({ ...drag, dx: dt * zoom, over, index, plan: undefined });
+        return setDrag({ ...move, dx: dt * zoom, over, index, plan: undefined });
       }
       setDropIndex(undefined);
       // a free clip: whichever of its edges is nearer a target catches, and it's drawn there while dragging
-      const groupStart = Math.min(...drag.group.map((c) => c.start)), groupEnd = Math.max(...drag.group.map(clipEnd));
+      const groupStart = Math.min(...move.group.map((c) => c.start)), groupEnd = Math.max(...move.group.map(clipEnd));
       const raw = Math.max(0, groupStart + dt);
-      const points = timelineTargets({ ...project, clips: project.clips.filter((c) => !drag.group.some((x) => x.id === c.id)) }, useStore.getState().time);
+      const points = timelineTargets({ ...project, clips: project.clips.filter((c) => !move.group.some((x) => x.id === c.id)) }, useStore.getState().time);
       const r = catches(e) ? snapSpan(raw, groupEnd - groupStart, points, 8 / zoom) : { start: raw, at: undefined };
       const delta = Math.max(0, r.start) - groupStart;
       setSnapAt(r.at);
       // dropped where it is let go, on the track under the pointer, even over another clip there (striped);
       // Shift: the nearest free layer instead (a new one when none is free)
-      setDrag({ ...drag, dx: delta * zoom, over, plan: stablePlan(e.shiftKey ? freeMoveOps(project, drag.group, delta, over) : exactMoveOps(drag.group, delta, over)) });
+      setDrag({ ...move, dx: delta * zoom, over, plan: stablePlan(e.shiftKey ? freeMoveOps(project, move.group, delta, over) : exactMoveOps(move.group, delta, over)) });
     }
   };
   moveRef.current = onPointerMove;
@@ -419,7 +450,8 @@ export function Timeline() {
     setSnapAt(undefined);
     pointer.current = undefined;
     if (!d) return;
-    if (d.kind === 'scrub') return;
+    if (d.kind === 'move' && d.refusal) { refuseDrop(d.refusal, e.clientX, e.clientY); return; }
+    if (d.kind === 'scrub') { if (!d.moved && d.clickClip) select(e.shiftKey || e.ctrlKey ? [...new Set([...selected, d.clickClip])] : [d.clickClip]); return; }
     if (d.kind === 'mark') {
       if (Math.abs(d.value - d.base[d.edge]!) > .001) await ops([{ op: 'set_marks', ...d.base, [d.edge]: d.value }]);
       return;
@@ -461,8 +493,11 @@ export function Timeline() {
 
   // ruler ticks
   const previewMedia = (e: { clientX: number; clientY: number; altKey: boolean }) => {
-    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-track-row],[data-new-track],[data-insert-track]');
-    if (!el) { setLanding(); setSnapAt(undefined); return; }
+    const el = hitRow(e.clientX, e.clientY);
+    if (!el) {
+      setLanding({ at: Math.max(0, xToTime(e.clientX)), duration: 5, request: {}, plan: [], label: 'اختر مسارًا', error: 'أسقط على مسار، وليس على المسطرة أو رأس المسار.', x: e.clientX, y: e.clientY });
+      setSnapAt(undefined); return;
+    }
     const m = project.media.find((m) => m.id === draggingMediaId);
     let t = project.tracks.find((t) => t.id === el.dataset.trackRow);
     // A newly previewed row represents the original requested destination, not a persisted track.
@@ -501,6 +536,7 @@ export function Timeline() {
         e.preventDefault(); e.stopPropagation();
         setMediaDragging(false);
         const next = landingRef.current;
+        if (next?.error) refuseDrop(next.error, e.clientX, e.clientY);
         if (next && !next.error) {
           if (isFileDrag(e.dataTransfer)) importFiles([...e.dataTransfer.files], next.request);
           else placeMedia(e.dataTransfer.getData(MEDIA_DRAG) || draggingMediaId!, next.request);
@@ -633,6 +669,7 @@ export function Timeline() {
         </div>
       </div>
       {landing?.error && <div className="pointer-events-none fixed z-[70] rounded bg-cut px-2 py-1 text-xs text-ink-950" dir="rtl" style={{ left: Math.min(window.innerWidth - 270, landing.x + 12), top: landing.y + 16 }}>{landing.error}</div>}
+      {dropError && <div role="status" className="pointer-events-none fixed z-[70] rounded bg-cut px-2 py-1 text-xs text-ink-950" dir="rtl" style={{ left: Math.min(window.innerWidth - 270, dropError.x + 12), top: Math.min(window.innerHeight - 40, dropError.y + 16) }}>{dropError.text}</div>}
       {menu && project.clips.some((c) => c.id === menu.clip.id) && <ClipMenu clip={project.clips.find((c) => c.id === menu.clip.id)!} x={menu.x} y={menu.y} onClose={closeMenu} />}
     </div>
   );

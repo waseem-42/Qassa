@@ -468,3 +468,7 @@ One 82 s full-frame HTML graphic over a voice track, later split into 8 scene pi
 
 - Header split export uses saved, validated settings; first use opens settings. Progress and a persistent notice show filename/duration, Play/Reveal, warnings and failures. Current marks have their own menu action. Preset suffixes and typed names persist, and outputs remain versioned. Ctrl+E / Ctrl+Shift+E are rebindable and searchable.
 - Chrome verified 1 export click + 1 Reveal (no dialog), unchanged ffprobe output, warnings/blockers/stale revision, marked output and remembered names at desktop/laptop sizes. 379 tests/76 files, typecheck and build pass. Evidence and caveats: `docs/research/night-2026-11.md`, `artifacts/qa/task28/`.
+## 2026-11-16 — timeline intent and quick gain (Task 29, timing caveat)
+
+- Drops use row geometry through the playhead; clicking its line selects the clip underneath while dragging scrubs. Explicit paused jumps reveal the playhead, and rejected drops explain why. Clip-menu and rebindable Alt+Up/Down gain changes apply ±1 dB, collected into one undo per key burst; pending volume flushes before edits/export.
+- 90 Chrome trials, single-undo bursts, marked-row insertion/refusals and zoomed navigation pass; 382 tests/78 files, typecheck/build pass. Two light-operation medians rose by 1.3/3.3 ms, so the strict no-slowdown acceptance remains open. Evidence and details: `docs/research/night-2026-11.md`.

@@ -11,6 +11,7 @@ export const useQuickExport = create<{
   warnings: Record<string, number>; dismiss(): void;
 }>((set) => ({ checking: false, warnings: {}, dismiss: () => set({ notice: undefined }) }));
 export async function quickExport(marked = false) {
+  await useStore.getState().flushVolume();
   const s = useStore.getState(), { name, project } = s;
   if (!name || !project || useQuickExport.getState().checking) return;
   const choice = quickExportChoice(project.name, loadSavedExport(name));

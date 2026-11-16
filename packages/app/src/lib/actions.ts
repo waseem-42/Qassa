@@ -17,6 +17,8 @@ export function runAction(action: ActionId, target?: EventTarget | null): unknow
   if (!p) return;
   const fps = p.settings.fps;
   switch (action) {
+    case 'volumeUp': return s.adjustVolume(1);
+    case 'volumeDown': return s.adjustVolume(-1);
     case 'quickExport': return quickExport();
     case 'openExport': return useHeaderDialog.getState().setDialog('export');
     case 'timelineMax': return useTimelineView.getState().toggleMax();
