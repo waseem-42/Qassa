@@ -246,10 +246,10 @@ export function Timeline() {
 
   useEffect(() => {
     const el = scroller.current!;
-    const update = () => setView({ left: el.scrollLeft, width: el.clientWidth });
-    update();
+    let width = 1200;
+    const update = () => setView({ left: el.scrollLeft, width });
     el.addEventListener('scroll', update, { passive: true });
-    const ro = new ResizeObserver(update);
+    const ro = new ResizeObserver(([entry]) => { width = entry.contentRect.width; update(); });
     ro.observe(el);
     return () => {
       el.removeEventListener('scroll', update);

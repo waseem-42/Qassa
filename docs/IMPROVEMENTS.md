@@ -472,3 +472,7 @@ One 82 s full-frame HTML graphic over a voice track, later split into 8 scene pi
 
 - Drops use row geometry through the playhead; clicking its line selects the clip underneath while dragging scrubs. Explicit paused jumps reveal the playhead, and rejected drops explain why. Clip-menu and rebindable Alt+Up/Down gain changes apply ±1 dB, collected into one undo per key burst; pending volume flushes before edits/export.
 - 90 Chrome trials, single-undo bursts, marked-row insertion/refusals and zoomed navigation pass; 382 tests/78 files, typecheck/build pass. Two light-operation medians rose by 1.3/3.3 ms, so the strict no-slowdown acceptance remains open. Evidence and details: `docs/research/night-2026-11.md`.
+## 2026-11-16 — real-size editor measurements (Task 30, partial)
+
+- Imported five generated 1080p/4K/HEVC/long-screen sources normally into an isolated 10 min edit. Headless and headed Chrome use proxies and reuse analysis on reopen; no >100 ms long tasks in measured playback/scrub/drag. Full preparation 112.93 s; final 1080p exports 11.65 s/video-minute cold and 7.89 warm before the UI changes.
+- Deferred native GL setup until after first paint, removed initial forced timeline width layout, and added visible loading/preparation statuses. Native startup still exceeds 100 ms; cold Vite module waits and limited single-sample results are explicit in docs/research/night-2026-11.md. 382 tests, typecheck/build pass; no user data or original servers touched.

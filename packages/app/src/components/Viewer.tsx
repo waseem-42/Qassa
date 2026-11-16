@@ -103,12 +103,13 @@ export function Viewer() {
   const [fit, setFit] = useState({ w: 640, h: 360 });
   const [safe, setSafe] = useState(false);
   const [glError, setGlError] = useState<string>();
+  const [glReady, setGlReady] = useState(false);
 
   // fit the output frame into the available space
   useEffect(() => {
     const el = box.current!;
-    const ro = new ResizeObserver(() => {
-      const r = el.getBoundingClientRect();
+    const ro = new ResizeObserver(([entry]) => {
+      const r = entry.contentRect;
       const k = Math.min((r.width - 24) / size.width, (r.height - 24) / size.height);
       setFit({ w: Math.max(80, Math.floor(size.width * k)), h: Math.max(45, Math.floor(size.height * k)) });
     });
@@ -117,11 +118,17 @@ export function Viewer() {
   }, [size.width, size.height]);
 
   useEffect(() => {
-    try {
-      renderer.current = new GradeRenderer(canvas.current!);
-    } catch (e) {
-      setGlError((e as Error).message);
-    }
+    // Let the editor and its preparation message paint before the native GL setup.
+    let next = 0;
+    const first = requestAnimationFrame(() => { next = requestAnimationFrame(() => {
+      try {
+        renderer.current = new GradeRenderer(canvas.current!);
+      } catch (e) {
+        setGlError((e as Error).message);
+      }
+      setGlReady(true);
+    }); });
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(next); };
   }, []);
 
   // seek / prepare the active video whenever time moves from outside the playback loop
@@ -423,6 +430,7 @@ export function Viewer() {
             <div className="pointer-events-none absolute border border-dashed border-white/30" style={{ inset: `${fit.h * 0.05}px ${fit.w * 0.05}px` }} />
           )}
           {!project.clips.length && <EmptyViewer />}
+          {!glReady && <div role="status" dir="rtl" className="absolute bottom-2 left-2 rounded bg-ink-900 px-2 py-1 text-xs text-ink-300">جارٍ تجهيز المعاينة…</div>}
           {glError && <div className="absolute bottom-2 left-2 text-xs text-cut">{glError}</div>}
         </div>
         {vids.map((r, i) => (
