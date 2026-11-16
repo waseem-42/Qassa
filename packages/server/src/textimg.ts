@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import { createRequire } from 'node:module';
-import puppeteer, { type Browser } from 'puppeteer-core';
+import { availableParallelism } from 'node:os';
+import puppeteer, { type Browser, type Page } from 'puppeteer-core';
 import { textLayerHtml, THEME_FONTS, type Clip, type Theme } from '@edit/shared';
 import { brands } from './brands.ts';
 import { BROWSER, ROOT } from './config.ts';
@@ -53,39 +54,72 @@ export async function closeBrowser() {
   browser = undefined;
 }
 
+interface TextRenderOptions {
+  onProgress?: (done: number, total: number) => void;
+  signal?: AbortSignal;
+}
+
 /**
  * Render every text clip to a full-frame transparent PNG (cached by content). Returns clipId -> project-relative path.
  * `active`: the lit word of each highlighted-caption piece (expandHighlights).
  */
-export async function renderTextImages(projectDir: string, clips: Clip[], W: number, H: number, theme?: Theme, active?: Map<string, number>): Promise<Map<string, string>> {
+export async function renderTextImages(projectDir: string, clips: Clip[], W: number, H: number, theme?: Theme, active?: Map<string, number>, options: TextRenderOptions = {}): Promise<Map<string, string>> {
+  options.signal?.throwIfAborted();
   const out = new Map<string, string>();
-  const todo: { clip: Clip; rel: string }[] = [];
+  const missing = new Map<string, { clip: Clip; rel: string; count: number }>();
   for (const c of clips) {
     if (!c.text) continue;
     const lit = active?.get(c.id);
     const hash = createHash('sha1').update(JSON.stringify([c.text, c.textStyle, theme ?? null, W, H, 3, ...(lit === undefined ? [] : [lit])])).digest('hex').slice(0, 16);
     const rel = `cache/text/${hash}.png`;
     out.set(c.id, rel);
-    if (!existsSync(join(projectDir, rel))) todo.push({ clip: c, rel });
+    if (!existsSync(join(projectDir, rel))) {
+      const old = missing.get(rel);
+      if (old) old.count++;
+      else missing.set(rel, { clip: c, rel, count: 1 });
+    }
   }
+  const todo = [...missing.values()];
+  let done = out.size - todo.reduce((n, item) => n + item.count, 0);
+  options.onProgress?.(done, out.size);
   if (!todo.length) return out;
   mkdirSync(join(projectDir, 'cache/text'), { recursive: true });
-  const b = await getBrowser();
-  const page = await b.newPage();
+  const css = fontFaceCss(undefined, [...new Set(['IBM Plex Sans Arabic', theme?.font ?? '', ...todo.map(({ clip }) => clip.textStyle?.font ?? '')])]);
+  const workers = Math.min(4, availableParallelism(), Math.ceil(todo.length / 16));
+  const ctrl = new AbortController();
+  const abort = () => ctrl.abort();
+  options.signal?.addEventListener('abort', abort, { once: true });
+  if (options.signal?.aborted) ctrl.abort();
+  let next = 0;
   try {
-    await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
-    // setContent has no file origin: embed just the fonts this render uses.
-    const css = fontFaceCss(undefined, [...new Set(['IBM Plex Sans Arabic', theme?.font ?? '', ...todo.map(({ clip }) => clip.textStyle?.font ?? '')])]);
-    for (const { clip, rel } of todo) {
-      await page.setContent(
-        `<!doctype html><html><head><meta charset="utf-8"><style>${css}html,body{margin:0;width:${W}px;height:${H}px;background:transparent;overflow:hidden}</style></head><body><div style="position:relative;width:${W}px;height:${H}px">${textLayerHtml(clip, H, theme, active?.get(clip.id))}</div></body></html>`,
-        { waitUntil: 'load' },
-      );
-      await page.evaluate(() => document.fonts.ready);
-      await page.screenshot({ path: join(projectDir, rel) as `${string}.png`, omitBackground: true, type: 'png' });
-    }
+    const results = await Promise.allSettled(Array.from({ length: workers }, async (_, w) => {
+      let own: Browser | undefined;
+      let page: Page | undefined;
+      try {
+        if (ctrl.signal.aborted) throw new Error('cancelled');
+        // Separate processes paint concurrently; the first worker reuses the shared browser.
+        const b = w === 0 ? await getBrowser() : (own = await launchBrowser());
+        page = await b.newPage();
+        await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
+        await page.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>${css}html,body{margin:0;width:${W}px;height:${H}px;background:transparent;overflow:hidden}</style></head><body><div id="text-layer" style="position:relative;width:${W}px;height:${H}px"></div></body></html>`, { waitUntil: 'load' });
+        // Load even unused weights/subsets before swapping text; keep the existing fallback for failed faces.
+        await page.evaluate(async () => { await Promise.all([...document.fonts].map((f) => f.load().catch(() => {}))); await document.fonts.ready; });
+        while (next < todo.length) {
+          if (ctrl.signal.aborted) throw new Error('cancelled');
+          const { clip, rel, count } = todo[next++];
+          await page.evaluate(async (html) => { document.getElementById('text-layer')!.innerHTML = html; await document.fonts.ready; }, textLayerHtml(clip, H, theme, active?.get(clip.id)));
+          await page.screenshot({ path: join(projectDir, rel) as `${string}.png`, omitBackground: true, type: 'png', optimizeForSpeed: true });
+          done += count;
+          options.onProgress?.(done, out.size);
+        }
+      } catch (e) { ctrl.abort(); throw e; }
+      finally { await page?.close().catch(() => {}); await own?.close().catch(() => {}); }
+    }));
+    const failed = results.find((r) => r.status === 'rejected');
+    if (failed?.status === 'rejected') throw failed.reason;
+    if (ctrl.signal.aborted) throw new Error('cancelled');
   } finally {
-    await page.close();
+    options.signal?.removeEventListener('abort', abort);
   }
   return out;
 }

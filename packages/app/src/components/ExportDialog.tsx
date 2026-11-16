@@ -202,7 +202,7 @@ function JobCard({ job, label, cancel, reveal }: { job: Job; label: string; canc
   return <div className="job-card">
     <div className="flex items-center gap-2"><strong className="min-w-0 flex-1 truncate">{job.kind === 'render' && file ? file : job.label}</strong><span className={job.status === 'error' ? 'text-cut-text' : 'text-ink-400'}>{label}</span></div>
     {job.render && <div className="job-version"><span>{job.label}</span><Version version={job.render} />{job.render.srt && <span>+ SRT</span>}</div>}
-    {['queued', 'running'].includes(job.status) && <><progress className="job-progress" max={1} value={job.progress} /><div className="flex justify-between"><span className="num">{Math.round(job.progress * 100)}%</span><button className="btn btn-ghost" onClick={() => cancel(job.id)}>إلغاء المهمة</button></div></>}
+    {['queued', 'running'].includes(job.status) && <>{job.kind === 'render' && job.stage === 'text' && job.message && <p className="mt-2 text-xs text-ink-400" role="status">{job.message}</p>}<progress className="job-progress" max={1} value={job.progress} /><div className="flex justify-between"><span className="num">{Math.round(job.progress * 100)}%</span><button className="btn btn-ghost" onClick={() => cancel(job.id)}>إلغاء المهمة</button></div></>}
     {job.error && <p className="mt-2 break-words text-cut-text">{job.error}</p>}
     {job.kind === 'render' && job.status === 'done' && job.result?.url && <ExportedActions url={job.result.url} output={job.result.output} reveal={reveal} />}
   </div>;

@@ -496,18 +496,23 @@ registerExportRoutes(app, store, jobs, async ({ name, project: edited, dir, qual
     const began = performance.now();
     // highlighted captions export as one still per spoken word
     const { project: p, active } = expandHighlights(edited, (m) => store.transcript(name, m)?.words);
-    const timings = { graphics: 0, segments: 0, final: 0 };
+    const timings = { text: 0, graphics: 0, segments: 0, final: 0 };
     const size = outputSize({ ...p.settings, resolution: quality === 'preview' ? Math.min(720, p.settings.resolution) : p.settings.resolution });
     const audio = e?.format === 'mp3' || e?.format === 'wav' ? e.format : undefined;
     ctx.update({ stage: 'text', progress: 0 });
     // sound only: no picture to draw text or graphics on
     const inRange = (c: Project['clips'][number]) => !range || c.start < range[1] && c.start + clipDuration(c) > range[0];
-    const texts = await renderTextImages(dir, audio ? [] : p.clips.filter((c) => c.text && inRange(c) && !p.tracks.find((t) => t.id === c.trackId)?.hidden), size.width, size.height, p.settings.theme, active);
+    const textStart = performance.now();
+    const texts = await renderTextImages(dir, audio ? [] : p.clips.filter((c) => c.text && inRange(c) && !p.tracks.find((t) => t.id === c.trackId)?.hidden), size.width, size.height, p.settings.theme, active, {
+      signal: ctx.signal,
+      onProgress: (done, total) => ctx.update({ stage: 'text', progress: total ? done / total * 0.15 : 0.15, message: `نصوص ${done}/${total}` }),
+    });
+    timings.text = (performance.now() - textStart) / 1000;
     const shown = (c: Project['clips'][number]) => !audio && inRange(c) && !p.tracks.find((t) => t.id === c.trackId)?.hidden && c.start < projectDuration(p);
     const graphicStart = performance.now();
     const captures: import('./graphics.ts').GraphicCaptureStats[] = [];
     const graphics = await renderGraphics(name, dir, p.clips.filter((c) => c.graphic && shown(c)), p.settings, size.width, p.settings.fps,
-      (g) => ctx.update({ stage: 'graphics', progress: g * 0.3, message: `رسوم ${Math.round(g * 100)}%` }), ctx.signal,
+      (g) => ctx.update({ stage: 'graphics', progress: 0.15 + g * 0.15, message: `رسوم ${Math.round(g * 100)}%` }), ctx.signal,
       quality === 'final' ? p.settings.motionBlur : 1, { onStats: (s) => captures.push(s) }); // motion blur only where it's worth the time
     timings.graphics = (performance.now() - graphicStart) / 1000;
     const plan = compile(p, {
