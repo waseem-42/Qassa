@@ -8,16 +8,12 @@ import { canSubmitExport, parseTimecode, type ExportPreflight, type ExportQualit
 import { Icon, Spinner } from './Brand.tsx';
 import { Modal } from './Modal.tsx';
 import { RenderCache } from './RenderCache.tsx';
+import { exportKey as savedKey, exportFileName, loadSavedExport as loadSaved, NAME_SUFFIX, type SavedExport as Saved } from '../lib/export-preferences.ts';
+import { useQuickExport } from '../lib/quick-export.ts';
 
-const NAME_SUFFIX: Record<string, string> = { youtube: 'يوتيوب', shorts: 'شورتس', instagram: 'إنستقرام', '4k': '4K', review: 'مراجعة', audio: 'صوت' };
-interface Saved { preset: string; quality: ExportQuality; settings: Partial<ExportSettings> }
 const advancedKey = 'qassa.export.advanced';
 function loadAdvanced(preset: string): boolean {
   try { const saved = localStorage.getItem(advancedKey); return saved === null ? preset === 'custom' : saved === 'true'; } catch { return preset === 'custom'; }
-}
-const savedKey = (name: string) => `qassa.export.${name}`;
-function loadSaved(name: string): Saved | undefined {
-  try { const raw = localStorage.getItem(savedKey(name)); return raw ? JSON.parse(raw) as Saved : undefined; } catch { return undefined; }
 }
 
 export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs'; onClose(): void }) {
@@ -27,7 +23,7 @@ export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs';
   const [advanced, setAdvanced] = useState(() => loadAdvanced(saved?.preset ?? 'project'));
   const [quality, setQuality] = useState<ExportQuality>(saved?.quality ?? 'final');
   const [settings, setSettings] = useState<Partial<ExportSettings>>(() => { const { fileName: _, range: __, ...rest } = saved?.settings ?? {}; return rest; });
-  const [fileName, setFileName] = useState(project?.name ?? ''), [nameTouched, setNameTouched] = useState(false);
+  const [fileName, setFileName] = useState(exportFileName(project?.name ?? '', saved)), [nameTouched, setNameTouched] = useState(saved?.nameTouched ?? false);
   const total = project ? projectDuration(project) : 0;
   const marks = useRef(project ? markedRange(project) : undefined).current;
   const [part, setPart] = useState<'all' | 'range'>(marks ? 'range' : 'all'), [from, setFrom] = useState(fmtTime(marks?.[0] ?? 0, 3)), [to, setTo] = useState(fmtTime(marks?.[1] ?? total, 3));
@@ -80,8 +76,9 @@ export function ExportDialog({ initial, onClose }: { initial: 'export' | 'jobs';
     setBusy(true); setError(''); setQueued(undefined);
     const body: ExportSettings = { ...s, fileName: fileName.trim() || project.name, ...(part === 'range' ? { range: [r0!, r1!] as [number, number] } : {}) };
     try {
+      useQuickExport.setState((q) => ({ warnings: { ...q.warnings, [check!.snapshotId]: check!.warnings.length + (check!.review?.length ?? 0) } }));
       setQueued(await useStore.getState().startRender(quality, check!.rev, body));
-      try { localStorage.setItem(savedKey(name), JSON.stringify({ preset, quality, settings } satisfies Saved)); localStorage.setItem(advancedKey, String(preset === 'custom')); } catch { /* remembering is a convenience */ }
+      try { localStorage.setItem(savedKey(name), JSON.stringify({ preset, quality, settings: { ...settings, fileName: body.fileName }, nameTouched } satisfies Saved)); localStorage.setItem(advancedKey, String(preset === 'custom')); } catch { /* remembering is a convenience */ }
     } catch (e) {
       if (e instanceof ApiError && e.body?.code === 'stale_revision') { setError('تغيّر المشروع بعد الفحص. حدّث بيانات المشروع ثم راجع الجاهزية مجددًا.'); void loadPreflight(); }
       else if (e instanceof ApiError && e.body?.code === 'export_not_ready' && e.body.preflight) { setCheck(e.body.preflight as ExportPreflight); setError('تغيّرت جاهزية المشروع. راجع العناصر المطلوبة أدناه.'); }

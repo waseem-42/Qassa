@@ -14,6 +14,7 @@ interface Command { id: string; label: string; group: string; keys?: string[]; w
 
 /** extra words people type for an action (English, colloquial) */
 const WORDS: Partial<Record<ActionId, string>> = {
+  quickExport: 'export render download save mp4 حفظ تنزيل', openExport: 'export settings خيارات تصدير',
   split: 'split cut razor قطع تقطيع شق', delete: 'remove مسح شيل ازاله', trimStart: 'trim ripple delete left قص بدايه', trimEnd: 'trim ripple delete right قص نهايه',
   undo: 'undo رجوع تراجع', redo: 'redo', addText: 'text title عنوان كتابه', comment: 'comment note ملاحظه', play: 'play pause تشغيل ايقاف',
   markIn: 'in mark علامه بدايه جزء التصدير', markOut: 'out mark علامه نهايه جزء التصدير', copy: 'copy', paste: 'paste', duplicate: 'duplicate نسخه',
@@ -36,7 +37,6 @@ function useCommands(): Command[] {
   return useMemo(() => {
     const s = () => useStore.getState(), dialog = useHeaderDialog.getState().setDialog;
     const list: Command[] = [
-      { id: 'export', label: 'تصدير الفيديو', group: 'المشروع', words: 'export render download save mp4 حفظ تنزيل', run: () => { s().setPlaying(false); dialog('export'); } },
       { id: 'review', label: 'مراجعة المونتاج قبل التصدير', group: 'المشروع', words: 'review check فحص اخطاء', run: () => { s().setPlaying(false); dialog('export'); } },
       { id: 'import', label: 'استيراد ملفات', group: 'المشروع', words: 'import add files upload media اضف ملفات رفع', run: pickFiles },
       { id: 'checkpoints', label: 'نقاط الحفظ', group: 'المشروع', words: 'checkpoint backup version نسخه احتياطيه', run: () => dialog('checkpoints') },

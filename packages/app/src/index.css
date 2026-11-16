@@ -846,3 +846,10 @@ button.transport-time:hover { background: var(--color-ink-800); }
 @media (max-width: 1100px) { .folder-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .folder-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .folder-panels { grid-template-columns: 1fr; } .folder-actions .btn { font-size: 12px; } }
 @media (max-width: 390px) { .folder-grid { grid-template-columns: 1fr; } }
+
+.export-split { display: inline-flex; flex-shrink: 0; }
+.export-split .export-trigger { border-start-end-radius: 0; border-end-end-radius: 0; }
+.export-split .export-options { border-start-start-radius: 0; border-end-start-radius: 0; border-inline-start: 1px solid var(--color-ink-700); padding-inline: 9px; }
+.export-notice { position: fixed; z-index: 80; bottom: 20px; inset-inline: 20px; margin-inline: auto; max-width: 760px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; border: 1px solid var(--color-accent); border-radius: 12px; background: var(--color-ink-900); color: var(--color-ink-100); box-shadow: 0 8px 30px color-mix(in srgb, var(--color-ink-950) 60%, transparent); }
+.export-notice > div { flex: 1; min-width: 160px; }
+.export-notice p { font-size: 12px; overflow-wrap: anywhere; }

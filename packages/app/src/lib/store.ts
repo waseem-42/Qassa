@@ -101,7 +101,7 @@ interface State {
   loadCheckpoints(): Promise<void>;
   saveCheckpoint(label: string): Promise<Checkpoint>;
   restoreCheckpoint(id: string, expectedRev: number): Promise<Checkpoint>;
-  startRender(quality: ExportQuality, expectedRev: number, settings?: ExportSettings): Promise<RenderVersion>;
+  startRender(quality: ExportQuality, expectedRev: number, settings?: ExportSettings, marked?: boolean): Promise<RenderVersion>;
   open(name: string): Promise<void>;
   close(): void;
   /** `displayName` when the title the user typed differs from the folder name */
@@ -321,11 +321,11 @@ export const useStore = create<State>((set, get) => ({
     }
     return r.safetyCheckpoint;
   },
-  async startRender(quality, expectedRev, settings) {
+  async startRender(quality, expectedRev, settings, marked) {
     const { name, rev } = get(), sequence = openSequence;
     if (!name) throw new Error('افتح مشروعًا لتصديره.');
     if (rev !== expectedRev) throw new Error('تغيّر المشروع بعد فحص الجاهزية. أعد الفحص قبل التصدير.');
-    const r = await api.post<{ job: Job; render: RenderVersion }>(`${projectPath(name)}/render`, { quality, expectedRev, export: settings });
+    const r = await api.post<{ job: Job; render: RenderVersion }>(`${projectPath(name)}/render`, { quality, expectedRev, export: settings, marked });
     if (sequence === openSequence && get().name === name) set((s) => {
       const job = s.jobs[r.job.id] ?? r.job;
       return { jobs: { ...s.jobs, [r.job.id]: { ...job, render: job.render ?? r.render } } };

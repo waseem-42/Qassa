@@ -4,6 +4,7 @@ import { create } from 'zustand';
 // in App.tsx looks actions up by the pressed combo. Rebinds are kept per browser.
 
 export type ActionId =
+  | 'quickExport' | 'openExport'
   | 'markIn' | 'markOut' | 'clearIn' | 'clearOut' | 'clearMarks' | 'playMarked' | 'timelineMax' | 'nudgeBack' | 'nudgeFwd' | 'nudgeBack10' | 'nudgeFwd10' | 'addMedia'
   | 'play' | 'frameBack' | 'frameFwd' | 'secBack' | 'secFwd' | 'jumpBack' | 'jumpFwd' | 'start' | 'end' | 'prevCut' | 'nextCut'
   | 'split' | 'delete' | 'deselect' | 'undo' | 'redo' | 'comment' | 'addText' | 'zoomIn' | 'zoomOut' | 'zoomFit' | 'shortcuts' | 'styles' | 'largeWave' | 'magnet' | 'copyLook' | 'pasteLook' | 'copy' | 'paste' | 'duplicate' | 'trimStart' | 'trimEnd' | 'palette' | 'rate';
@@ -11,6 +12,8 @@ export type ActionId =
 export interface Action { id: ActionId; label: string; group: string; keys: string[] }
 
 export const ACTIONS: Action[] = [
+  { id: 'quickExport', label: 'تصدير بالإعدادات الأخيرة', group: 'المشروع', keys: ['Ctrl+E'] },
+  { id: 'openExport', label: 'إعدادات التصدير', group: 'المشروع', keys: ['Ctrl+Shift+E'] },
   { id: 'timelineMax', label: 'تكبير مساحة التايملاين / استعادة', group: 'العرض', keys: ['Shift+F'] },
   { id: 'nudgeBack', label: 'تحريك المحدد فريم للخلف', group: 'التعديل', keys: [','] },
   { id: 'nudgeFwd', label: 'تحريك المحدد فريم للأمام', group: 'التعديل', keys: ['.'] },

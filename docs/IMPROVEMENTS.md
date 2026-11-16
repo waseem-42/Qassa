@@ -463,3 +463,8 @@ One 82 s full-frame HTML graphic over a voice track, later split into 8 scene pi
 
 - Long ffmpeg filtergraphs use relative cache files, including gain substitution; exports skip outside-range text/graphic preparation. Whole-edit loudness is cached with sound/source-sensitive keys, preserving normalization across marked exports. Animated-heavy full/marked renders now succeed; warm 5 s ranges measured 1.68 s static / 1.62 s animated (three-run medians).
 - 376 tests, typecheck and app build pass. Strict decoded-frame parity, complete V1 range pruning and cold-full performance acceptance remain open; details and timings are in `docs/research/night-2026-11.md`. Isolated QA only; no user projects or style history changed.
+
+## 2026-11-16 — one-click repeat export (Task 28)
+
+- Header split export uses saved, validated settings; first use opens settings. Progress and a persistent notice show filename/duration, Play/Reveal, warnings and failures. Current marks have their own menu action. Preset suffixes and typed names persist, and outputs remain versioned. Ctrl+E / Ctrl+Shift+E are rebindable and searchable.
+- Chrome verified 1 export click + 1 Reveal (no dialog), unchanged ffprobe output, warnings/blockers/stale revision, marked output and remembered names at desktop/laptop sizes. 379 tests/76 files, typecheck and build pass. Evidence and caveats: `docs/research/night-2026-11.md`, `artifacts/qa/task28/`.

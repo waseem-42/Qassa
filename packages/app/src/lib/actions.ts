@@ -5,7 +5,8 @@ import { useTimelineView } from './timeline-view.ts';
 import { placeMediaRun, removeMedia, useMediaSelection } from './import.ts';
 import { deleteOps } from './layout.ts';
 import { trimToPlayhead } from './trim-playhead.ts';
-import { usePalette } from './palette.ts';
+import { useHeaderDialog, usePalette } from './palette.ts';
+import { quickExport } from './quick-export.ts';
 import { deleteSelectedKey, useKeySel } from '../components/Timeline.tsx';
 
 /** Runs one shortcut action — from its key (App.tsx) or from the command search. `target` is the focused element. */
@@ -16,6 +17,8 @@ export function runAction(action: ActionId, target?: EventTarget | null): unknow
   if (!p) return;
   const fps = p.settings.fps;
   switch (action) {
+    case 'quickExport': return quickExport();
+    case 'openExport': return useHeaderDialog.getState().setDialog('export');
     case 'timelineMax': return useTimelineView.getState().toggleMax();
     case 'addMedia': { const { ids } = useMediaSelection.getState(); if (ids.length) return placeMediaRun(ids, s.time); return; }
     case 'nudgeBack': case 'nudgeFwd': case 'nudgeBack10': case 'nudgeFwd10': {

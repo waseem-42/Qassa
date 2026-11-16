@@ -4,6 +4,7 @@ import { BOTH_PANELS, useStore } from '../lib/store.ts';
 import { Icon, Wordmark } from './Brand.tsx';
 import { Checkpoints } from './Checkpoints.tsx';
 import { ExportDialog } from './ExportDialog.tsx';
+import { QuickExport } from './QuickExport.tsx';
 import { RuntimeSettings, useRuntime } from './RuntimeSettings.tsx';
 import { PopupMenu, type MenuItem } from './PopupMenu.tsx';
 import { keysFor, prettyKey, useKeys } from '../lib/keys.ts';
@@ -68,7 +69,7 @@ export function Header() {
       <span className="connection-pill" data-connected={connection === 'connected'} role="status">{connection !== 'connected' && <><i />{connection === 'connecting' ? 'جارٍ الاتصال…' : 'انقطع الاتصال — أحاول مرة ثانية'}</>}</span>
       {project && <button className="btn checkpoint-trigger" aria-label="نقاط حفظ المشروع" title="نقاط حفظ المشروع" onClick={() => { useStore.getState().setPlaying(false); setDialog('checkpoints'); }}><Icon name="bookmark" size={17} /><span>نقاط الحفظ</span></button>}
       {project && <button className="btn task-button" onClick={() => setDialog('jobs')} title="التحليل والتصدير"><Icon name="clock" />المهام {active.length > 0 && <span className="count-badge">{active.length}</span>}</button>}
-      {project && <button className="btn btn-primary export-trigger" onClick={() => { useStore.getState().setPlaying(false); setDialog('export'); }}><Icon name="download" size={17} />تصدير</button>}
+      {project && <QuickExport />}
     </header>
     {dialog && project && (dialog === 'checkpoints' ? <Checkpoints key={name} onClose={() => setDialog(undefined)} /> : <ExportDialog key={name} initial={dialog} onClose={() => setDialog(undefined)} />)}
     <RuntimeSettings />
