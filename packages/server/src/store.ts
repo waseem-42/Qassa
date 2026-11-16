@@ -132,6 +132,7 @@ export class Store extends EventEmitter {
   apply(name: string, ops: Op[], author = 'user', opts: { history?: boolean; allowProjectRestore?: boolean } = {}): { project: Project; rev: number; notices: string[] } {
     const e = this.get(name);
     const notices: string[] = [];
+    const before = e.project;
     const next = applyOps(e.project, ops, { words: (m) => this.transcript(name, m)?.words, allowProjectRestore: opts.allowProjectRestore, report: (message) => notices.push(message) });
     this.commit(name, e, next, author, () => {
       if (opts.history !== false) {
@@ -144,6 +145,7 @@ export class Store extends EventEmitter {
       const use = e.project.stylesUsed.find((s) => s.id === op.id);
       if (use) this.emit('style_used', name, use);
     }
+    this.emit('ops', { name, ops, before, project: e.project });
     return { project: e.project, rev: e.rev, notices };
   }
 

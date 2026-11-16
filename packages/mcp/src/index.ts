@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { ExportSettings, Op, reviewLine, type ReviewFinding } from '@edit/shared';
 import { desktopConnection } from './connection.ts';
 import { toolSchema } from './tool-schema.ts';
+import { projectState } from './project-state.ts';
 
 // Claude's hands on the editor. Every tool calls the local edit-tool server, so whatever
 // Claude changes shows up live in the editor UI — and the other way round.
@@ -38,7 +39,7 @@ async function ensureServer(): Promise<string> {
 
 async function call(path: string, body?: unknown, raw = false, method?: 'PATCH' | 'DELETE'): Promise<any> {
   const base = await ensureServer();
-  const res = await fetch(base + path, body === undefined && !method ? undefined : { method: method ?? 'POST', ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) });
+  const res = await fetch(base + path, { method: method ?? (body === undefined ? 'GET' : 'POST'), headers: { ...(process.env.EDIT_AGENT_TASK_ID ? { 'x-qassa-task': process.env.EDIT_AGENT_TASK_ID } : {}), ...(body === undefined ? {} : { 'content-type': 'application/json' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(`${err.error ?? res.statusText}${err.issues ? `\n${JSON.stringify(err.issues, null, 1)}` : ''}`);
@@ -126,8 +127,8 @@ tool('checkpoint_restore', 'Restore a saved editing state after the user request
   } catch (e) { return fail(e); }
 });
 
-tool('project_state', 'Read the current project JSON, session revision and undo history. Use rev for checkpoint restoration and optimistic export guards. Project folder ID is independent of display name.', { project }, async (a) => {
-  try { return text(JSON.stringify(await call(p(a.project)), null, 1)); } catch (e) { return fail(e); }
+tool('project_state', 'Read revision/history and a window of clips (default 40). Start with project_summary. clipIds reads exact clip settings; from/limit pages the timeline; full:true explicitly requests the entire JSON. clipWindow.truncated warns about omitted clips. Project folder ID is independent of display name.', { project, from: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(100).default(40), clipIds: z.array(z.string()).max(40).optional(), full: z.boolean().default(false) }, async (a) => {
+  try { return text(JSON.stringify(projectState(await call(p(a.project)), a))); } catch (e) { return fail(e); }
 });
 
 tool('project_create', 'Create a project (folders: source, refs, analysis, graphics, luts, cache, renders). Idempotent.', { name: project, start: z.enum(['video', 'podcast', 'empty']).optional() }, async ({ name, start }) => {

@@ -120,7 +120,8 @@ interface State {
   adjustVolume(db: number): void;
   flushVolume(): Promise<void>;
   setPlaying(p: boolean): void;
-  select(ids: string[]): void;
+  select(ids: string[], inspect?: boolean): void;
+  inspectSelection: boolean;
   setZoom(z: number): void;
   notify(text: string, kind?: 'error' | 'info'): void;
   loadMediaData(mediaId: string): Promise<void>;
@@ -200,6 +201,7 @@ export const useStore = create<State>((set, get) => ({
     if (await get().ops([{ op: 'delete_range', start: range[0], end: range[1] }, { op: 'set_marks', in: null, out: null }])) { get().select([]); get().seek(range[0]); }
   },
   selected: [],
+  inspectSelection: true,
   zoom: 40,
   magnet: (() => { try { return localStorage.getItem('qassa.magnet') !== '0'; } catch { return true; } })(),
   largeWave: (() => { try { return localStorage.getItem('qassa.largeWave') === '1'; } catch { return false; } })(),
@@ -522,8 +524,8 @@ export const useStore = create<State>((set, get) => ({
     if (playing && p && get().time >= projectDuration(p) - 0.05) set({ time: 0 });
     set({ playing, playRange: undefined });
   },
-  select(selected) {
-    set({ selected });
+  select(selected, inspectSelection = true) {
+    set({ selected, inspectSelection });
   },
   setZoom(zoom) {
     set({ zoom: Math.max(1, Math.min(400, zoom)) });

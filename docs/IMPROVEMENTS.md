@@ -476,3 +476,9 @@ One 82 s full-frame HTML graphic over a voice track, later split into 8 scene pi
 
 - Imported five generated 1080p/4K/HEVC/long-screen sources normally into an isolated 10 min edit. Headless and headed Chrome use proxies and reuse analysis on reopen; no >100 ms long tasks in measured playback/scrub/drag. Full preparation 112.93 s; final 1080p exports 11.65 s/video-minute cold and 7.89 warm before the UI changes.
 - Deferred native GL setup until after first paint, removed initial forced timeline width layout, and added visible loading/preparation statuses. Native startup still exceeds 100 ms; cold Vite module waits and limited single-sample results are explicit in docs/research/night-2026-11.md. 382 tests, typecheck/build pass; no user data or original servers touched.
+
+## 2026-11-16 — AI task boundaries and smaller state (Task 31, partial)
+
+- Finished AI cards list grouped op changes with seek/select, and restore all task batches in one undoable action. Outside writes conservatively disable full restore with a reason; user edits survive. Session baselines are bounded; persisted change lists survive restart while expired undo is explicitly unavailable.
+- Task logs count tools/result sizes without content. MCP state defaults to 40 clips with explicit truncation, paging/exact ids/full opt-in; heavy payload 77,554→6,277 bytes. Prompts prefer summaries and batched edits; deep requests show a time estimate. Both edit-tool skill copies updated.
+- 387 tests, typecheck/build and deterministic Chrome/real-MCP QA pass. Paid before/after comparison remains blocked by CLI login (corrected baseline recorded $0.000); no cost-speed claim. Details and invocation caveats in docs/research/night-2026-11.md.

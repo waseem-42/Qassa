@@ -37,6 +37,7 @@ import { registerExportRoutes } from './export-preflight.ts';
 import { registerClipTools } from './clip-tools.ts';
 import { projectCover, STRIP_FRAMES } from './covers.ts';
 import { routeTask, runAgent, setAgentProjectDir, taskLog, type AgentRequest } from './agent.ts';
+import { AgentEdits } from './agent-edits.ts';
 import { recordCacheUse, registerRenderCache } from './render-cache.ts';
 
 const store = new Store();
@@ -47,6 +48,11 @@ const jobs = new Jobs(join(DATA_DIR, 'logs/jobs.json'));
 const agentJobs = new Jobs(join(DATA_DIR, 'logs/agent-jobs.json'));
 setAgentProjectDir(projectDir);
 const app = Fastify({ logger: { level: 'warn' }, bodyLimit: 20 * 1024 * 1024 });
+const agentEdits = new AgentEdits(store);
+app.addHook('onRequest', (req, _reply, done) => {
+  const id = req.headers['x-qassa-task'];
+  agentEdits.run(typeof id === 'string' ? id : undefined, done);
+});
 
 await app.register(fastifyWebsocket);
 await app.register(fastifyMultipart, { defCharset: 'utf8', limits: { fileSize: 64 * 1024 * 1024 * 1024 } });
@@ -596,7 +602,13 @@ function startAgent(name: string, body: AgentRequest) {
   if (!text) throw new OpError('اكتب الطلب أول');
   if (!['quick', 'standard', 'deep'].includes(body.tier)) throw new OpError('tier must be quick, standard or deep');
   return agentJobs.add('agent', name, text.length > 60 ? `${text.slice(0, 60)}…` : text,
-    (ctx) => runAgent(ctx, name, { text, tier: body.tier, time: body.time, selected: body.selected, notes, ideas: body.ideas }), notes ? { notes } : body.ideas ? { ideas: true } : undefined);
+    async (ctx) => {
+      agentEdits.begin(name, ctx.job.id);
+      try {
+        const result = await runAgent(ctx, name, { text, tier: body.tier, time: body.time, selected: body.selected, notes, ideas: body.ideas });
+        return { ...result, edits: agentEdits.finish(name, ctx.job.id) };
+      } finally { agentEdits.finish(name, ctx.job.id); }
+    }, notes ? { notes } : body.ideas ? { ideas: true } : undefined);
 }
 
 /** settings.aiNotes: each new user comment starts its own task, unless it needs the deep tier (that waits for a click). */
@@ -609,6 +621,11 @@ function autoNotes(name: string, added: Note[]) {
 }
 
 app.get<P>('/api/projects/:name/agent/log', async (req) => taskLog(projectDir(req.params.name)));
+app.get<{ Params: { name: string; id: string } }>('/api/projects/:name/agent/:id/edits', async (req) => agentEdits.status(req.params.name, req.params.id));
+app.post<{ Params: { name: string; id: string } }>('/api/projects/:name/agent/:id/undo', async (req) => {
+  if (agentJobs.hasActive(req.params.name)) throw new OpError('انتظر اكتمال مهام الذكاء قبل التراجع الكامل.');
+  return agentEdits.undo(req.params.name, req.params.id);
+});
 
 app.get<P & { Params: { mediaId: string; file: string } }>('/api/projects/:name/analysis/:mediaId/:file', async (req, reply) => {
   if (!/^[\w.-]+\.json$/.test(req.params.file)) return reply.code(400).send({ error: 'bad file' });

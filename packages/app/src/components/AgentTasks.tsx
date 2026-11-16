@@ -102,6 +102,7 @@ export function AgentTasks({ compact = false }: { compact?: boolean }) {
               <span className="text-ink-200">{info.model} · جهد {info.effort === 'low' ? 'منخفض' : info.effort === 'medium' ? 'متوسط' : 'عالٍ'}</span>
               {' — '}{tier ? 'اخترته أنت' : (route ?? local)?.why}{route?.cost ? ` (التصنيف كلّف ${usd(route.cost)})` : ''}
               <div>التكلفة المتوقعة <span className="text-ink-200"><Usd>{`${usd(info.estimate[0])}–${usd(info.estimate[1])}`}</Usd></span> · الحد الأقصى <Usd>{usd(info.budget)}</Usd></div>
+              {shown === 'deep' && <div>قد يأخذ ~5 دقائق؛ الوقت يختلف حسب الطلب.</div>}
             </div>
           ) : <div className="text-[11px] text-ink-500">ما عرفت حجم الطلب من كلماته — اضغط «اطلب» ويصنّفه نموذج صغير (أقل من سنت)، أو اختر بنفسك.</div>}
         </div>
@@ -128,12 +129,34 @@ export function AgentTasks({ compact = false }: { compact?: boolean }) {
 
 /** 75 → 1:15 */
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+interface TaskEdits { available: boolean; reason?: string; undone?: boolean; changes: { label: string; count: number; at: number; clipIds: string[] }[] }
 
 function TaskCard({ job }: { job: Job }) {
   const live = job.status === 'queued' || job.status === 'running';
-  const r = job.result as { reply?: string; cost?: number; model?: string; durationMs?: number; usage?: Usage } | undefined;
+  const r = job.result as { reply?: string; cost?: number; model?: string; durationMs?: number; usage?: Usage; edits?: TaskEdits } | undefined;
   // a running task ticks once a second so its elapsed time moves between progress reports
   const [now, setNow] = useState(Date.now);
+  const rev = useStore((s) => s.rev);
+  const [edits, setEdits] = useState<TaskEdits>();
+  const [undoing, setUndoing] = useState(false);
+  useEffect(() => {
+    if (live) return;
+    let current = true;
+    api.get<TaskEdits>(`${projectPath(job.project)}/agent/${job.id}/edits`).then((status) => {
+      if (current) setEdits({ ...status, changes: status.changes.length ? status.changes : r?.edits?.changes ?? [] });
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [job.id, job.project, job.result, live, rev]);
+  const undoTask = async () => {
+    setUndoing(true);
+    try {
+      await useStore.getState().flushVolume();
+      const r = await api.post<any>(`${projectPath(job.project)}/agent/${job.id}/undo`, {});
+      if (useStore.getState().name === job.project && r.rev >= useStore.getState().rev) useStore.setState({ project: r.project, rev: r.rev, history: r.history, selected: [] });
+      setEdits(r);
+    } catch (e) { useStore.getState().notify((e as Error).message); }
+    finally { setUndoing(false); }
+  };
   useEffect(() => {
     if (!live) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -156,6 +179,14 @@ function TaskCard({ job }: { job: Job }) {
       )}
       {live && <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-ink-500" dir="auto" title={job.message}>{job.status === 'queued' ? 'ينتظر دوره…' : job.message ?? 'يبدأ…'}</div>}
       {job.status === 'done' && r?.reply && <p className="mt-1 whitespace-pre-line text-[11px] leading-5 text-ink-300" dir="auto">{r.reply}</p>}
+      {!live && edits && <div className="mt-2 space-y-1">
+        {edits.changes.map((change) => <button key={change.label} className="btn btn-ghost h-auto w-full justify-start text-[11px]" onClick={() => {
+          const s = useStore.getState();
+          s.seek(change.at); s.select(change.clipIds.filter((id) => s.project?.clips.some((c) => c.id === id)), false);
+        }}>{change.label} · {change.count}</button>)}
+        {!!edits.changes.length && <button className="btn h-auto w-full text-[11px]" disabled={!edits.available || undoing} onClick={undoTask}>تراجع عن كل ما سوّاه</button>}
+        {edits.reason && <p className="text-[11px] leading-5 text-ink-500">{edits.reason}</p>}
+      </div>}
       {job.status === 'done' && r?.model && <p className="num mt-1 text-[11px] text-ink-500" title="التوكنز اللي استخدمها — حد الخمس ساعات يحسبها (قراءة الكاش أخف بكثير)">{usageLine(r.model, r.usage, r.durationMs ?? 0)}</p>}
       {job.status === 'error' && <p className="mt-1 text-[11px] leading-5 text-cut-text" dir="auto">{job.error}</p>}
       {job.status === 'cancelled' && <p className="mt-1 text-[11px] text-ink-500">أُوقف.</p>}

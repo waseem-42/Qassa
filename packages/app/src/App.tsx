@@ -129,7 +129,7 @@ function Workspace() {
   }, [mediaOverlay, wide]);
   // selecting a clip opens its properties (even when the tools panel is closed)
   useEffect(() => {
-    if (selected.length) useStore.getState().setPanel('inspect');
+    if (selected.length && useStore.getState().inspectSelection) useStore.getState().setPanel('inspect');
   }, [selected]);
   return (
     <div className="editor-workspace" data-tools={panels.tools} data-media={panels.media} data-media-overlay={mediaOverlay && !wide}>
