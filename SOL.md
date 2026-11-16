@@ -1372,3 +1372,34 @@ One sequential local commit per task, on master; no push. Tasks 27–32 were all
 |32|done|this commit — remembered groups, changed markers and ≤15 measured default controls; daily trial paths preserved.|
 
 **Claude: look first** at Task 27's export-parity/cold-time gaps before accepting render correctness/performance, then Task 31's task-boundary refusal semantics and the required authenticated before/after brief. Task 30's profiles separate native startup/Vite waits from smooth measured editing; do not call all real footage fast from these short samples. Task 29's small median increases are disclosed, not hidden. Detailed tables, limitations and runnable QA evidence: docs/research/night-2026-11.md and artifacts/qa/task27–task32/. No further task was started.
+
+### Review by Claude — night run Tasks 27–32 (2026-11-16)
+
+All six commits read; 388 tests, typecheck pass on `270a811`. Not yet walked by hand in the browser by Claude or the user.
+
+- **Task 27 — accepted.** Claude reran the heavy fixture on `270a811` (`artifacts/qa/claude-1116/`): full cold 282.8 s, full warm 42.9 s (Task 26: 119.8 / 102.1). The cold time is real and repeats, but it is not from this task: ≈193 s of it is the «text» stage before graphics, and `packages/server/src/textimg.ts` has not changed since `b7a4f3b`. It renders 121 texts one by one, about 1.6 s each. Task 26's 119.8 s cold run most likely had those images cached already. This becomes Task 33. The frame-hash line was Claude's mistake (two lossy encodes never match bit for bit); duration and frame counts are the right check. V1 segments outside a marked range on a cold cache stay open, low priority.
+- **Task 28 — accepted** on the report and the diff.
+- **Task 29 — accepted.** The 1–3 ms increases are not a failure; the «no operation got slower» line meant what a hand can feel.
+- **Task 30 — accepted as a measurement.** Real-size footage plays on proxies with no long task after loading. The user's «slow and hangs» is still not reproduced; Claude is asking the user where it happens.
+- **Task 31 — accepted, one thing to watch.** `project_state` now returns 40 clips by default. This also changes what Claude sees in ordinary MCP sessions, so the truncation notice must stay loud. The paid before/after comparison is still open (the test run was not logged in).
+- **Task 32 — accepted** on the report and the diff.
+
+---
+
+## Task 33 — The «text» stage of a first export (after the night run)
+
+Measured by Claude on `270a811`: a first export of the heavy fixture (121 texts, 10 min) spends about 193 s of 283 s preparing text images, with the progress bar at 0 and the stage «text». A repeat export takes 43 s. Every caption-heavy video pays this once per new or changed text, and the preview export a user makes to check captions pays it too.
+
+Cause (`packages/server/src/textimg.ts:60`): one page, one text at a time, and each one calls `page.setContent` with the whole document, including the `@font-face` CSS with the fonts embedded, then waits for `document.fonts.ready`, then takes a full-frame PNG screenshot.
+
+Do:
+- Load the document and the fonts once per batch, then swap only the text layer for each clip. Check that the picture is the same as today (pixel compare on a sample of presets, Arabic and Latin, highlighted captions included).
+- Render in parallel on a few pages or browser workers, as graphics capture does (`4018b84`), within a sane limit.
+- Report progress during the stage (`ctx.update` with n of total), so the bar moves and says «نصوص 40/121».
+- The cache key and the cached file layout stay as they are, so existing caches remain valid.
+
+**Done when:**
+- The heavy fixture's cold «text» stage takes under 30 s (it was ≈193 s). Medians of three cold runs, with the stage time now recorded in `timings.text`.
+- Images are pixel-identical to the old path for the sampled texts, or the Report shows the differing pixels and why.
+- The export shows moving progress during the text stage.
+- `npm test`, `npm run typecheck` and the app build pass. Contact sheets and covers (`sheets.ts`) still work, since they use the same function.
