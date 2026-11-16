@@ -41,6 +41,11 @@ describe('source style library', () => {
 });
 
 describe('favourites', () => {
+  it('lists a favourite that has no picture and sits in a hidden use (OneTake)', () => {
+    const listed = searchStyleCatalog('', '', 0, 30, '', { favorites: ['onetake:workflow', 'lemo:art-deco'], onlyPreview: true, curated: true });
+    expect(listed.entries.map((e) => e.id)).toEqual(['onetake:workflow', 'lemo:art-deco']);
+  });
+
   it('keeps the newest first, ignores repeats, refuses unknown ids and lists favourites in that order', async () => {
     const { mkdtempSync, rmSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');

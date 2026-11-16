@@ -9,9 +9,9 @@ import { useFavorites } from '../lib/favorites.ts';
 import { RecentStyles, rememberStyle, StyleUsage } from './RecentStyles.tsx';
 import { Modal } from './Modal.tsx';
 
-// The styles window, in three places: apply now (looks and editing recipes, one click, undoable), discover ideas
-// (the reference libraries sorted by what they are for, built with the assistant), and mine (favourites, recent,
-// saved styles).
+// The styles window keeps two things apart: editing styles (how the video is cut and moves: ready recipes, and the
+// reference libraries built with the assistant) and identity (colours of texts, graphics and captions, and the grade).
+// «مكتبتي» holds the favourites of each, what was used last, and the saved identities.
 
 type Saved = StyleDef & { saved: true; createdAt: string; from?: string };
 
@@ -28,7 +28,7 @@ export function Styles() {
   const [transitions, setTransitions] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [busy, setBusy] = useState<string>();
-  const [tab, setTab] = useState<'apply' | 'discover' | 'mine'>('apply');
+  const [tab, setTab] = useState<'apply' | 'discover' | 'mine'>('discover');
   useEffect(() => {
     if (!open || !target) return;
     setTab(target.source === 'library' ? 'discover' : target.source === 'saved' ? 'mine' : 'apply');
@@ -92,7 +92,7 @@ export function Styles() {
     try {
       const r = await api.post(`${projectPath(name)}/apply-style`, { id: s.id, captions, transitions });
       if (useStore.getState().name === name && r.rev >= useStore.getState().rev) useStore.setState({ project: r.project, rev: r.rev, history: r.history });
-      notify(`طُبّق ستايل «${s.name}» — تقدر تتراجع بـ Ctrl+Z`, 'info');
+      notify(`طُبّقت هوية «${s.name}» — تقدر تتراجع بـ Ctrl+Z`, 'info');
     } catch (e) {
       notify((e as Error).message);
     } finally {
@@ -100,13 +100,13 @@ export function Styles() {
     }
   };
   const save = async () => {
-    if (!saveName.trim()) return notify('اكتب اسم للستايل');
+    if (!saveName.trim()) return notify('اكتب اسم للهوية');
     if (saving) return;
     setSaving(true);
     try {
       await api.post('/api/styles', { project: name, name: saveName });
       setSaveName('');
-      notify('انحفظ الستايل — تقدر تطبّقه على أي مشروع', 'info');
+      notify('انحفظت الهوية — تقدر تطبّقها على أي مشروع', 'info');
       await load();
     } catch (e) {
       notify((e as Error).message);
@@ -116,10 +116,10 @@ export function Styles() {
     setDeleting(true);
     try {
       const response = await fetch(`/api/styles/${encodeURIComponent(s.id)}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('تعذّر حذف الستايل. حاول مرة ثانية.');
+      if (!response.ok) throw new Error('تعذّر حذف الهوية. حاول مرة ثانية.');
       setDeleteTarget(undefined);
       await load();
-      notify('تم حذف الستايل المحفوظ', 'info');
+      notify('تم حذف الهوية المحفوظة', 'info');
     } catch (e) { notify((e as Error).message); }
     finally { setDeleting(false); }
   };
@@ -141,54 +141,59 @@ export function Styles() {
     <label><input type="checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} /> تحديث تنسيق الكابشن</label>
     <label><input type="checkbox" checked={transitions} onChange={(e) => setTransitions(e.target.checked)} /> انتقالات على كل القصات</label>
   </div>;
-  const status = loadError ? <div className="style-empty" role="alert"><h3>تعذّر تحميل الستايلات</h3><p>{loadError}</p><button className="btn" onClick={load}>إعادة المحاولة</button></div> : loading ? <p role="status" className="py-8 text-center text-sm text-ink-400">جارٍ تحميل الستايلات…</p> : null;
+  const status = loadError ? <div className="style-empty" role="alert"><h3>تعذّر تحميل الهويات</h3><p>{loadError}</p><button className="btn" onClick={load}>إعادة المحاولة</button></div> : loading ? <p role="status" className="py-8 text-center text-sm text-ink-400">جارٍ تحميل الهويات…</p> : null;
 
   return (
-    <Modal title="مكتبة الستايلات" subtitle="اختر أسلوب المونتاج أو اضبط الهوية البصرية لمشروعك." full onClose={() => setStylesOpen(false)}>
+    <Modal title="مكتبة الستايلات" subtitle="ستايلات المونتاج تغيّر القص والحركة والكابشن. الهوية تغيّر الألوان فقط." full onClose={() => setStylesOpen(false)}>
     <div className="styles-window flex flex-col" dir="rtl">
       <nav className="styles-navigation" aria-label="أقسام الستايلات">
-        {([['apply', 'طبّق على مشروعك', 'هويات ووصفات بضغطة'], ['discover', 'اكتشف أفكار', 'مراجع مرتبة حسب الاستخدام'], ['mine', 'مكتبتي', `${favIds.length} مفضلة · ${lib.saved.length} محفوظ`]] as const).map(([id, label, detail]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}><b>{label}</b><span>{detail}</span></button>)}
+        {([['discover', 'ستايلات المونتاج', 'وصفات جاهزة وأفكار للقص والحركة'], ['apply', 'الهوية والألوان', 'ألوان النصوص والرسوم والكابشن'], ['mine', 'مكتبتي', `${favIds.length} مفضلة · ${lib.saved.length} هوية محفوظة`]] as const).map(([id, label, detail]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}><b>{label}</b><span>{detail}</span></button>)}
       </nav>
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        {tab === 'discover' ? <SourceLibrary key={name} initialId={target?.source === 'library' ? target.id : undefined} /> : tab === 'apply' ? <>
-          <div className="style-intro"><div><span className="style-eyebrow">يتطبق الحين، ويتراجع بـ Ctrl+Z</span><h2>نفس اللقطة. إحساس مختلف.</h2><p>الهوية تغيّر ألوان النصوص والرسوم والكابشن ودرجة الألوان، والمعاينة على لقطة من مشروعك. الوصفات تحت ترتب الحركة والكابشن والعناوين.</p></div></div>
+        {tab === 'discover' ? <>
+          <section className="style-fav-section"><EditingStyles key={name} /></section>
+          <section className="style-fav-section"><h3 className="style-section-title">أفكار من مكتبات الستايلات</h3><SourceLibrary key={name} initialId={target?.source === 'library' ? target.id : undefined} /></section>
+        </> : tab === 'apply' ? <>
+          <div className="style-intro"><div><span className="style-eyebrow">يتطبق الحين، ويتراجع بـ Ctrl+Z</span><h2>نفس اللقطة. ألوان مختلفة.</h2><p>الهوية تغيّر ألوان النصوص والرسوم والكابشن ودرجة الألوان فقط، والمعاينة على لقطة من مشروعك. القص والحركة ما يتغيرون؛ هذي في «ستايلات المونتاج».</p></div></div>
           {lookControls}
           {status ?? <>
             <div className="style-kinds" role="group" aria-label="نوع الفيديو"><button aria-pressed={!kind} onClick={() => setKind('')}>الكل <span className="num">{lib.presets.length}</span></button>{kinds.map((k) => <button key={k} aria-pressed={kind === k} onClick={() => setKind(kind === k ? '' : k)}>{k} <span className="num">{lib.presets.filter((s) => s.tags?.includes(k)).length}</span></button>)}</div>
             {gallery(shownLooks)}
             {!shownLooks.length && <div className="style-empty"><h3>لا توجد هوية بهذا البحث</h3><p>جرّب كلمة ثانية أو نوع آخر.</p><button className="btn" onClick={() => { setLookQuery(''); setKind(''); }}>عرض الكل</button></div>}
           </>}
-          <section className="style-fav-section"><h3 className="style-section-title">وصفات مونتاج</h3><EditingStyles key={name} /></section>
         </> : <>
           <section className="style-fav-section">
-            <h3 className="style-section-title">♥ المفضلة <span className="num">{favIds.length}</span></h3>
-            {!!favLooks.length && <div className="mb-5">{gallery(favLooks)}</div>}
+            <h3 className="style-section-title">♥ ستايلات مونتاج مفضلة <span className="num">{favIds.length - favLooks.length}</span></h3>
             <SourceLibrary key={`favorites-${name}`} favoritesOnly />
           </section>
+          {!!favLooks.length && <section className="style-fav-section">
+            <h3 className="style-section-title">♥ هويات مفضلة <span className="num">{favLooks.length}</span></h3>
+            {gallery(favLooks)}
+          </section>}
           <section className="style-fav-section">
             <h3 className="style-section-title">آخر ما استخدمت</h3>
             <RecentStyles onUse={(id, source) => { if (source === 'library') useStore.getState().openStyle(id, source); else { const style = looks.find((s) => s.id === id); if (style) view(style); } }} />
           </section>
           <section className="style-fav-section">
-            <h3 className="style-section-title">ستايلاتي المحفوظة <span className="num">{lib.saved.length}</span></h3>
+            <h3 className="style-section-title">هوياتي المحفوظة <span className="num">{lib.saved.length}</span></h3>
             <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-ink-800 bg-ink-900 p-3">
-              <span className="text-sm text-ink-300">احفظ شكل هذا المشروع كستايل تستخدمه بعدين:</span>
-              <input className="field h-8 w-56" aria-label="اسم الستايل المحفوظ" placeholder="اسم الستايل… مثلاً: قناتي" value={saveName} onChange={(e) => setSaveName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
+              <span className="text-sm text-ink-300">احفظ ألوان هذا المشروع كهوية تستخدمها بعدين:</span>
+              <input className="field h-8 w-56" aria-label="اسم الهوية المحفوظة" placeholder="اسم الهوية… مثلاً: قناتي" value={saveName} onChange={(e) => setSaveName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
               <button className="btn btn-primary h-8" disabled={saving || !saveName.trim()} onClick={save}>{saving ? 'جارٍ الحفظ…' : 'احفظ الهوية الحالية'}</button>
               <div className="flex-1" />
               {refs.length > 0 ? refs.map((m) => (
                 <button key={m.id} className="btn h-8 text-xs" onClick={() => api.post(`${projectPath(name)}/style`, { refMediaId: m.id, strength: 0.6, apply: 'default' }).then(() => notify(`يبني ألوان من «${m.name}»…`, 'info')).catch((e) => notify(e.message))}>
                   ✦ ألوان من الرفرنس «{m.name}»
                 </button>
-              )) : <span className="text-xs text-ink-500">عندك مقطع بستايل تحبه؟ ارفعه كـ «رفرنس» من الوسائط وتقدر تاخذ ألوانه.</span>}
+              )) : <span className="text-xs text-ink-500">عندك مقطع بألوان تحبها؟ ارفعه كـ «رفرنس» من الوسائط وتقدر تاخذ ألوانه.</span>}
             </div>
             {status ?? (lib.saved.length ? gallery(lib.saved) : <p className="style-empty-line">اضبط ألوان المشروع والنصوص، ثم احفظ هويتك من الحقل بالأعلى — تقدر تطبّقها على أي مشروع.</p>)}
           </section>
         </>}
       </div>
     </div>
-    {detail && <Modal wide title={detail.name} subtitle={lib.presets.some((s) => s.id === detail.id) ? 'ستايل مضمّن في قَصّة' : 'ستايل محفوظ محليًا'} onClose={() => setDetail(undefined)}><div className="modal-body style-look-detail"><StyleCard s={detail} frame={frame} project={project} busy={!!busy} current={isCurrent(detail)} used={project.stylesUsed.some((u) => u.id === detail.id)} onApply={() => apply(detail)} /><p className="text-xs text-ink-400">{lib.presets.some((s) => s.id === detail.id) ? 'المصدر: مكتبة قَصّة المحلية.' : 'المصدر: هوية محفوظة من مشروعك؛ حقوق الأصول تتبع مصادرها.'}</p><StyleUsage id={detail.id} /></div></Modal>}
-    {deleteTarget && <Modal title={`حذف «${deleteTarget.name}»؟`} onClose={() => !deleting && setDeleteTarget(undefined)}><div className="p-5"><p className="mb-4 text-sm text-ink-400">سيُحذف من ستايلاتك المحفوظة. إعدادات المشاريع التي استخدمته ستبقى كما هي.</p><div className="flex gap-2"><button className="btn text-cut-text" disabled={deleting} onClick={() => remove(deleteTarget)}>{deleting ? 'جارٍ الحذف…' : 'حذف الستايل'}</button><button className="btn" disabled={deleting} onClick={() => setDeleteTarget(undefined)}>إلغاء</button></div></div></Modal>}
+    {detail && <Modal wide title={detail.name} subtitle={lib.presets.some((s) => s.id === detail.id) ? 'هوية مضمّنة في قَصّة' : 'هوية محفوظة محليًا'} onClose={() => setDetail(undefined)}><div className="modal-body style-look-detail"><StyleCard s={detail} frame={frame} project={project} busy={!!busy} current={isCurrent(detail)} used={project.stylesUsed.some((u) => u.id === detail.id)} onApply={() => apply(detail)} /><p className="text-xs text-ink-400">{lib.presets.some((s) => s.id === detail.id) ? 'المصدر: مكتبة قَصّة المحلية.' : 'المصدر: هوية محفوظة من مشروعك؛ حقوق الأصول تتبع مصادرها.'}</p><StyleUsage id={detail.id} /></div></Modal>}
+    {deleteTarget && <Modal title={`حذف «${deleteTarget.name}»؟`} onClose={() => !deleting && setDeleteTarget(undefined)}><div className="p-5"><p className="mb-4 text-sm text-ink-400">ستُحذف من هوياتك المحفوظة. إعدادات المشاريع التي استخدمته ستبقى كما هي.</p><div className="flex gap-2"><button className="btn text-cut-text" disabled={deleting} onClick={() => remove(deleteTarget)}>{deleting ? 'جارٍ الحذف…' : 'حذف الهوية'}</button><button className="btn" disabled={deleting} onClick={() => setDeleteTarget(undefined)}>إلغاء</button></div></div></Modal>}
     </Modal>
   );
 }

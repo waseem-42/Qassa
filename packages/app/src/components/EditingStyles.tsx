@@ -68,7 +68,8 @@ export function SourceLibrary({ favoritesOnly = false, initialId }: { favoritesO
   const detailRequest = useRef(0);
   // one id per filter set: replies to an older search (or its "show more") are dropped
   const search = useRef(0);
-  const url = (offset: number) => `/api/style-library?q=${encodeURIComponent(query)}&use=${encodeURIComponent(use)}&offset=${offset}&limit=${PAGE}&sort=curated${everything ? '&all=1' : '&preview=1'}${favoritesOnly ? '&favorites=1' : ''}`;
+  // favourites list everything hearted: a reference with no picture (OneTake) is still a favourite
+  const url = (offset: number) => `/api/style-library?q=${encodeURIComponent(query)}&use=${encodeURIComponent(use)}&offset=${offset}&limit=${PAGE}&sort=curated${favoritesOnly ? '&all=1&favorites=1' : everything ? '&all=1' : '&preview=1'}`;
   // the favourites list follows hearts given here or in another window
   const favKey = favoritesOnly ? favIds.join() : '';
   useEffect(() => {
@@ -156,7 +157,7 @@ export function SourceLibrary({ favoritesOnly = false, initialId }: { favoritesO
         if (navigateGallery(e.currentTarget, e.target, e.key)) { e.preventDefault(); e.stopPropagation(); }
       }}>{shown.map((entry) => <StyleTile key={entry.id} entry={entry} sourceName={sourceName(entry.source)} used={used.some((u) => u.id === entry.id)} showUse={!use} onOpen={() => select(entry)} />)}</div>
       {!shown.length && (favoritesOnly && !filtered
-        ? <p className="style-empty-line"><Icon name="heart" size={15} /> {favIds.length ? 'ما في أفكار من المكتبات في مفضلتك بعد.' : 'ما في مفضلة بعد.'} اضغط القلب على أي هوية في «طبّق على مشروعك» أو أي فكرة في «اكتشف أفكار»، وتجتمع هنا.</p>
+        ? <p className="style-empty-line"><Icon name="heart" size={15} /> {favIds.length ? 'ما في أفكار من المكتبات في مفضلتك بعد.' : 'ما في مفضلة بعد.'} اضغط القلب على أي فكرة في «ستايلات المونتاج»، وتجتمع هنا.</p>
         : <div className="style-empty"><Icon name="search" size={28} /><h3>ما لقينا ستايل بهذا البحث</h3><p>جرّب كلمة أوسع أو كلمة إنجليزية لأن أوصاف المكتبات بلغتها الأصلية.</p><button className="btn" onClick={reset}>{favoritesOnly ? 'عرض كل المفضلة' : 'عرض كل الستايلات'}</button></div>)}
       {shown.length < total && <div className="style-more"><button className="btn" disabled={more} onClick={loadMore}>{more ? 'جارٍ التحميل…' : 'عرض المزيد'}</button><span><span className="num">{shown.length}</span> من <span className="num">{total}</span></span></div>}
     </>}
