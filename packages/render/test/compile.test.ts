@@ -17,6 +17,41 @@ const base = () =>
 const opts = { quality: 'final' as const, nvenc: true, fileKey: () => 'k' };
 
 describe('compile', () => {
+  it('shares whole-edit loudness across ranges and invalidates it for sound changes', () => {
+    const p = base(), key = compile(p, opts).measure?.key;
+    expect(key).toMatch(/^[a-f0-9]{64}$/);
+    expect(compile(p, { ...opts, range: [10, 12] }).measure?.key).toBe(key);
+    const title = applyOps(p, [{ op: 'add_text', text: 'new', start: 0, duration: 2 }]);
+    expect(compile(title, opts).measure?.key).toBe(key);
+    const quiet = applyOps(p, [{ op: 'update_clip', clipId: 'c0', patch: { volume: .5 } }]);
+    expect(compile(quiet, opts).measure?.key).not.toBe(key);
+    expect(compile(p, { ...opts, fileKey: () => 'changed source' }).measure?.key).not.toBe(key);
+    const preview = { ...opts, quality: 'preview' as const };
+    expect(compile(p, { ...preview, fileKey: (path) => path === 'source/a.mp4' ? 'new original' : 'k' }).measure?.key)
+      .not.toBe(compile(p, preview).measure?.key);
+  });
+  it('writes long animated-text graphs to project-relative files', () => {
+    const p = applyOps(base(), Array.from({ length: 150 }, (_, i) => ({ op: 'add_text' as const, text: `line ${i}`, start: i * .35, duration: .3, style: { animation: 'fade' as const } })));
+    const plan = compile(p, { ...opts, textImage: (c) => `cache/text/${c.id}.png` });
+    expect(plan.final.args.join(' ').length).toBeLessThan(30000);
+    const at = plan.final.args.indexOf('-filter_complex_script');
+    expect(at).toBeGreaterThan(0);
+    const file = plan.files.find((f) => f.path === plan.final.args[at + 1]);
+    expect(file?.path).toMatch(/^cache\/filters\//);
+    expect(file?.body).toContain('fade=t=in');
+  });
+  it('omits text and graphic inputs outside a marked range while keeping their clocks', () => {
+    const p = applyOps(base(), [
+      { op: 'add_text', text: 'before', start: 0, duration: 2 },
+      { op: 'add_text', text: 'inside', start: 9, duration: 4 },
+      { op: 'add_clip', clip: { id: 'far', trackId: 'V2', graphic: 'lib/steps', start: 40, in: 0, out: 3 } },
+    ]);
+    const plan = compile(p, { ...opts, range: [10, 12], textImage: (c) => `cache/${c.text}.png`, graphicVideo: () => 'cache/far.mkv' });
+    expect(plan.final.args.join(' ')).toContain('cache/inside.png');
+    expect(plan.final.args.join(' ')).not.toContain('cache/before.png');
+    expect(plan.final.args.join(' ')).not.toContain('cache/far.mkv');
+    expect(plan.final.args.join(' ')).toContain('between(t,9,13)');
+  });
   it('restores lossless alpha from dual-stream graphic caches at the project frame rate', () => {
     const p = applyOps(base(), [{ op: 'add_clip', clip: { trackId: 'V2', graphic: 'lib/chapter', in: 0, out: 4, start: 2 } }]);
     const graph = compile(p, { ...opts, graphicVideo: () => 'cache/graphics/layer.rgba.mkv' }).final.args.join(' ');

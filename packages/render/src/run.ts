@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, renameSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { LOUDNESS_GAIN, type FfmpegJob, type RenderPlan } from './compile.ts';
 
@@ -74,6 +74,11 @@ export function runJob(job: FfmpegJob, cwd: string, onProgress?: (p: number) => 
  * Silence, or a measurement that fails to print, gets no gain.
  */
 export function measureGain(m: NonNullable<RenderPlan['measure']>, cwd: string, signal?: AbortSignal): Promise<number> {
+  const cache = m.key && /^[a-f0-9]{64}$/.test(m.key) ? join(cwd, 'cache', `loudness-${m.key}.json`) : undefined;
+  if (cache) try {
+    const gain: unknown = JSON.parse(readFileSync(cache, 'utf8')).gain;
+    if (typeof gain === 'number' && Number.isFinite(gain) && Math.abs(gain) <= 30) return Promise.resolve(gain);
+  } catch { /* an absent or incomplete cache is measured again */ }
   return new Promise((resolve, reject) => {
     const proc = spawn(FFMPEG, ['-hide_banner', '-nostats', '-loglevel', 'info', ...m.args], { cwd, windowsHide: true });
     let err = '';
@@ -85,7 +90,9 @@ export function measureGain(m: NonNullable<RenderPlan['measure']>, cwd: string, 
       if (code !== 0) return reject(new Error(`ffmpeg (loudness) exited ${code}: ${err.trim().slice(-2000)}`));
       const json = [...err.matchAll(/\{[^{}]*"input_i"[^{}]*\}/g)].at(-1)?.[0];
       const input = json ? Number(JSON.parse(json).input_i) : NaN;
-      resolve(Number.isFinite(input) && input > -70 ? Math.round(Math.max(-30, Math.min(30, m.target - input)) * 100) / 100 : 0);
+      const gain = Number.isFinite(input) && input > -70 ? Math.round(Math.max(-30, Math.min(30, m.target - input)) * 100) / 100 : 0;
+      if (cache) try { mkdirSync(join(cwd, 'cache'), { recursive: true }); writeFileSync(cache, JSON.stringify({ gain }), 'utf8'); } catch { /* caching never blocks export */ }
+      resolve(gain);
     });
   });
 }
@@ -130,6 +137,7 @@ export async function runPlan(plan: RenderPlan, cwd: string, onProgress: (p: Run
   if (signal?.aborted) throw new Error('cancelled');
   onProgress({ stage: 'final', progress: 0, done, total: todo.length, cached });
   const gain = plan.measure ? await measureGain(plan.measure, cwd, signal) : 0;
+  for (const f of plan.files) if (f.body.includes(LOUDNESS_GAIN)) writeFileSync(join(cwd, f.path), f.body.replaceAll(LOUDNESS_GAIN, String(gain)), 'utf8');
   plan = { ...plan, final: { ...plan.final, args: plan.final.args.map((a) => a.replaceAll(LOUDNESS_GAIN, String(gain))) } };
   await runJob(plan.final, cwd, (p) => onProgress({ stage: 'final', progress: p, done, total: todo.length, cached }), signal);
   return plan.final.output;

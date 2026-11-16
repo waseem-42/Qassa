@@ -5,7 +5,7 @@ import {
   type Key,
   type Keyframe,
   type Media,
-  type Picture,
+  Picture,
   type Project,
   type Track,
   type Transform,
@@ -67,7 +67,7 @@ export interface RenderPlan {
   /** other files the passes read: static text streams, keyframe commands (sendcmd) */
   files: { path: string; body: string }[];
   /** the sound-only pass that measures the mix; its gain replaces LOUDNESS_GAIN in the final pass (no sound to level: none) */
-  measure?: { target: number; args: string[] };
+  measure?: { target: number; args: string[]; key?: string };
   final: FfmpegJob;
 }
 
@@ -452,7 +452,7 @@ export function compile(p: Project, opts: RenderOptions): RenderPlan {
     // captions are many short, unanimated images: chain them into a single image stream
     for (const track of p.tracks.filter((t) => t.kind === 'text' && visible(t.id))) {
       const clips = p.clips
-        .filter((c) => c.trackId === track.id && c.text && isStatic(c) && c.start < duration && opts.textImage?.(c))
+        .filter((c) => c.trackId === track.id && c.text && isStatic(c) && c.start < duration && (!opts.range || c.start < opts.range[1] && clipEnd(c) > opts.range[0]) && opts.textImage?.(c))
         .sort((a, b) => a.start - b.start)
         .filter((c, i, arr) => i === 0 || c.start >= clipEnd(arr[i - 1]) - 1e-3);
       if (clips.length < 2) continue;
@@ -477,7 +477,10 @@ export function compile(p: Project, opts: RenderOptions): RenderPlan {
   // layers stack like the editor preview: b-roll and graphics in track order, then text above all of them;
   // within a track, by start
   const layers = [...p.tracks.filter((t) => t.kind !== 'text'), ...p.tracks.filter((t) => t.kind === 'text')];
-  const free = p.clips.filter((c) => c.trackId !== MAIN_TRACK && c.start < duration && !streamed.has(c.id));
+  const touches = (c: Clip) => !opts.range || c.start < opts.range[1] && clipEnd(c) > opts.range[0];
+  const free = p.clips.filter((c) => c.trackId !== MAIN_TRACK && c.start < duration && !streamed.has(c.id))
+    .filter((c) => touches(c) || p.tracks.find((t) => t.id === c.trackId)?.kind === 'audio' || c.mediaId && media.has(c.mediaId) && hasAudioOf(c, media.get(c.mediaId)!))
+    .map((c) => !touches(c) && c.mediaId ? { ...c, picture: Picture.parse({ ...c.picture, off: true }) } : c);
   const musicLabels: string[] = [];
   const speechLabels: string[] = [];
   const sfxLabels: string[] = [];
@@ -656,7 +659,7 @@ export function compile(p: Project, opts: RenderOptions): RenderPlan {
   const copyVideo = vSteps.length === 0 && !range && (opts.codec ?? 'h264') === 'h264' && opts.level !== 'small';
   const sound = aSteps.join(';');
   const graph = [...(audioOnly ? [] : vSteps), sound.replace(loud, gainStep)].join(';');
-  const measure = sound.includes(loud)
+  let measure: RenderPlan['measure'] = sound.includes(loud)
     ? { target: p.settings.loudness, args: [...finalInputs, '-filter_complex', sound.replace(loud, measureStep), '-map', '[aout]', '-t', n(duration), '-f', 'null', '-'] }
     : undefined;
   const final: FfmpegJob = {
@@ -681,5 +684,29 @@ export function compile(p: Project, opts: RenderOptions): RenderPlan {
     ],
   };
 
+  // Whole-edit loudness remains stable when pictures outside the range are omitted.
+  if (range) {
+    const full = compile(p, { ...opts, range: undefined, textImage: undefined, graphicVideo: undefined, blankImage: undefined });
+    measure = full.measure;
+    for (const file of full.files) if (!files.some((f) => f.path === file.path)) files.push(file);
+  }
+  if (measure) measure.key = createHash('sha256').update(JSON.stringify([
+    1, opts.quality, fps, p.settings.loudness, fade,
+    p.tracks.map((t) => [t.id, t.kind, t.muted, t.audio]),
+    p.clips.filter((c) => c.mediaId && media.get(c.mediaId)?.hasAudio).map((c) => [
+      c.trackId, c.start, c.in, c.out, c.speed, c.volume, c.fadeIn, c.fadeOut, c.denoise, c.anim?.volume, c.transition,
+      c.mediaId, c.picture?.off, media.get(c.mediaId!)?.role,
+      media.get(c.mediaId!)!.path, opts.fileKey(media.get(c.mediaId!)!.path), srcOf(media.get(c.mediaId!)!), opts.fileKey(srcOf(media.get(c.mediaId!)!)),
+    ]),
+  ])).digest('hex');
+  const externalize = (args: string[]) => {
+    const at = args.indexOf('-filter_complex');
+    if (at < 0 || args[at + 1].length < 4096) return args;
+    const body = args[at + 1], path = `cache/filters/${createHash('sha1').update(body).digest('hex')}.ffgraph`;
+    if (!files.some((f) => f.path === path)) files.push({ path, body });
+    return [...args.slice(0, at), '-filter_complex_script', path, ...args.slice(at + 2)];
+  };
+  final.args = externalize(final.args);
+  if (measure) measure.args = externalize(measure.args);
   return { width: W, height: H, fps, duration: final.duration, segments, concatList, files, measure, final };
 }

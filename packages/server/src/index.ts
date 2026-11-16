@@ -495,8 +495,9 @@ registerExportRoutes(app, store, jobs, async ({ name, project: edited, dir, qual
     const audio = e?.format === 'mp3' || e?.format === 'wav' ? e.format : undefined;
     ctx.update({ stage: 'text', progress: 0 });
     // sound only: no picture to draw text or graphics on
-    const texts = await renderTextImages(dir, audio ? [] : p.clips.filter((c) => c.text && !p.tracks.find((t) => t.id === c.trackId)?.hidden), size.width, size.height, p.settings.theme, active);
-    const shown = (c: { trackId: string; start: number }) => !audio && !p.tracks.find((t) => t.id === c.trackId)?.hidden && c.start < projectDuration(p);
+    const inRange = (c: Project['clips'][number]) => !range || c.start < range[1] && c.start + clipDuration(c) > range[0];
+    const texts = await renderTextImages(dir, audio ? [] : p.clips.filter((c) => c.text && inRange(c) && !p.tracks.find((t) => t.id === c.trackId)?.hidden), size.width, size.height, p.settings.theme, active);
+    const shown = (c: Project['clips'][number]) => !audio && inRange(c) && !p.tracks.find((t) => t.id === c.trackId)?.hidden && c.start < projectDuration(p);
     const graphicStart = performance.now();
     const captures: import('./graphics.ts').GraphicCaptureStats[] = [];
     const graphics = await renderGraphics(name, dir, p.clips.filter((c) => c.graphic && shown(c)), p.settings, size.width, p.settings.fps,
