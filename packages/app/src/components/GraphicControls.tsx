@@ -5,6 +5,8 @@ import { api, projectPath } from '../lib/api.ts';
 import { currentMotion, graphicElement, MOTIONS, motionPatch, withEdit, type Motion } from '../lib/graphic-edit.ts';
 import { KeySlider, Row, Section, Slider } from './ui.tsx';
 import { Icon } from './Brand.tsx';
+import { InspectorGroup } from './InspectorGroup.tsx';
+import { changedValue } from '../lib/inspector.ts';
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
@@ -207,22 +209,24 @@ export function GraphicContent({ clip }: { clip: Clip }) {
   const setData = (next: Record<string, Json>) => ops(pieces(useStore.getState().project!, clip).map((id): Op => ({ op: 'update_clip', clipId: id, patch: { graphicData: next } })));
   // fields the template knows about come first, in its order; then anything else on the clip
   const keys = [...new Set([...Object.keys(tpl?.data ?? {}), ...Object.keys(data)])];
+  const primary = keys.filter((k) => ['title', 'subtitle', 'label', 'text'].includes(k) && typeof (data[k] ?? tpl?.data?.[k]) === 'string').slice(0, 1);
+  const list = keys.find((k) => { const value = data[k] ?? tpl?.data?.[k];return Array.isArray(value) && value.every((v) => typeof v === 'string'); });
+  if (list) primary.push(list);
+  const fields = (items: string[]) => items.map((k) => <Field key={k} name={k} label={tpl?.labels?.[k]} value={data[k]} example={tpl?.data?.[k]} options={tpl?.options?.[k]} onChange={(v) => {
+    const next = { ...data };if (v === undefined) delete next[k];else next[k] = v;setData(next);
+  }} />);
 
   return (
     <>
       <Section title="المحتوى">
         {(tpl?.about ?? tpl?.description) && <div className="mb-2 text-[11px] leading-5 text-ink-500" dir="auto">{tpl!.about ?? tpl!.description}</div>}
-        {keys.length ? keys.map((k) => (
-          <Field key={k} name={k} label={tpl?.labels?.[k]} value={data[k]} example={tpl?.data?.[k]} options={tpl?.options?.[k]}
-            onChange={(v) => {
-              const next = { ...data };
-              if (v === undefined) delete next[k]; else next[k] = v;
-              setData(next);
-            }} />
-        )) : <div className="text-xs text-ink-500">هذي الرسمة ما لها بيانات — عدّل عناصرها مباشرة من «عناصر الرسمة».</div>}
+        {keys.length ? fields(primary) : <div className="text-xs text-ink-500">هذي الرسمة ما لها بيانات — عدّل عناصرها مباشرة من «عناصر الرسمة».</div>}
+        {keys.some((k) => !primary.includes(k)) && <InspectorGroup id={`graphic-data:${clip.graphic}`} title="بقية بيانات الرسمة" changed={keys.filter((k) => !primary.includes(k)).some((k) => changedValue(data[k], tpl?.data?.[k]))}>{fields(keys.filter((k) => !primary.includes(k)))}</InspectorGroup>}
       </Section>
-      {!!scenes?.length && <ScenesSection clip={clip} scenes={scenes} />}
-      <ElementsSection clip={clip} />
+      <InspectorGroup id="graphic-scenes-elements" title="توقيت المشاهد وعناصر الرسمة" changed={!!(clip.retime || clip.graphicEdits?.length)}>
+        {!!scenes?.length && <ScenesSection clip={clip} scenes={scenes} />}
+        <ElementsSection clip={clip} />
+      </InspectorGroup>
     </>
   );
 }
@@ -233,10 +237,14 @@ export function GraphicPlace({ clip }: { clip: Clip }) {
   return (
     <>
       <Section title="المكان والحجم" actions={(clip.place || clip.anim || clip.picture) && <button className="btn btn-ghost h-6 text-xs" onClick={() => ops([{ op: 'update_clip', clipId: clip.id, patch: { place: null, picture: null, anim: null } }])}>إعادة</button>}>
+        <Row label="الحجم"><KeySlider clip={clip} prop="scale" min={0.2} max={2} step={0.01} def={1} fmt={pct} /></Row>
+        <InspectorGroup id="graphic-position" title="موضع الرسمة" changed={!!(clip.place?.dx || clip.place?.dy || clip.anim?.dx?.length || clip.anim?.dy?.length)}>
         <Row label="أفقي"><KeySlider clip={clip} prop="dx" min={-0.5} max={0.5} step={0.005} def={0} fmt={pct} /></Row>
         <Row label="عمودي"><KeySlider clip={clip} prop="dy" min={-0.5} max={0.5} step={0.005} def={0} fmt={pct} /></Row>
-        <Row label="الحجم"><KeySlider clip={clip} prop="scale" min={0.2} max={2} step={0.01} def={1} fmt={pct} /></Row>
+        </InspectorGroup>
+        <InspectorGroup id="graphic-opacity" title="شفافية الرسمة" changed={(clip.picture?.opacity ?? 1) !== 1 || !!clip.anim?.opacity?.length}>
         <Row label="الشفافية"><KeySlider clip={clip} prop="opacity" min={0} max={1} step={0.01} def={1} fmt={pct} /></Row>
+        </InspectorGroup>
         <div className="text-[11px] text-ink-500">أو اسحب الرسمة على الفيديو، والزاوية للحجم. ◆ حركة عند المؤشر: أضف نقطتين بقيم مختلفة وتتحرك بينها.</div>
       </Section>
       <MotionSection clip={clip} />
@@ -406,13 +414,13 @@ export function MotionSection({ clip }: { clip: Clip }) {
     </div>
   );
   return (
-    <Section title="حركة الدخول والخروج">
+    <InspectorGroup id="layer-motion" title="حركة الدخول والخروج" changed={!!(clip.anim?.dx?.length || clip.anim?.dy?.length || clip.anim?.scale?.length || clip.anim?.opacity?.length)}><Section title="حركة الدخول والخروج">
       <div className="mb-1 text-xs text-ink-400">الدخول</div>
       {row('enter')}
       <div className="mb-1 mt-2 text-xs text-ink-400">الخروج</div>
       {row('exit')}
       {!now.enter && !now.exit && clip.anim && <div className="mt-1 text-[11px] text-ink-500">فيها مفاتيح حركة خاصة — اختيار قالب يستبدلها.</div>}
-    </Section>
+    </Section></InspectorGroup>
   );
 }
 
@@ -460,7 +468,7 @@ function Field({ name, label: shown, value, example, options, onChange }: {
     return (
       <div className="py-1">
         <div className="mb-1 text-xs text-ink-400">{label}</div>
-        {items.map((it, i) => (
+        {items.slice(0, 3).map((it, i) => (
           <div key={i} className="mb-1 flex items-start gap-1">
             <span className="num mt-1.5 w-4 text-[10px] text-ink-500">{i + 1}</span>
             <div className="min-w-0 flex-1">
@@ -468,11 +476,17 @@ function Field({ name, label: shown, value, example, options, onChange }: {
                 ? <Group value={it} example={typeof sample === 'object' ? (sample as Record<string, Json>) : undefined} onChange={(g) => set(i, g)} />
                 : <TextField value={String(it ?? '')} onCommit={(s) => set(i, s)} />}
             </div>
-            <button className="btn btn-ghost h-7 px-1 text-xs" disabled={i === 0} title="فوق" onClick={() => swap(i)}>↑</button>
-            <button className="btn btn-ghost h-7 px-1 text-xs text-cut-text" title="حذف" onClick={() => set(i, undefined)}>✕</button>
           </div>
         ))}
         <button className="btn btn-ghost h-6 text-xs" onClick={() => onChange([...items, typeof sample === 'object' && sample !== null ? structuredClone(sample) : ''])}>+ إضافة</button>
+        <InspectorGroup id={`graphic-list:${name}`} title="بقية العناصر وترتيب القائمة" changed={changedValue(items, example)}>
+          {items.slice(3).map((it, offset) => <Field key={offset + 3} name={String(offset + 4)} value={it} example={sample} onChange={(v) => set(offset + 3, v)} />)}
+          {items.map((it, i) => <div key={i} className="my-1 flex items-center gap-1">
+            <span className="min-w-0 flex-1 truncate text-xs">{i + 1}. {typeof it === 'object' ? 'عنصر' : String(it)}</span>
+            <button className="btn btn-ghost h-7 px-1 text-xs" disabled={i === 0} title="فوق" onClick={() => swap(i)}>↑</button>
+            <button className="btn btn-ghost h-7 px-1 text-xs text-cut-text" title="حذف" onClick={() => set(i, undefined)}>✕</button>
+          </div>)}
+        </InspectorGroup>
       </div>
     );
   }

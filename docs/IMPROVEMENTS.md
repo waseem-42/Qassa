@@ -482,3 +482,8 @@ One 82 s full-frame HTML graphic over a voice track, later split into 8 scene pi
 - Finished AI cards list grouped op changes with seek/select, and restore all task batches in one undoable action. Outside writes conservatively disable full restore with a reason; user edits survive. Session baselines are bounded; persisted change lists survive restart while expired undo is explicitly unavailable.
 - Task logs count tools/result sizes without content. MCP state defaults to 40 clips with explicit truncation, paging/exact ids/full opt-in; heavy payload 77,554→6,277 bytes. Prompts prefer summaries and batched edits; deep requests show a time estimate. Both edit-tool skill copies updated.
 - 387 tests, typecheck/build and deterministic Chrome/real-MCP QA pass. Paid before/after comparison remains blocked by CLI login (corrected baseline recorded $0.000); no cost-speed claim. Details and invocation caveats in docs/research/night-2026-11.md.
+
+## 2026-11-16 — quieter inspector defaults (Task 32)
+
+- Named closed groups remember their state per viewer and show gold dots for changed values. Core zoom/size/volume/text fields remain open; other place, motion, cleanup, crop, formatting, list structure and SFX choices stay available inside groups. Key navigation appears when keys exist; existing actions/shortcuts are retained.
+- All measured inspector defaults are ≤15 controls: video picture 33→15, audio 23→15, graphic place 37→13, content 20→14, SFX 21→14. Desktop/laptop Chrome verified persistence, changed markers, retained list/key controls and 90/90 daily editor trials. 388 tests/82 files, typecheck/build pass. Detailed evidence and Night summary are in docs/research/night-2026-11.md / SOL.md; all QA data/servers cleaned, protected file hashes unchanged.

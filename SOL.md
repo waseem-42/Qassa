@@ -1353,3 +1353,22 @@ Task 25 reviewed and committed (38c3b18). Claude then added competitor features 
 ### Task 31 — partly (night run; paid comparison blocked by login)
 
 - Session task boundaries tag MCP requests; finished cards group/navigate changes and restore all batches with one click. Any outside write during/after the task refuses full restore with a reason; tests cover both, guarded restore, async Fastify context and metrics. Full-state MCP defaults to 40 clips with explicit truncation/paging/exact ids/full opt-in; heavy actual payload 77,554→6,277 bytes (91.9%). Logs include tool counts/result bytes/largest results; deep time estimate shown; both skill copies updated. Real Chrome + actual MCP via a labelled fake CLI verified one-click undo, change navigation, interleaved-user refusal and persisted telemetry. 387 tests/81 files, typecheck/build pass. Two real Claude invocations attempted: first harness canceled before a cost result (unknown), corrected baseline returned Not logged in, recorded $0.000 and no tools/tokens. No after paid run against the known failure, so paid before/after efficiency remains unverified. Boundaries expire after restart/20 tasks (clear reason; change lists persist). Details/evidence docs/research/night-2026-11.md, artifacts/qa/task31/. Data/servers cleaned. Continue to Task 32.
+
+### Task 32 — done (night run)
+
+- Added remembered InspectorGroup and effective-value markers; grouped less frequent picture/audio/time/text/graphic/SFX controls while keeping primary fields open. No feature, op, shortcut or command-search action removed. Same clutter inventory: video picture 33→15, audio 23→15, time 16→15, text 16→12, graphic content 20→14, place 37→13, SFX 21→14. All 40 default inspector states ≤15; an additional corrected top-of-tab 22-state check covers free video/music/linked captions at both sizes. Changed closed groups, reload/per-viewer memory, non-editing folds, retained array/key controls and 90/90 daily editor trials pass. 388 tests/82 files, typecheck/build pass. Files: app Inspector/GraphicControls/ui, InspectorGroup, inspector helper/test, token CSS; details/screenshots/scripts in docs/research/night-2026-11.md and artifacts/qa/task32/. Data/owned servers removed; protected samples/styles/AI logs unchanged. No push.
+
+### Night summary — 2026-11-16
+
+One sequential local commit per task, on master; no push. Tasks 27–32 were all attempted, with explicit partial acceptance below. No user project writes or original 4317/5173 server operations; only isolated 4496/5296 QA, now stopped. Final checks: 388 tests/82 files, typecheck and app build pass. The two pre-existing style-history changes remain uncommitted and byte-identical to the start.
+
+| Task | Status | Local commit / remaining review |
+|---|---|---|
+|27|partly|1d6492e — animated export failure fixed, warm marked medians <2 s; strict full/range frame parity, full V1 range pruning and cold-full median acceptance remain.|
+|28|done|666cf1b — one-click repeat export, guarded snapshots, persistent feedback, marked menu and saved names verified.|
+|29|partly|5c774c4 — all four behaviors and 90 trials pass; two light medians rose 1.3/3.3 ms, so literal no-slower acceptance is open.|
+|30|partly|a3ac6ad — real-size/headed measurements, proxy reuse and load feedback; native startup still >100 ms, single-sample/cold Vite limits and no full real-size operation inventory.|
+|31|partly|19bced1 — safe full-task undo/change list/metrics and 92% smaller heavy default state; successful paid brief comparison blocked by CLI login. Corrected baseline cost $0.000; first immediately canceled harness invocation has no captured cost.|
+|32|done|this commit — remembered groups, changed markers and ≤15 measured default controls; daily trial paths preserved.|
+
+**Claude: look first** at Task 27's export-parity/cold-time gaps before accepting render correctness/performance, then Task 31's task-boundary refusal semantics and the required authenticated before/after brief. Task 30's profiles separate native startup/Vite waits from smooth measured editing; do not call all real footage fast from these short samples. Task 29's small median increases are disclosed, not hidden. Detailed tables, limitations and runnable QA evidence: docs/research/night-2026-11.md and artifacts/qa/task27–task32/. No further task was started.

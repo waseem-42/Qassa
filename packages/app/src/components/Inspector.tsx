@@ -12,6 +12,8 @@ import { KEY_NEAR, valuesPatch, withZoomKey, zoomEasePatch } from '../lib/anim.t
 import { deleteOps, useLayout } from '../lib/layout.ts';
 import { anchorPatch } from './EditHandles.tsx';
 import { TranscriptNeeded } from './Transcribe.tsx';
+import { InspectorGroup } from './InspectorGroup.tsx';
+import { changedValue } from '../lib/inspector.ts';
 
 /** Captions from the transcript of what is left after the cuts — no AI, no cost. */
 export function autoCaptions() {
@@ -24,6 +26,8 @@ export function autoCaptions() {
 }
 
 const NEUTRAL = Grade.parse({});
+const NEUTRAL_PLACE = { ...Place.parse({}), ax: 0.5, ay: 0.5 };
+const NEUTRAL_PICTURE = { ...Picture.parse({}), off: false };
 /** Latin text (60 fps, -14 LUFS) kept in its own order inside Arabic — an option can't hold a <bdi> */
 const ltr = (t: string) => `\u2066${t}\u2069`;
 
@@ -93,13 +97,27 @@ function ClipTabs({ kind, clip, count, project }: { kind: ClipKind; clip: Clip; 
       <ClipSummary clip={clip} count={count} project={project} kind={kind} />
       <TabBar tabs={tabs} tab={tab} setTab={setTab} />
       <div role="tabpanel" aria-label={TAB_LABEL[tab]}>
-        {tab === 'picture' && (main ? <><ZoomSection clip={clip} /><PlaceSection clip={clip} /><FrameSection clip={clip} /></> : <><PlaceSection clip={clip} /><FrameSection clip={clip} /><ZoomSection clip={clip} /></>)}
+        {tab === 'picture' && (main ? <>
+          <ZoomSection clip={clip} />
+          <InspectorGroup id="video-layer" title="حجم ومكان الطبقة" changed={changedValue(clip.place, NEUTRAL_PLACE) || !!(clip.anim?.dx?.length || clip.anim?.dy?.length || clip.anim?.scale?.length)}>
+            <PlaceSection clip={clip} />
+          </InspectorGroup>
+          <InspectorGroup id="video-frame" title="الإطار والقص" changed={changedValue(clip.picture, NEUTRAL_PICTURE) || !!clip.anim?.opacity?.length}>
+            <FrameSection clip={clip} />
+          </InspectorGroup>
+        </> : <PlaceSection clip={clip} advanced={<><FrameSection clip={clip} /><ZoomSection clip={clip} /></>} />)}
         {tab === 'audio' && <AudioSection clip={clip} />}
         {tab === 'time' && <>
-          {(kind === 'visual' && media?.kind !== 'image' || kind === 'audio') && <SpeedSection clip={clip} />}
-          {!main && count === 1 && <TimingSection clip={clip} />}
-          {main && count === 1 && <TransitionSection clip={clip} project={project} />}
-          {!main && count === 1 && kind === 'visual' && <MotionSection clip={clip} />}
+          {!main && kind === 'visual' ? <>
+            {count === 1 && <TimingSection clip={clip} />}
+            <InspectorGroup id="layer-time" title="السرعة وحركة اللقطة" changed={clip.speed !== 1 || !!clip.anim}>
+              {media?.kind !== 'image' && <SpeedSection clip={clip} />}{count === 1 && <MotionSection clip={clip} />}
+            </InspectorGroup>
+          </> : <>
+            {(kind === 'visual' && media?.kind !== 'image' || kind === 'audio') && <SpeedSection clip={clip} />}
+            {!main && count === 1 && <TimingSection clip={clip} />}
+            {main && count === 1 && <InspectorGroup id="video-transition" title="الانتقال من اللقطة السابقة" changed={!!clip.transition}><TransitionSection clip={clip} project={project} /></InspectorGroup>}
+          </>}
         </>}
         {tab === 'text' && <TextControls clip={clip} />}
         {tab === 'content' && <GraphicContent clip={clip} />}
@@ -149,14 +167,19 @@ function SpeedSection({ clip }: { clip: Clip }) {
   return (
     <Section title="السرعة">
       <div className="seg-buttons speed-buttons">
-        {[...new Set([0.5, 1, 1.5, 2, 4, clip.speed])].sort((a, b) => a - b).map((s) => (
+        {[0.5, 1, 2].map((s) => (
           <button key={s} className="btn num" dir="ltr" aria-pressed={clip.speed === s} onClick={() => ops([{ op: 'update_clip', clipId: clip.id, patch: { speed: s } }])}>{s}×</button>
         ))}
-        <select className="field" aria-label="سرعة أخرى" value="" onChange={(e) => e.target.value && ops([{ op: 'update_clip', clipId: clip.id, patch: { speed: Number(e.target.value) } }])}>
+      </div>
+      <InspectorGroup id="speed-more" title="سرعات أخرى" changed={![0.5, 1, 2].includes(clip.speed)}>
+        <div className="seg-buttons speed-buttons">
+          {[...new Set([1.5, 4, ...(![0.5, 1, 2].includes(clip.speed) ? [clip.speed] : [])])].map((s) => <button key={s} className="btn num" dir="ltr" aria-pressed={clip.speed === s} onClick={() => ops([{ op: 'update_clip', clipId: clip.id, patch: { speed: s } }])}>{s}×</button>)}
+          <select className="field" aria-label="سرعة أخرى" value="" onChange={(e) => e.target.value && ops([{ op: 'update_clip', clipId: clip.id, patch: { speed: Number(e.target.value) } }])}>
           <option value="">أخرى…</option>
           {[0.25, 0.75, 1.25, 3, 8, 16].map((s) => <option key={s} value={s}>{ltr(`${s}×`)}</option>)}
         </select>
-      </div>
+        </div>
+      </InspectorGroup>
     </Section>
   );
 }
@@ -166,6 +189,7 @@ function AudioSection({ clip }: { clip: Clip }) {
   return (
     <Section title="الصوت">
       <Row label="المستوى"><KeySlider clip={clip} prop="volume" min={0} max={2} step={0.05} def={1} fmt={(v) => `${Math.round(v * 100)}%`} /></Row>
+      <InspectorGroup id="audio-fades" title="التدرّج في بداية ونهاية الصوت" changed={!!(clip.fadeIn || clip.fadeOut)}>
       {(['fadeIn', 'fadeOut'] as const).map((k) => (
         <Row key={k} label={k === 'fadeIn' ? 'يبدأ تدريجي' : 'يختفي تدريجي'}>
           <Slider value={clip[k] ?? 0} min={0} max={Math.min(5, clipDuration(clip) / 2)} step={0.05} def={0} fmt={(v) => `${v.toFixed(1)}ث`}
@@ -173,7 +197,8 @@ function AudioSection({ clip }: { clip: Clip }) {
             onCommit={(v) => commit([{ op: 'update_clip', clipId: clip.id, patch: { [k]: v } }])} />
         </Row>
       ))}
-      <DenoiseRow clip={clip} />
+      </InspectorGroup>
+      <InspectorGroup id="audio-cleanup" title="تنقية الصوت والمقارنة" changed={!!clip.denoise}><DenoiseRow clip={clip} /></InspectorGroup>
     </Section>
   );
 }
@@ -198,14 +223,14 @@ function ZoomSection({ clip }: { clip: Clip }) {
     return c ? commit(trOps({ [k]: v })) : preview(trOps({ [k]: v }));
   };
   return (
-    <Section title={clip.trackId === MAIN_TRACK ? 'تكبير وتركيز' : 'تكبير داخل اللقطة'} actions={
-      <>
+    <Section title={clip.trackId === MAIN_TRACK ? 'تكبير وتركيز' : 'تكبير داخل اللقطة'}>
+      <Row label="التكبير"><Slider value={now.scale} min={1} max={5} step={0.01} def={1} hardMax={20} fmt={(v) => `${Math.round(v * 100)}%`} onPreview={(v) => setTr('scale', v, false)} onCommit={(v) => setTr('scale', v, true)} /></Row>
+      <InspectorGroup id="zoom-focus" title="التركيز ومفاتيح الحركة" changed={changedValue(tr, { scale: 1, x: 0.5, y: 0.5, keyframes: [] })}>
+      <div className="flex flex-wrap gap-1">
         <button className="btn btn-ghost h-6 text-xs" aria-pressed={showFocus} title="أظهر نقطة التركيز على المعاينة (ونقطة ارتكاز الطبقة) — واسحبها لتغيير التركيز" onClick={() => useLayout.getState().setShowFocus(!showFocus)}>◎ نقطة التركيز</button>
         <button className="btn btn-ghost h-6 text-xs" title="أضف نقطة حركة عند المؤشر" onClick={() => ops(trOps({ keyframes: withZoomKey(tr?.keyframes, { t: local, ...now }) }))}>◆ حركة</button>
         {tr && <button className="btn btn-ghost h-6 text-xs" onClick={() => ops([{ op: 'update_clip', clipId: clip.id, patch: { transform: null } }])}>إعادة</button>}
-      </>
-    }>
-      <Row label="التكبير"><Slider value={now.scale} min={1} max={5} step={0.01} def={1} hardMax={20} fmt={(v) => `${Math.round(v * 100)}%`} onPreview={(v) => setTr('scale', v, false)} onCommit={(v) => setTr('scale', v, true)} /></Row>
+      </div>
       <Row label="التركيز أفقي"><Slider value={now.x} min={0} max={1} step={0.005} def={0.5} onPreview={(v) => setTr('x', v, false)} onCommit={(v) => setTr('x', v, true)} /></Row>
       <Row label="التركيز عمودي"><Slider value={now.y} min={0} max={1} step={0.005} def={0.5} onPreview={(v) => setTr('y', v, false)} onCommit={(v) => setTr('y', v, true)} /></Row>
       {!!tr?.keyframes.length && (
@@ -220,12 +245,13 @@ function ZoomSection({ clip }: { clip: Clip }) {
         </div>
       )}
       {zoomHere && zoomNext && <EaseRow value={zoomHere.ease} onPick={(e) => commit([{ op: 'update_clip', clipId: clip.id, patch: zoomEasePatch(clip, local, e) }])} />}
+      </InspectorGroup>
     </Section>
   );
 }
 
 /** A layer above the main track: where it sits on the frame and how big (picture-in-picture), keyable. */
-function PlaceSection({ clip }: { clip: Clip }) {
+function PlaceSection({ clip, advanced }: { clip: Clip; advanced?: React.ReactNode }) {
   const { ops } = useStore.getState();
   const time = useSlowTime();
   // a corner / the centre at the playhead (a key there when the place moves); full frame drops the place and its keys
@@ -235,6 +261,8 @@ function PlaceSection({ clip }: { clip: Clip }) {
   const corner = (sx: number, sy: number) => { const s = 0.35, m = 0.5 - s / 2 - 0.03; return { scale: s, dx: sx * m, dy: sy * m }; };
   return (
     <Section title="الحجم والمكان">
+      <Row label="الحجم"><KeySlider clip={clip} prop="scale" min={0.1} max={4} step={0.01} def={1} fmt={pct} hardMin={PLACE_LIMITS.scaleMin} hardMax={PLACE_LIMITS.scaleMax} /></Row>
+      <InspectorGroup id={advanced ? 'layer-position-frame' : 'layer-position'} title={advanced ? 'الموضع والارتكاز والإطار' : 'الموضع والارتكاز'} changed={changedValue(clip.place, NEUTRAL_PLACE) || !!(clip.anim?.dx?.length || clip.anim?.dy?.length) || !!advanced && (changedValue(clip.picture, NEUTRAL_PICTURE) || !!clip.transform || !!clip.anim?.opacity?.length)}>
       <Row label="بسرعة">
         <div className="flex items-center gap-2">
           <div className="position-grid" role="group" aria-label="موضع اللقطة">
@@ -246,10 +274,11 @@ function PlaceSection({ clip }: { clip: Clip }) {
           <button className="btn btn-ghost" title="ملء الشاشة وإزالة حركة المكان والحجم" onClick={() => ops(plOps(null))}>ملء الشاشة</button>
         </div>
       </Row>
-      <Row label="الحجم"><KeySlider clip={clip} prop="scale" min={0.1} max={4} step={0.01} def={1} fmt={pct} hardMin={PLACE_LIMITS.scaleMin} hardMax={PLACE_LIMITS.scaleMax} /></Row>
       <Row label="أفقي"><KeySlider clip={clip} prop="dx" min={-1.5} max={1.5} step={0.005} def={0} fmt={pct} hardMin={-PLACE_LIMITS.d} hardMax={PLACE_LIMITS.d} /></Row>
       <Row label="عمودي"><KeySlider clip={clip} prop="dy" min={-1.5} max={1.5} step={0.005} def={0} fmt={pct} hardMin={-PLACE_LIMITS.d} hardMax={PLACE_LIMITS.d} /></Row>
       <AnchorRow clip={clip} />
+      {advanced}
+      </InspectorGroup>
       <div className="text-[11px] text-ink-500">أو اسحبها على الفيديو، والزاوية للحجم. اكتب أي رقم في الخانة لقيم أبعد من الشريط (الحجم لين {PLACE_LIMITS.scaleMax * 100}%).</div>
     </Section>
   );
@@ -290,9 +319,6 @@ function FrameSection({ clip }: { clip: Clip }) {
   const slide = (make: (v: number) => Op[]) => ({ onPreview: (v: number) => preview(make(v)), onCommit: (v: number) => commit(make(v)) });
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const cropped = pic.crop.l || pic.crop.r || pic.crop.t || pic.crop.b;
-  // opens by itself on a cropped clip, then only the user closes it (a slider dragged back to 0 must not fold it away)
-  const [cropOpen, setCropOpen] = useState(!!cropped);
-  useEffect(() => { if (cropped) setCropOpen(true); }, [clip.id, !!cropped]);
   return (
     <Section title="الإطار" actions={(clip.picture || clip.anim?.opacity) && <button className="btn btn-ghost h-6 text-xs" onClick={() => ops([{ op: 'update_clip', clipId: clip.id, patch: { picture: null, anim: { opacity: null } } }])}>إعادة</button>}>
       <Row label="الملاءمة">
@@ -322,12 +348,11 @@ function FrameSection({ clip }: { clip: Clip }) {
           <button className="btn" aria-pressed={pic.flipY} onClick={() => ops(picOps({ flipY: !pic.flipY }))}>⇅ عمودي</button>
         </div>
       </Row>
-      <details className="fold" open={cropOpen} onToggle={(e) => setCropOpen(e.currentTarget.open)}>
-        <summary>قص الأطراف{cropped ? ' ·' : ''}</summary>
+      <InspectorGroup id="picture-crop" title="قص الأطراف" changed={!!cropped}>
         {([['l', 'يسار'], ['r', 'يمين'], ['t', 'فوق'], ['b', 'تحت']] as const).map(([k, label]) => (
           <Row key={k} label={label}><Slider value={pic.crop[k]} min={0} max={0.45} step={0.005} def={0} fmt={pct} {...slide((v) => picOps({ crop: { [k]: v } }))} /></Row>
         ))}
-      </details>
+      </InspectorGroup>
     </Section>
   );
 }
@@ -466,24 +491,27 @@ function TextControls({ clip }: { clip: Clip }) {
           <option value="title">عنوان</option><option value="lower-third">لوثر ثيرد</option><option value="caption">كابشن</option><option value="label">وسم</option><option value="card">بطاقة</option>
         </select>
       </Row>
-      <Row label="الحركة">
-        <select className="field" value={st.animation} onChange={(e) => style({ animation: e.target.value as TextStyle['animation'] })}>
-          <option value="fade">ظهور</option><option value="slide-up">صعود</option><option value="pop">نبض</option><option value="none">بدون</option>
-        </select>
-      </Row>
       {clip.words && <SpokenWord clip={clip} />}
       <Row label="الحجم"><Slider value={st.size} min={20} max={180} step={1} def={TextStyle.parse({}).size} hardMin={6} hardMax={1200} fmt={(v) => `${v}px`} onPreview={(v) => style({ size: v }, false)} onCommit={(v) => style({ size: v })} /></Row>
+      <Row label="اللون"><input type="color" className="h-7 w-full cursor-pointer rounded bg-transparent" value={st.color ?? themeText} onChange={(e) => style({ color: e.target.value }, false)} onBlur={(e) => style({ color: e.target.value })} /></Row>
+      <InspectorGroup id="text-format" title="الوزن والخلفية" changed={st.weight !== TextStyle.parse({}).weight || !!st.background}>
       <Row label="الوزن">
         <select className="field" value={st.weight} onChange={(e) => style({ weight: Number(e.target.value) })}>
           {[400, 500, 600, 700].map((w) => <option key={w} value={w}>{w}</option>)}
         </select>
       </Row>
-      <Row label="اللون"><input type="color" className="h-7 w-full cursor-pointer rounded bg-transparent" value={st.color ?? themeText} onChange={(e) => style({ color: e.target.value }, false)} onBlur={(e) => style({ color: e.target.value })} /></Row>
       <Row label="الخلفية">
         <div className="flex gap-2">
           <input type="color" className="h-7 flex-1 cursor-pointer rounded bg-transparent" value={st.background?.startsWith('#') ? st.background.slice(0, 7) : '#14161c'} onChange={(e) => style({ background: e.target.value }, false)} onBlur={(e) => style({ background: e.target.value })} />
           <button className="btn h-7 text-xs" onClick={() => style({ background: null })}>افتراضي</button>
         </div>
+      </Row>
+      </InspectorGroup>
+      <InspectorGroup id="text-position" title="المكان والمحاذاة والحركة" changed={changedValue({ x: st.x, y: st.y, align: st.align, animation: st.animation }, TextStyle.parse({}))}>
+      <Row label="الحركة">
+        <select className="field" value={st.animation} onChange={(e) => style({ animation: e.target.value as TextStyle['animation'] })}>
+          <option value="fade">ظهور</option><option value="slide-up">صعود</option><option value="pop">نبض</option><option value="none">بدون</option>
+        </select>
       </Row>
       <Row label="أفقي"><Slider value={st.x} min={0} max={1} step={0.005} def={0.5} hardMin={-0.5} hardMax={1.5} onPreview={(v) => style({ x: v }, false)} onCommit={(v) => style({ x: v })} /></Row>
       <Row label="عمودي"><Slider value={st.y} min={0} max={1} step={0.005} def={0.5} hardMin={-0.5} hardMax={1.5} onPreview={(v) => style({ y: v }, false)} onCommit={(v) => style({ y: v })} /></Row>
@@ -494,6 +522,7 @@ function TextControls({ clip }: { clip: Clip }) {
           ))}
         </div>
       </Row>
+      </InspectorGroup>
     </Section>
   );
 }
@@ -554,7 +583,7 @@ function ThemeSection({ project }: { project: Project }) {
           ))}
         </div>
       </Section>
-      <details><summary className="cursor-pointer text-xs text-ink-400 px-4 py-2">تعديل يدوي</summary>
+      <InspectorGroup id="theme-manual" title="ألوان وخط الهوية يدويًا" changed={changedValue(th, Theme.parse({}))}>
       <Section title="الألوان">
         {color('accent', 'المميّز', 'الخط الجانبي للعناوين، خلفية الوسوم، والأرقام والإبرازات في الرسوم')}
         {color('accent2', 'الثاني', 'الجهة الثانية في المقارنة وبعض التفاصيل في الرسوم')}
@@ -585,7 +614,7 @@ function ThemeSection({ project }: { project: Project }) {
             <option value="auto">تلقائي من النص</option><option value="rtl">يمين ← يسار</option><option value="ltr">يسار ← يمين</option>
           </select>
         </Row>
-      </Section></details>
+      </Section></InspectorGroup>
     </>
   );
 }
@@ -666,20 +695,22 @@ function SfxSection({ project }: { project: Project }) {
     notify(r.count ? `انحط ${r.count} مؤثر على الرسوم والعناوين والانتقالات — Ctrl+Z يرجّعها` : 'ما لقيت رسوم أو عناوين أو انتقالات تحتاج مؤثر', 'info');
   }).catch((e) => notify(e.message));
   const add = (id: string) => api.post(`${projectPath(name)}/sfx`, { id, at: time }).then(adopt).catch((e) => notify(e.message));
+  const tiles = (items: typeof list) => items.map((s) => (
+    <div key={s.id} className="flex items-center gap-1 rounded border border-ink-800 px-1.5 py-1" title={s.description}>
+      <button className="text-ink-400 hover:text-accent" title="اسمع" onClick={() => playOneShot(`/api/sfx/${s.id}/audio`, 0.8)}>▶</button>
+      <span className="flex-1 truncate text-xs text-ink-200">{s.name}</span>
+      <button className="btn btn-ghost h-6 px-1.5 text-[11px]" title="أضفه عند المؤشر" onClick={() => add(s.id)}>+</button>
+    </div>
+  ));
   return (
     <Section title="مؤثرات صوتية" actions={<span className="text-[11px] text-ink-500">{onTrack ? `${onTrack} على مسار المؤثرات` : ''}</span>}>
       <button className="btn btn-primary mb-2 w-full justify-center" onClick={auto} title="هووش للرسوم، بوب للعناوين، سووش للانتقالات — يستبدل التلقائية القديمة ويخلي اللي حطيتها بيدك">
         {AUTO_MARK} ضع المؤثرات تلقائياً
       </button>
       <div className="grid grid-cols-2 gap-1">
-        {list.map((s) => (
-          <div key={s.id} className="flex items-center gap-1 rounded border border-ink-800 px-1.5 py-1" title={s.description}>
-            <button className="text-ink-400 hover:text-accent" title="اسمع" onClick={() => playOneShot(`/api/sfx/${s.id}/audio`, 0.8)}>▶</button>
-            <span className="flex-1 truncate text-xs text-ink-200">{s.name}</span>
-            <button className="btn btn-ghost h-6 px-1.5 text-[11px]" title="أضفه عند المؤشر" onClick={() => add(s.id)}>+</button>
-          </div>
-        ))}
+        {tiles(list.slice(0, 4))}
       </div>
+      {list.length > 4 && <InspectorGroup id="sfx-more" title="بقية المؤثرات الصوتية"><div className="grid grid-cols-2 gap-1">{tiles(list.slice(4))}</div></InspectorGroup>}
     </Section>
   );
 }

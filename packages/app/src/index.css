@@ -628,6 +628,10 @@ input[type='range']:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(
 .fold > summary::before { content: '‹'; display: inline-block; width: 10px; text-align: center; transition: transform .12s; }
 .fold[open] > summary::before { transform: rotate(-90deg); }
 .fold > summary:hover { color: var(--color-ink-200); }
+.inspector-group { margin-top: 0; border-bottom: 1px solid var(--color-ink-800); }
+.inspector-group > summary { padding: 10px 12px; }
+section .inspector-group > summary { padding-inline: 0; }
+.inspector-changed { color: var(--color-accent); font-size: 18px; line-height: 12px; }
 
 /* a track a dragged clip would move to */
 [data-track-row][data-drop] { background: color-mix(in srgb, var(--color-accent) 8%, transparent); box-shadow: inset 0 0 0 1px var(--color-accent-dim); }
